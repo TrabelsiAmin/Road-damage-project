@@ -8,6 +8,7 @@ import 'package:geolocator/geolocator.dart';
 import 'package:uuid/uuid.dart';
 import '../core/app_colors.dart';
 import '../core/constants.dart';
+import '../inference/inference_config.dart';
 import '../inference/temporal_smoothing.dart';
 import '../inference/yuv_converter.dart';
 import '../models/observation.dart';
@@ -53,7 +54,7 @@ class _CameraDetectionScreenState extends State<CameraDetectionScreen>
   bool _inferenceBusy = false;
   bool _capturing = false;
   int _frameCount = 0;
-  static const int _frameInterval = 5;
+  int _frameInterval = 5;
 
   List<Detection> _liveDetections = [];
   final _uuid = const Uuid();
@@ -68,6 +69,10 @@ class _CameraDetectionScreenState extends State<CameraDetectionScreen>
   void initState() {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
+    InferenceConfig.ensureLoaded().then((cfg) {
+      if (!mounted) return;
+      setState(() => _frameInterval = cfg.cameraFrameSkip);
+    });
     _initCamera();
   }
 

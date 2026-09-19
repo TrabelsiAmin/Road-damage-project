@@ -83,6 +83,42 @@ void main() {
       );
       expect(dets, isEmpty);
     });
+
+    test('channels-last [N, 11] layout', () {
+      final m = LetterboxMeta.compute(origW: 640, origH: 640, inputSize: 640);
+      final row = List<double>.filled(11, 0);
+      row[0] = 0.5;
+      row[1] = 0.5;
+      row[2] = 0.2;
+      row[3] = 0.2;
+      row[4 + 1] = 0.8; // D10
+      final dets = decodeYoloOutput(
+        output: [row],
+        letterbox: m,
+        numClasses: 7,
+        confidenceThreshold: 0.35,
+      );
+      expect(dets, hasLength(1));
+      expect(dets.first.classIndex, 1);
+    });
+
+    test('tiny boxes are dropped when minBoxArea is set', () {
+      final m = LetterboxMeta.compute(origW: 640, origH: 640, inputSize: 640);
+      final output = List.generate(11, (_) => List<double>.filled(1, 0));
+      output[0][0] = 0.5;
+      output[1][0] = 0.5;
+      output[2][0] = 0.001;
+      output[3][0] = 0.001;
+      output[4][0] = 0.99;
+      final dets = decodeYoloOutput(
+        output: output,
+        letterbox: m,
+        numClasses: 7,
+        confidenceThreshold: 0.35,
+        minBoxArea: 1e-4,
+      );
+      expect(dets, isEmpty);
+    });
   });
 
   group('VideoSampling', () {

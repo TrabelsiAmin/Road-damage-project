@@ -2,7 +2,7 @@ import 'dart:io';
 import 'dart:typed_data';
 import 'package:flutter/foundation.dart';
 import 'package:tflite_flutter/tflite_flutter.dart';
-import '../core/constants.dart';
+import '../inference/inference_config.dart';
 import '../inference/nms.dart';
 import '../inference/preprocessing.dart';
 import '../inference/yolo_decoder.dart';
@@ -44,8 +44,8 @@ class TFLiteAgentRunner implements DetectionAgentRunner {
     required this.agentName,
     required this.agentClasses,
     required String modelPath,
-    this.confidenceThreshold = TariqMapConstants.defaultConfidenceThreshold,
-    this.iouThreshold = TariqMapConstants.defaultIouThreshold,
+    this.confidenceOverride,
+    this.iouOverride,
     this.inputSize = 640,
   }) {
     _tryLoad(modelPath);
@@ -54,9 +54,14 @@ class TFLiteAgentRunner implements DetectionAgentRunner {
   @override
   final String agentName;
   final List<String> agentClasses;
-  final double confidenceThreshold;
-  final double iouThreshold;
+  final double? confidenceOverride;
+  final double? iouOverride;
   final int inputSize;
+
+  double get confidenceThreshold =>
+      confidenceOverride ?? InferenceConfig.instance.confidenceThreshold;
+  double get iouThreshold =>
+      iouOverride ?? InferenceConfig.instance.iouThreshold;
 
   Interpreter? _interpreter;
   bool _failed = false;
@@ -152,12 +157,14 @@ class TFLiteAgentRunner implements DetectionAgentRunner {
     final output = _allocateOutput();
     interpreter.run(input, output);
 
+    final cfg = InferenceConfig.instance;
     final squeezed = squeezeYoloOutput(output);
     final candidates = decodeYoloOutput(
       output: squeezed,
       letterbox: pre.letterbox,
       numClasses: classNames.length,
       confidenceThreshold: confidenceThreshold,
+      minBoxArea: cfg.minBoxArea,
     );
 
     final raw = <Detection>[];
@@ -173,9 +180,17 @@ class TFLiteAgentRunner implements DetectionAgentRunner {
       ));
     }
 
+    final nms = cfg.classAwareNms
+        ? applyClassAwareNms
+        : applyNms;
     return AgentResult(
       agent: agentName,
-      detections: applyClassAwareNms(raw, iouThreshold: iouThreshold),
+      detections: nms(
+        raw,
+        iouThreshold: iouThreshold,
+        minConfidence: confidenceThreshold,
+        maxDetections: cfg.maxDetections,
+      ),
       isMock: false,
     );
   }

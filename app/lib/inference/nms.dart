@@ -38,6 +38,7 @@ List<Detection> applyNms(
   List<Detection> detections, {
   double iouThreshold = 0.45,
   double minConfidence = 0.0,
+  int? maxDetections,
 }) {
   // 1. Filter by confidence
   final candidates = detections
@@ -51,6 +52,7 @@ List<Detection> applyNms(
   for (var i = 0; i < candidates.length; i++) {
     if (suppressed.contains(i)) continue;
     kept.add(candidates[i]);
+    if (maxDetections != null && kept.length >= maxDetections) break;
     for (var j = i + 1; j < candidates.length; j++) {
       if (suppressed.contains(j)) continue;
       if (computeIou(candidates[i].box, candidates[j].box) > iouThreshold) {
@@ -71,6 +73,7 @@ List<Detection> applyClassAwareNms(
   List<Detection> detections, {
   double iouThreshold = 0.45,
   double minConfidence = 0.0,
+  int? maxDetections,
 }) {
   // Group by class code
   final byClass = <String, List<Detection>>{};
@@ -88,5 +91,8 @@ List<Detection> applyClassAwareNms(
   }
 
   result.sort((a, b) => b.confidence.compareTo(a.confidence));
+  if (maxDetections != null && result.length > maxDetections) {
+    return result.take(maxDetections).toList();
+  }
   return result;
 }

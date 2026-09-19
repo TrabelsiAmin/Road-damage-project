@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../core/app_colors.dart';
 import '../core/constants.dart';
+import '../inference/inference_config.dart';
 
 /// Settings screen — all configurable inference and sync parameters.
 ///
@@ -14,9 +15,7 @@ class SettingsScreen extends StatefulWidget {
 }
 
 class _SettingsScreenState extends State<SettingsScreen> {
-  // Inference
-  double _confidenceThreshold = TariqMapConstants.defaultConfidenceThreshold;
-  int    _liveFps             = TariqMapConstants.defaultLiveFps;
+  final _cfg = InferenceConfig();
 
   // Sync
   bool _wifiOnly        = true;
@@ -32,11 +31,14 @@ class _SettingsScreenState extends State<SettingsScreen> {
 
   Future<void> _load() async {
     final prefs = await SharedPreferences.getInstance();
+    await InferenceConfig.ensureLoaded();
     if (mounted) {
       setState(() {
-        _confidenceThreshold = prefs.getDouble('confidence_threshold') ??
-            TariqMapConstants.defaultConfidenceThreshold;
-        _liveFps    = prefs.getInt('live_fps')    ?? TariqMapConstants.defaultLiveFps;
+        _cfg.confidenceThreshold = InferenceConfig.instance.confidenceThreshold;
+        _cfg.iouThreshold = InferenceConfig.instance.iouThreshold;
+        _cfg.classAwareNms = InferenceConfig.instance.classAwareNms;
+        _cfg.maxDetections = InferenceConfig.instance.maxDetections;
+        _cfg.liveFps = InferenceConfig.instance.liveFps;
         _wifiOnly   = prefs.getBool('wifi_only')  ?? true;
         _retentionDays = prefs.getInt('retention_days') ?? 90;
         _loading    = false;
@@ -45,9 +47,13 @@ class _SettingsScreenState extends State<SettingsScreen> {
   }
 
   Future<void> _save() async {
+    InferenceConfig.instance.confidenceThreshold = _cfg.confidenceThreshold;
+    InferenceConfig.instance.iouThreshold = _cfg.iouThreshold;
+    InferenceConfig.instance.classAwareNms = _cfg.classAwareNms;
+    InferenceConfig.instance.maxDetections = _cfg.maxDetections;
+    InferenceConfig.instance.liveFps = _cfg.liveFps;
+    await InferenceConfig.instance.persist();
     final prefs = await SharedPreferences.getInstance();
-    await prefs.setDouble('confidence_threshold', _confidenceThreshold);
-    await prefs.setInt('live_fps', _liveFps);
     await prefs.setBool('wifi_only', _wifiOnly);
     await prefs.setInt('retention_days', _retentionDays);
     if (mounted) {
@@ -85,29 +91,67 @@ class _SettingsScreenState extends State<SettingsScreen> {
                   children: [
                     _LabeledRow(
                       label: 'Confidence threshold',
-                      detail: '${(_confidenceThreshold * 100).toStringAsFixed(0)}%',
+                      detail: '${(_cfg.confidenceThreshold * 100).toStringAsFixed(0)}%',
                       child: Slider(
-                        value: _confidenceThreshold,
+                        value: _cfg.confidenceThreshold,
                         min: 0.10,
                         max: 0.80,
                         divisions: 14,
                         activeColor: AppColors.teal,
-                        onChanged: (v) => setState(() => _confidenceThreshold = v),
+                        onChanged: (v) => setState(() => _cfg.confidenceThreshold = v),
                         semanticFormatterCallback: (v) =>
                             '${(v * 100).toStringAsFixed(0)}%',
                       ),
                     ),
                     const _Divider(),
                     _LabeledRow(
-                      label: 'Live inference FPS',
-                      detail: '$_liveFps fps',
+                      label: 'NMS IoU threshold',
+                      detail: _cfg.iouThreshold.toStringAsFixed(2),
                       child: Slider(
-                        value: _liveFps.toDouble(),
+                        value: _cfg.iouThreshold,
+                        min: 0.20,
+                        max: 0.80,
+                        divisions: 12,
+                        activeColor: AppColors.teal,
+                        onChanged: (v) => setState(() => _cfg.iouThreshold = v),
+                      ),
+                    ),
+                    const _Divider(),
+                    _LabeledRow(
+                      label: 'Max detections / agent',
+                      detail: '${_cfg.maxDetections}',
+                      child: Slider(
+                        value: _cfg.maxDetections.toDouble(),
+                        min: 5,
+                        max: 100,
+                        divisions: 19,
+                        activeColor: AppColors.teal,
+                        onChanged: (v) => setState(() => _cfg.maxDetections = v.round()),
+                      ),
+                    ),
+                    const _Divider(),
+                    SwitchListTile.adaptive(
+                      title: const Text('Class-aware NMS',
+                          style: TextStyle(fontSize: 14, fontWeight: FontWeight.w500)),
+                      subtitle: const Text(
+                        'Suppress overlaps only within the same D-code. Off = class-agnostic.',
+                        style: TextStyle(color: Colors.black45, fontSize: 12),
+                      ),
+                      value: _cfg.classAwareNms,
+                      activeTrackColor: AppColors.teal,
+                      onChanged: (v) => setState(() => _cfg.classAwareNms = v),
+                    ),
+                    const _Divider(),
+                    _LabeledRow(
+                      label: 'Live inference FPS',
+                      detail: '${_cfg.liveFps} fps',
+                      child: Slider(
+                        value: _cfg.liveFps.toDouble(),
                         min: 1,
                         max: 15,
                         divisions: 14,
                         activeColor: AppColors.teal,
-                        onChanged: (v) => setState(() => _liveFps = v.round()),
+                        onChanged: (v) => setState(() => _cfg.liveFps = v.round()),
                         semanticFormatterCallback: (v) => '${v.round()} fps',
                       ),
                     ),

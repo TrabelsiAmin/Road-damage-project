@@ -2,6 +2,7 @@ import 'dart:io';
 import 'dart:typed_data';
 import 'package:flutter/foundation.dart';
 import '../core/constants.dart';
+import '../inference/inference_config.dart';
 import '../models/observation.dart';
 import 'model_manager.dart';
 import 'tflite_factory_stub.dart'
@@ -121,6 +122,7 @@ class DetectionService {
   /// On Android/iOS: attempts to load bundled TFLite models; falls back to mock
   /// per-agent if the file is unavailable. The UI must surface that fallback.
   static Future<DetectionService> create() async {
+    await InferenceConfig.ensureLoaded();
     if (kIsWeb) {
       return DetectionService._(runners: _buildMockRunners());
     }

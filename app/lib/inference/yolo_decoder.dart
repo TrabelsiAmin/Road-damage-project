@@ -27,6 +27,7 @@ List<YoloCandidate> decodeYoloOutput({
   required LetterboxMeta letterbox,
   required int numClasses,
   required double confidenceThreshold,
+  double minBoxArea = 0.0,
 }) {
   if (output.isEmpty || output.first.isEmpty) return const [];
 
@@ -67,6 +68,7 @@ List<YoloCandidate> decodeYoloOutput({
       at(3, anchor),
     );
     if (w <= 0 || h <= 0) continue;
+    if (minBoxArea > 0 && w * h < minBoxArea) continue;
 
     candidates.add(YoloCandidate(
       classIndex: bestClass,

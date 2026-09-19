@@ -64,6 +64,8 @@ class TariqMapConstants {
   static const defaultConfidenceThreshold = 0.35;
   static const defaultIouThreshold = 0.45;
   static const defaultLiveFps = 5;  // frames per second for live inference
+  static const defaultMaxDetections = 50;
+  static const defaultMinBoxArea = 1e-6; // normalised w*h; drop specks after inverse letterbox
 
   // ── Sync ────────────────────────────────────────────────────────────────
   static const maxUploadRetries = 5;

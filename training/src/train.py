@@ -23,7 +23,11 @@ from pathlib import Path
 
 import numpy as np
 import yaml
-from ultralytics import YOLO
+
+try:
+    from ultralytics import YOLO as _YOLO
+except ImportError:  # pragma: no cover
+    _YOLO = None
 
 
 # ---------------------------------------------------------------------------
@@ -130,12 +134,41 @@ def train(
     seed: int,
     aug_config: Path,
     project: str = "runs",
+    allow_cpu: bool = False,
+    finetune: bool = False,
+    batch: int | None = None,
 ) -> None:
     classes = AGENTS.get(agent)
     if classes is None:
         raise SystemExit(f"Unknown agent: {agent}. Choose from {list(AGENTS)}")
 
     _set_seeds(seed)
+
+    if not data_config.exists():
+        raise SystemExit(f"Data YAML not found: {data_config}")
+
+    source_hint = str(data_config).lower()
+    if "global_potholes" in source_hint:
+        raise SystemExit(
+            "STOP: Global_Potholes_Dataset-image is unlabeled. "
+            "Train on RDD2022/RDD2024 after convert_rdd_voc.py (data strategy A)."
+        )
+
+    try:
+        import torch
+        has_cuda = torch.cuda.is_available()
+    except ImportError:
+        has_cuda = False
+
+    if not has_cuda and not allow_cpu:
+        raise SystemExit(
+            "No GPU detected. Refusing to start a CPU YOLOv8 run that cannot "
+            "finish in a reasonable time. Pass --allow-cpu to override, or run "
+            "on a CUDA machine. No metrics will be fabricated."
+        )
+
+    device_note = "cuda" if has_cuda else "cpu"
+    started = datetime.now(timezone.utc)
 
     aug_params = _load_augmentation_params(aug_config)
     train_params = _load_training_params(aug_config)
@@ -147,7 +180,7 @@ def train(
         "imgsz": imgsz,
         "seed": seed,
         "project": project,
-        "name": agent,
+        "name": f"{agent}{'_ft' if finetune else '_baseline'}",
         "pretrained": True,
         "save": True,
         "save_period": 10,
@@ -155,30 +188,56 @@ def train(
         "plots": True,
         "exist_ok": False,
     })
+    if batch is not None:
+        train_params["batch"] = batch
+    if finetune:
+        # Lower LR for fine-tuning an already trained road-damage checkpoint.
+        train_params["lr0"] = float(train_params.get("lr0", 0.01)) * 0.1
+        train_params.setdefault("patience", 20)
 
     # Merge augmentation params
     train_params.update(aug_params)
 
     print(f"\n{'='*60}")
-    print(f"  Agent:    {agent}")
-    print(f"  Classes:  {classes}")
-    print(f"  Weights:  {weights}")
-    print(f"  Data:     {data_config}")
-    print(f"  Epochs:   {epochs}")
-    print(f"  Seed:     {seed}")
+    print(f"  Agent:     {agent}")
+    print(f"  Classes:   {classes}")
+    print(f"  Weights:   {weights}")
+    print(f"  Data:      {data_config}")
+    print(f"  Epochs:    {epochs}")
+    print(f"  Imgsz:     {imgsz}")
+    print(f"  Batch:     {train_params.get('batch')}")
+    print(f"  Optimizer: {train_params.get('optimizer')}")
+    print(f"  LR0:       {train_params.get('lr0')}")
+    print(f"  Seed:      {seed}")
+    print(f"  Device:    {device_note}")
+    print(f"  Finetune:  {finetune}")
     print(f"{'='*60}\n")
 
-    model = YOLO(weights)
+    if _YOLO is None:
+        raise SystemExit("ultralytics is not installed. pip install -r requirements.txt")
+
+    model = _YOLO(weights)
     results = model.train(**train_params)
 
     # Evaluate on test split
     print(f"\n[train] Running final evaluation on test split…")
     test_results = model.val(data=str(data_config), split="test", imgsz=imgsz)
 
-    run_dir = Path(project) / agent
+    run_dir = Path(project) / train_params["name"]
     metrics_dict = {}
     if hasattr(test_results, "results_dict"):
         metrics_dict = test_results.results_dict
+
+    elapsed = (datetime.now(timezone.utc) - started).total_seconds()
+    metrics_dict = dict(metrics_dict)
+    metrics_dict["training_time_seconds"] = elapsed
+    metrics_dict["device"] = device_note
+    metrics_dict["imgsz"] = imgsz
+    metrics_dict["epochs_requested"] = epochs
+    metrics_dict["batch"] = train_params.get("batch")
+    metrics_dict["optimizer"] = train_params.get("optimizer")
+    metrics_dict["lr0"] = train_params.get("lr0")
+    metrics_dict["finetune"] = finetune
 
     _write_model_card(
         agent=agent,
@@ -212,6 +271,17 @@ def main() -> None:
         help="Path to augmentation.yaml",
     )
     parser.add_argument("--project", default="runs", help="Output project directory")
+    parser.add_argument(
+        "--allow-cpu",
+        action="store_true",
+        help="Allow training without CUDA (very slow; still will not invent metrics)",
+    )
+    parser.add_argument(
+        "--finetune",
+        action="store_true",
+        help="Fine-tune mode: lower LR, expect --weights to be a previous best.pt",
+    )
+    parser.add_argument("--batch", type=int, default=None, help="Override batch size")
     args = parser.parse_args()
 
     train(
@@ -223,6 +293,9 @@ def main() -> None:
         seed=args.seed,
         aug_config=args.aug_config,
         project=args.project,
+        allow_cpu=args.allow_cpu,
+        finetune=args.finetune,
+        batch=args.batch,
     )
 
 

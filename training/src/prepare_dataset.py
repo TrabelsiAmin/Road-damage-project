@@ -115,6 +115,12 @@ def prepare(
 
     random.seed(seed)
 
+    if "global_potholes" in str(source).lower():
+        raise SystemExit(
+            "STOP: Global_Potholes_Dataset-image has no labels (data strategy A). "
+            "Convert RDD2022/RDD2024 VOC XML with src.convert_rdd_voc first."
+        )
+
     # Load class map
     class_map: dict[str, Any] = json.loads(class_map_path.read_text())
     alias_map = _build_alias_to_dcode(class_map)

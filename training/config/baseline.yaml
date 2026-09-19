@@ -1,0 +1,31 @@
+# Reproducible YOLOv8n baseline. Used by docs/training.md.
+# Do not claim accuracy from this file — metrics come from src.evaluate after a real run.
+
+model: yolov8n.pt
+imgsz: 640
+epochs: 100
+batch: 16
+optimizer: SGD
+lr0: 0.01
+lrf: 0.01
+momentum: 0.937
+weight_decay: 0.0005
+seed: 42
+pretrained: true
+workers: 4
+patience: 30
+close_mosaic: 10
+
+# Compare later (only if GPU memory allows; do not auto-pick the biggest):
+#   yolov8n 640
+#   yolov8s 640
+#   yolov8s 960
+candidates:
+  - {model: yolov8n.pt, imgsz: 640}
+  - {model: yolov8s.pt, imgsz: 640}
+  - {model: yolov8s.pt, imgsz: 960}
+
+notes:
+  - Start with YOLOv8n 640 for mobile deployment.
+  - Choose among candidates using the same test split and src.evaluate.
+  - Higher resolution helps small cracks/potholes; it also increases latency.

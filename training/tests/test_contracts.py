@@ -17,7 +17,7 @@ class ContractTests(unittest.TestCase):
         manifest = json.loads((ROOT / 'config/model-bundles.json').read_text())
         self.assertEqual(manifest['input']['width'], 640)
         self.assertEqual(manifest['input']['height'], 640)
-        self.assertEqual(manifest['postprocess']['coordinateSpace'], 'normalized')
+        self.assertEqual(manifest['postprocess']['coordinateSpace'], 'normalized_original_image')
         self.assertGreater(manifest['postprocess']['confidenceThreshold'], 0)
 
 if __name__ == '__main__':

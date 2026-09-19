@@ -1,0 +1,16 @@
+# Fine-tune from a baseline best.pt. Same evaluation protocol as baseline.
+# python -m src.train --agent pavement --data config/pavement.yaml \
+#     --weights runs/pavement_baseline/weights/best.pt --finetune --epochs 50
+
+model: best.pt
+imgsz: 640
+epochs: 50
+batch: 16
+optimizer: SGD
+lr0: 0.001
+lrf: 0.01
+seed: 42
+patience: 20
+freeze: 10
+
+objective: Improve small-damage recall (D00, D10, D20, D40) without inflating global mAP via easy large objects.

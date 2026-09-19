@@ -19,8 +19,8 @@ import shutil
 from datetime import datetime, timezone
 from pathlib import Path
 
-from ultralytics import YOLO
-
+# Ultralytics is imported inside export_tflite so missing-weights checks
+# do not require a GPU training stack.
 
 # ---------------------------------------------------------------------------
 # Supported precisions (export ladder: float32 → float16 → int8)
@@ -59,6 +59,19 @@ def export_tflite(
     imgsz: int = 640,
 ) -> Path:
     """Export a YOLOv8 .pt model to TFLite and return the output file path."""
+    if not weights_path.exists():
+        raise SystemExit(
+            f"NOT_RUN: weights not found at {weights_path}. "
+            "Train a real YOLOv8 checkpoint before export. "
+            "Do not bundle a placeholder .tflite."
+        )
+    try:
+        from ultralytics import YOLO
+    except ImportError as exc:
+        raise SystemExit(
+            "NOT_RUN: ultralytics is not installed. pip install -r requirements.txt"
+        ) from exc
+
     output_dir.mkdir(parents=True, exist_ok=True)
 
     model = YOLO(str(weights_path))

@@ -12,6 +12,9 @@ from src.analyze_labeled_dataset import analyze
 from src.evaluate import evaluate
 from src.verify_tflite import inspect_tflite
 from src.prepare_dataset import prepare
+from src.download_rdd import locate
+from src.export import export_tflite
+from src.check_environment import inspect
 
 
 def _write_voc(path: Path, name: str, w=100, h=100, xmin=10, ymin=20, xmax=50, ymax=80) -> None:
@@ -139,6 +142,31 @@ class PrepareGuardTests(unittest.TestCase):
             with self.assertRaises(SystemExit) as ctx:
                 prepare(src, Path(td) / "out", ROOT / "config" / "source-class-map.json", (0.7, 0.15, 0.15))
             self.assertIn("STOP", str(ctx.exception))
+
+
+class DownloadLocateTests(unittest.TestCase):
+    def test_empty_dir_is_not_usable(self):
+        with tempfile.TemporaryDirectory() as td:
+            report = locate(Path(td))
+            self.assertFalse(report["usable"])
+            self.assertEqual(report["xml_count"], 0)
+
+
+class ExportGuardTests(unittest.TestCase):
+    def test_missing_weights_is_not_run(self):
+        with tempfile.TemporaryDirectory() as td:
+            with self.assertRaises(SystemExit) as ctx:
+                export_tflite(Path(td) / "missing.pt", "pavement", Path(td) / "out")
+            self.assertIn("NOT_RUN", str(ctx.exception))
+
+
+class EnvironmentTests(unittest.TestCase):
+    def test_reports_labeled_missing_without_inventing_cuda(self):
+        with tempfile.TemporaryDirectory() as td:
+            report = inspect(ROOT, Path(td) / "no-rdd")
+            self.assertFalse(report["labeled_extract"]["usable"])
+            self.assertFalse(report["can_train_yolov8"])
+            self.assertIn("cuda", report)
 
 
 if __name__ == "__main__":

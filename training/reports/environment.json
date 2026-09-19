@@ -1,0 +1,31 @@
+{
+  "status": "OK",
+  "inspected_at_utc": "2026-09-19T19:28:26.926607+00:00",
+  "ffmpeg": "/usr/bin/ffmpeg",
+  "ffprobe": "/usr/bin/ffprobe",
+  "cuda": {
+    "available": false,
+    "reason": "nvidia-smi not found"
+  },
+  "torch": {
+    "installed": false,
+    "cuda": false
+  },
+  "ultralytics": {
+    "installed": false
+  },
+  "labeled_extract": {
+    "path": "/tmp/tariqmap-work/Road-damage-project/training/data/raw/rdd2022",
+    "exists": false,
+    "xml_count": 0,
+    "usable": false
+  },
+  "can_train_yolov8": false,
+  "can_mux_video": true,
+  "notes": [
+    "No NVIDIA GPU. src.train will refuse unless --allow-cpu.",
+    "No local RDD VOC XML. Do not train on Global Potholes.",
+    "ultralytics is not installed in this environment.",
+    "FFmpeg CLI present \u2014 annotated MP4 muxer can run here."
+  ]
+}

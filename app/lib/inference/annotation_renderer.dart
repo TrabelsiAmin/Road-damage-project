@@ -30,6 +30,18 @@ class AnnotationRenderer {
 
   // ── Public API ────────────────────────────────────────────────────────────
 
+  /// Renders [detections] onto [sourceBytes] and returns JPEG bytes.
+  /// Does not touch the filesystem (usable from unit tests).
+  Future<Uint8List> renderToBytes({
+    required Uint8List sourceBytes,
+    required List<Detection> detections,
+  }) {
+    return compute(
+      _renderInIsolate,
+      _RenderArgs(sourceBytes: sourceBytes, detections: detections),
+    );
+  }
+
   /// Renders [detections] onto [sourceBytes] and saves the result.
   ///
   /// Returns the absolute path of the saved annotated image.
@@ -38,9 +50,9 @@ class AnnotationRenderer {
     required List<Detection> detections,
     required String captureId,
   }) async {
-    final annotated = await compute(
-      _renderInIsolate,
-      _RenderArgs(sourceBytes: sourceBytes, detections: detections),
+    final annotated = await renderToBytes(
+      sourceBytes: sourceBytes,
+      detections: detections,
     );
     final dir = await _annotatedDir();
     final path = p.join(dir.path, '$captureId.annotated.jpg');

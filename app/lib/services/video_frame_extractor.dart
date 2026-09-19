@@ -41,12 +41,10 @@ class FrameExtractionResult {
 /// Extracts JPEG frames from a local video file.
 ///
 /// Uses the platform thumbnail APIs (MediaMetadataRetriever / AVAssetImageGenerator)
-/// via `video_thumbnail`. That is the reliable Flutter-compatible path;
-/// bundling FFmpeg is not required for inspection workflows.
+/// via `video_thumbnail`. That is the reliable Flutter-compatible extract path.
 ///
-/// Limitation (documented, not hidden): this extractor does **not** encode an
-/// annotated output video. Downstream code produces annotated JPEGs and a
-/// contact sheet instead.
+/// Annotated MP4 encoding is handled separately by FfmpegVideoMuxer when
+/// the FFmpeg CLI is installed. This extractor does not mux.
 class VideoFrameExtractor {
   VideoFrameExtractor({this.jpegQuality = 80, this.maxFrames = 40});
 

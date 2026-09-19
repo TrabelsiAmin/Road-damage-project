@@ -10,7 +10,7 @@
 | Extract JPEG at each timestamp | **CURRENTLY WORKING** (platform thumbnail APIs) |
 | Letterbox → TFLite → inverse letterbox → NMS | **CURRENTLY WORKING** (code) / **REQUIRES MODEL** (weights) |
 | Annotated per-frame JPEG + contact sheet | **CURRENTLY WORKING** |
-| Encoded annotated MP4 / MOV | **NOT IMPLEMENTED** (documented limitation) |
+| Encoded annotated MP4 / MOV | **CURRENTLY WORKING** when FFmpeg CLI is on PATH (Linux/desktop, verified decode). **NOT AVAILABLE** on stock Android/iOS (no FFmpeg binary) |
 | Fake boxes on video | **NOT USED** |
 
 ## Why the old path was wrong
@@ -27,10 +27,30 @@ Video file
   → DetectionService.detectAllBytes(..., allowMock: false)
   → AnnotationRenderer (only if real boxes exist)
   → contact sheet of up to 12 annotated frames
-  → session directory deleted on screen dispose
+  → FFmpeg concat + libx264 (if ffmpeg/ffprobe exist)
+       → ffprobe (video stream + duration)
+       → ffmpeg decode to null (must be silent)
+       → save MP4 under app documents /tariqmap_videos/
+  → session JPEG directory deleted on screen dispose; muxed MP4 is kept
 ```
 
-Platform extraction uses Android `MediaMetadataRetriever` / iOS `AVAssetImageGenerator` through `video_thumbnail`. That is the reliable Flutter path. A full FFmpeg kit is not bundled (size, licensing, maintenance).
+Platform extraction uses Android `MediaMetadataRetriever` / iOS `AVAssetImageGenerator` through `video_thumbnail`. Desktop/training uses the same concat recipe via `python -m src.process_video`.
+
+The encoded file is a **sampled-frame montage** (each JPEG held until the next sample timestamp), not a full original-fps re-encode of the source clip.
+
+## Verified muxer test
+
+On a machine with FFmpeg 6.x:
+
+```bash
+cd training
+python -m unittest tests.test_mux_video
+# also: flutter test test/unit/video_muxer_test.dart
+```
+
+Those tests synthesize or draw JPEGs, mux H.264 `yuv420p` +faststart, then require `ffprobe` duration > 0 and `ffmpeg -i out.mp4 -f null -` with empty stderr. Status is never `OK` without that decode.
+
+There are **no inspection videos** in this git repository (gitignore). Tests use a generated `testsrc` clip / solid-color JPEGs.
 
 ## Error handling
 
@@ -42,8 +62,14 @@ Platform extraction uses Android `MediaMetadataRetriever` / iOS `AVAssetImageGen
 | Large video | interval stretched so at most 40 frames cover the clip |
 | Mock-only service | frames still extracted; **no mock boxes** |
 | Inference exception | that frame is skipped; others continue |
-| Temp files | `tmp/tariqmap_video_frames/<session>/`; cleaned on dispose |
+| FFmpeg missing | contact sheet kept; banner explains MP4 needs FFmpeg on PATH |
+| FFmpeg mux/decode error | contact sheet kept; mux status is FAILED, not OK |
+| Temp JPEG files | `tmp/tariqmap_video_frames/<session>/`; cleaned on dispose |
 
-## Limitation: no output video
+## Desktop CLI
 
-Encoding an annotated MP4 on-device needs a muxer (FFmpeg or MediaCodec). Shipping that solely to draw boxes is brittle and easy to fake with a "success" path that never writes a valid movie. TariqMap therefore keeps **annotated JPEGs + a contact sheet**. If a muxed preview is required later, add it behind an explicit FFmpeg dependency and a round-trip test — do not claim it works before that.
+```bash
+cd training
+python -m src.process_video --input clip.mp4 --output /tmp/annotated.mp4 --fps 2
+python -m src.process_video --verify-only /tmp/annotated.mp4
+```

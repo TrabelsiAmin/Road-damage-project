@@ -4,6 +4,8 @@ import 'package:flutter/material.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:image/image.dart' as img;
 import 'package:path/path.dart' as p;
+import 'package:path_provider/path_provider.dart';
+import 'package:share_plus/share_plus.dart';
 import 'package:uuid/uuid.dart';
 import 'package:video_player/video_player.dart';
 import '../core/app_colors.dart';
@@ -12,22 +14,23 @@ import '../models/observation.dart';
 import '../services/detection_service.dart';
 import '../services/territorial_service.dart';
 import '../services/video_frame_extractor.dart';
+import '../services/video_muxer.dart';
 import 'result_screen.dart';
 
-/// Video import: extract real JPEG frames, run inference, show annotated
-/// frames and a contact sheet.
+/// Video import: extract real JPEG frames, run inference, annotate, mux MP4.
 ///
 /// Pipeline:
 ///   Video file → platform thumbnail seek → JPEG frame → DetectionService
 ///   → inverse-letterboxed boxes → annotated JPEG → contact sheet
+///   → FFmpeg H.264 MP4 when `ffmpeg` is on PATH (verified decode)
 ///
 /// STATUS:
 ///   CURRENTLY WORKING — frame extraction + per-frame inference + contact sheet
+///   CURRENTLY WORKING — encoded annotated MP4 **when FFmpeg CLI is installed**
+///                       (Linux/desktop). Stock Android/iOS have no ffmpeg;
+///                       those builds keep the contact sheet.
 ///   REQUIRES MODEL — without a TFLite asset, frames are extracted but no
 ///                    boxes are invented (allowMock: false)
-///   LIMITATION — an encoded annotated MP4 is not produced. Encoding a video
-///                on-device without FFmpeg is unreliable; we keep annotated
-///                JPEGs + a contact sheet instead of pretending a muxer works.
 class VideoImportScreen extends StatefulWidget {
   const VideoImportScreen({
     super.key,
@@ -56,14 +59,19 @@ class _VideoImportScreenState extends State<VideoImportScreen> {
   String? _limitation;
   Directory? _sessionDir;
   String? _contactSheetPath;
+  File? _outputVideo;
+  VideoPlayerController? _outputController;
+  String? _muxStatus;
 
   final _results = <_FrameResult>[];
   final _extractor = VideoFrameExtractor(maxFrames: 40);
   final _renderer = const AnnotationRenderer();
+  final _muxer = FfmpegVideoMuxer();
 
   @override
   void dispose() {
     _controller?.dispose();
+    _outputController?.dispose();
     final dir = _sessionDir;
     if (dir != null) {
       VideoFrameExtractor.cleanup(dir);
@@ -121,6 +129,10 @@ class _VideoImportScreenState extends State<VideoImportScreen> {
         _picking = false;
         _results.clear();
         _contactSheetPath = null;
+        _outputVideo = null;
+        _muxStatus = null;
+        _outputController?.dispose();
+        _outputController = null;
         _status = 'Ready — ${p.basename(file.path)}';
       });
     } catch (e) {
@@ -138,8 +150,12 @@ class _VideoImportScreenState extends State<VideoImportScreen> {
       _framesProc = 0;
       _results.clear();
       _contactSheetPath = null;
+      _outputVideo = null;
+      _muxStatus = null;
       _limitation = null;
     });
+    _outputController?.dispose();
+    _outputController = null;
 
     final previous = _sessionDir;
     if (previous != null) {
@@ -241,12 +257,17 @@ class _VideoImportScreenState extends State<VideoImportScreen> {
         _contactSheetPath = await _writeContactSheet(annotatedPaths);
       }
 
+      await _muxOutputVideo();
+
+      if (!mounted) return;
       setState(() {
         _processing = false;
         final hits = _results.where((r) => r.observation.detections.isNotEmpty).length;
+        final muxBit = _outputVideo != null
+            ? 'Output MP4 saved (${p.basename(_outputVideo!.path)}).'
+            : (_muxStatus ?? 'Encoded MP4 not produced.');
         _status =
-            'Done — ${_results.length} frames inspected, $hits with detections. '
-            'Annotated output video is not encoded; see contact sheet / per-frame JPEGs.';
+            'Done — ${_results.length} frames inspected, $hits with detections. $muxBit';
       });
     } on FrameExtractionException catch (e) {
       setState(() {
@@ -293,6 +314,67 @@ class _VideoImportScreenState extends State<VideoImportScreen> {
     } catch (e) {
       debugPrint('[VideoImport] contact sheet failed: $e');
       return null;
+    }
+  }
+
+  Future<void> _muxOutputVideo() async {
+    if (_results.isEmpty) return;
+    final available = await _muxer.isAvailable();
+    if (!available) {
+      _muxStatus =
+          'Encoded output video requires FFmpeg on PATH (verified on Linux/desktop). '
+          'Stock Android/iOS do not ship FFmpeg — contact sheet is kept.';
+      return;
+    }
+
+    final frames = <TimedJpeg>[];
+    for (final r in _results) {
+      final path = r.annotatedPath ?? r.thumbnailPath;
+      if (path == null) continue;
+      frames.add(TimedJpeg(file: File(path), timestampMs: r.timestampMs));
+    }
+    if (frames.isEmpty) {
+      _muxStatus = 'No JPEG frames available to mux.';
+      return;
+    }
+
+    if (mounted) {
+      setState(() => _status = 'Encoding annotated MP4 with FFmpeg…');
+    }
+
+    try {
+      final docs = await getApplicationDocumentsDirectory();
+      final destDir = Directory(p.join(docs.path, 'tariqmap_videos'));
+      await destDir.create(recursive: true);
+      final dest = File(p.join(
+        destDir.path,
+        muxOutputName(_videoFile?.path ?? 'clip'),
+      ));
+      final mux = await _muxer.mux(
+        frames: frames,
+        output: dest,
+        sourceDurationMs: _duration.inMilliseconds,
+      );
+      if (mux.ok && mux.output != null) {
+        _outputVideo = mux.output;
+        _muxStatus =
+            'FFmpeg H.264 ${mux.width}×${mux.height}, '
+            '${mux.durationSec?.toStringAsFixed(2)}s, decode_ok=true. '
+            'Sampled-frame montage (not original fps).';
+        final ctrl = VideoPlayerController.file(mux.output!);
+        await ctrl.initialize();
+        await ctrl.setLooping(true);
+        ctrl.addListener(() {
+          if (mounted) setState(() {});
+        });
+        _outputController?.dispose();
+        _outputController = ctrl;
+      } else {
+        _muxStatus =
+            'FFmpeg mux failed (${mux.status}): ${mux.reason}. Contact sheet kept.';
+      }
+    } catch (e) {
+      _muxStatus = 'FFmpeg mux error: $e. Contact sheet kept.';
     }
   }
 
@@ -370,7 +452,9 @@ class _VideoImportScreenState extends State<VideoImportScreen> {
                   const Text(
                     'Each timestamp is decoded to a JPEG, then run through the '
                     'same letterbox → TFLite → inverse-letterbox pipeline as still images. '
-                    'An encoded annotated MP4 is not produced.',
+                    'When FFmpeg is on PATH, those frames are muxed into an H.264 MP4 '
+                    '(sampled montage, verified by ffprobe + decode). Otherwise only '
+                    'the contact sheet is kept.',
                     style: TextStyle(color: Colors.black45, fontSize: 12),
                   ),
                 ],
@@ -411,6 +495,58 @@ class _VideoImportScreenState extends State<VideoImportScreen> {
             if (_limitation != null) ...[
               const SizedBox(height: 12),
               _Banner(text: _limitation!, warning: true),
+            ],
+            if (_muxStatus != null) ...[
+              const SizedBox(height: 12),
+              _Banner(text: _muxStatus!, warning: _outputVideo == null),
+            ],
+            if (_outputVideo != null && _outputController != null) ...[
+              const SizedBox(height: 16),
+              _Section(
+                title: 'OUTPUT VIDEO',
+                child: Column(
+                  children: [
+                    AspectRatio(
+                      aspectRatio: _outputController!.value.aspectRatio == 0
+                          ? 16 / 9
+                          : _outputController!.value.aspectRatio,
+                      child: VideoPlayer(_outputController!),
+                    ),
+                    const SizedBox(height: 8),
+                    Row(
+                      children: [
+                        IconButton(
+                          onPressed: () {
+                            final c = _outputController!;
+                            setState(() {
+                              c.value.isPlaying ? c.pause() : c.play();
+                            });
+                          },
+                          icon: Icon(
+                            _outputController!.value.isPlaying
+                                ? Icons.pause
+                                : Icons.play_arrow,
+                          ),
+                        ),
+                        Expanded(
+                          child: Text(
+                            p.basename(_outputVideo!.path),
+                            style: const TextStyle(fontSize: 12, color: Colors.black54),
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                        ),
+                        TextButton.icon(
+                          onPressed: () {
+                            Share.shareXFiles([XFile(_outputVideo!.path)]);
+                          },
+                          icon: const Icon(Icons.share, size: 16),
+                          label: const Text('Share'),
+                        ),
+                      ],
+                    ),
+                  ],
+                ),
+              ),
             ],
             if (_contactSheetPath != null) ...[
               const SizedBox(height: 16),

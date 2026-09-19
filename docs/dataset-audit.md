@@ -1,33 +1,38 @@
 # TariqMap Dataset Audit
 
-**Dataset Analysed**: `Global_Potholes_Dataset-image` (YOLO format)
-**Date of Audit**: 2026-09-19
+**Date**: 2026-09-19  
+**Strategy**: Option A — do not train on unlabeled images.
 
-## Honest Machine Learning
+## Global Potholes dump
 
-For TariqMap to be a production-ready application, we cannot blindly train on unverified data. This document outlines the findings of our automated and manual dataset audit.
+Source of truth: `training/reports/global_potholes_audit.json`
 
-### Class Imbalance
+| Field | Value |
+| --- | --- |
+| Path (original import) | `Global_Potholes_Dataset-image` |
+| Image count | **29,120** JPEG |
+| Annotation files | **0** |
+| Annotation status | **UNLABELED** |
+| Class mapping | **NOT POSSIBLE** |
+| Train/val/test split | **NOT PRESENT** (flat directory) |
+| Verdict | **STOP** — do not train |
 
-Our audit script (`training/src/audit_dataset.py`) revealed the following distribution in the training split:
-- **D00 (Longitudinal Cracks)**: 1,245 instances
-- **D10 (Transverse Cracks)**: 890 instances
-- **D20 (Alligator Cracks)**: 3,450 instances
-- **D40 (Potholes)**: 12,055 instances
+There are **no** D00 / D10 / D20 / D40 instance counts for this dump. Any earlier table that listed thousands of labeled cracks or potholes on Global Potholes was **wrong**: those numbers were not measured from labels because labels do not exist.
 
-**Conclusion**: The dataset is heavily skewed towards Potholes. The model will naturally exhibit higher recall for potholes and may underperform on longitudinal and transverse cracks. To mitigate this in the mobile app, our `Observation` priority scoring algorithm weights cracks heavily so that they are not ignored if detected with lower confidence.
+The images may still be used as unlabeled demo/reference photos in the mobile app. They are gitignored and are not part of the training pipeline.
 
-### Label Drift & Annotation Quality
+## Labeled data for training
 
-- **Missing Labels**: We found 45 images in the training set that contained no `.txt` label files, despite containing visible road features. These were excluded from the training manifest.
-- **Bounding Box Integrity**: Several bounding boxes in the original dataset extended beyond the normalised `[0, 1]` coordinate space. Our pre-processing pipeline clips these to the image boundaries to prevent `NaN` errors during TFLite conversion.
+Use RDD2022/RDD2024 (Pascal VOC). See [dataset.md](dataset.md).
 
-### Mock Fallback
+Until that extract lives on the training machine:
 
-Because we cannot guarantee accurate inference across all edge cases (e.g., severe weather conditions, night time), the TariqMap application implements a robust mock fallback mechanism.
-- If the TFLite agent fails to initialise (e.g. on Flutter Web or due to hardware constraints), the system seamlessly transitions to a `MockAgent`.
-- The user interface is strictly bound to report this, injecting a high-visibility `DEMO MOCK INFERENCE` warning banner.
+- baseline mAP: **not computed**
+- per-class AP: **not computed**
+- confusion matrix: **not computed**
 
-### Future Work
-- Integration of SMOTE or focal loss during YOLOv8n fine-tuning to penalize the majority class (D40).
-- Curating a localized dataset specific to the Tunisian road infrastructure.
+Do not copy numbers from other papers and present them as this project's results.
+
+## Mock fallback (application)
+
+The Flutter app can run gallery import with a deterministic mock runner. That is **DEMO/MOCK**, labeled in the UI. Video and live camera refuse mock boxes (`allowMock: false`) so a missing model cannot look like a detector.

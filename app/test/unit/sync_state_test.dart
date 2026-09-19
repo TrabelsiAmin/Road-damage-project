@@ -75,7 +75,8 @@ void main() {
       expect(client.uploadCount, 1);
       final updated = await repo.findById('pending1');
       expect(updated!.syncStatus, SyncStatus.failed);
-      expect(updated.uploadAttempts, 1);
+      // uploading + failed both increment the attempt counter
+      expect(updated.uploadAttempts, 2);
       expect(updated.syncError, isNotNull);
     });
 

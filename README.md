@@ -1,44 +1,89 @@
-# TariqMap 🛣️
+# TariqMap — Road Damage Inspection
 
-**Offline-First Road Damage Inspection**
+Offline-first Flutter app for road-defect detection (images, sampled video frames, live camera) plus a training pipeline for YOLOv8 → TFLite.
 
-TariqMap is a production-grade, offline-first mobile application (Android/iOS) designed for real-time road anomaly detection using on-device Machine Learning. It empowers field inspectors and crowd-sourced contributors to capture road defects via images, live video streams, or video file imports, automatically logging GPS coordinates and severity scores.
+This repository is a working product slice, not a trained production model.
 
-## Key Features
+## Status at a glance
 
-- **Offline-First Inference**: Runs a compressed YOLOv8n TFLite model directly on the device. No internet connection is required for detection.
-- **Multi-Modal Input**: Supports importing static images, importing pre-recorded video sequences, and a live-camera inspection mode with real-time bounding box overlays and FPS diagnostics.
-- **Robust Sync Engine**: An idempotent, retryable background synchronization coordinator pushes observations to the central backend whenever connectivity is restored.
-- **Prioritization Engine**: Automatically calculates an severity/priority score (0-100) based on defect class (e.g., severe potholes vs. minor longitudinal cracks) and inference confidence.
-- **Mock/Demo Transparency**: Built for honesty. The UI clearly flags "Mock" or "Partial Mock" inference modes if agents fail or if running on unsupported platforms (e.g., Flutter Web).
+| Area | Status |
+| --- | --- |
+| Still-image capture + observation log + mock/demo banners | **CURRENTLY WORKING** (demo/mock until a real model is installed) |
+| Video: MP4/MOV → JPEG frame extract → inference → annotated frames + contact sheet | **CURRENTLY WORKING** (pipeline). **REQUIRES MODEL** for real boxes. Encoded output MP4 is **not** produced — see [docs/video-detection.md](docs/video-detection.md) |
+| Live camera YUV/BGRA conversion, preview-aligned boxes, temporal smoothing, latency | **CURRENTLY WORKING** (pipeline). **REQUIRES MODEL** for real boxes |
+| TFLite runner (letterbox + inverse mapping + YOLO decode) | **CURRENTLY WORKING** (code). **REQUIRES MODEL** (no `.tflite` is bundled) |
+| FastAPI observation ingest | **DEMO/MOCK** (in-memory, no auth) |
+| Global Potholes 29,120 JPEGs | **DEMO/REFERENCE only**. Unlabeled. **Not used for training.** Removed from git tracking |
+| YOLOv8 baseline / fine-tune / mAP | **REQUIRES LABELED DATA** + GPU. Metrics are **not claimed** |
+| D50 / D60 (faded markings) | Trainable **only if** RDD D44 / D43 exist in the dump you download |
+| D90 (rutting) | **ABSENT** from RDD2022/RDD2024 — taxonomy only |
 
-## Architecture
+## Data strategy (Option A)
 
-The project is structured into three main layers:
-1. **Training Pipeline (`/training`)**: Scripts for auditing datasets (Global Potholes Dataset), augmenting data, training YOLOv8n, and exporting to TFLite and PyTorch Mobile formats.
-2. **Mobile Application (`/app`)**: The Flutter mobile application responsible for UI, SQLite persistence, camera handling, and TFLite execution.
-3. **Backend (`/backend`)**: A lightweight FastAPI mock ingestion server representing the remote data lake.
+Do **not** train YOLO on `Global_Potholes_Dataset-image`. That dump has images and no labels.
 
-## Getting Started
+Train on a labeled road-damage set such as **RDD2022 / RDD2024** after converting Pascal VOC XML → YOLO with the mapping in `training/config/source-class-map.json`.
 
-### 1. Mobile App
+```
+D00 → D00   longitudinal crack
+D10 → D10   transverse crack
+D20 → D20   alligator crack
+D40 → D40   pothole
+D43 → D60   white-line blur → faded lane marking   (only if present)
+D44 → D50   crosswalk blur → faded crossing        (only if present)
+D90         not in RDD — do not invent a mapping
+```
+
+Pipeline:
+
+```bash
+cd training
+python -m src.download_rdd --dest data/raw/rdd2022          # locates; does not scrape
+python -m src.convert_rdd_voc --source data/raw/rdd2022 --output data/raw/rdd_yolo
+python -m src.analyze_labeled_dataset --dataset data/raw/rdd_yolo --output reports/rdd_analysis.json
+python -m src.prepare_dataset --source data/raw/rdd_yolo --output data/processed --class-map config/source-class-map.json
+python -m src.train --agent pavement --data config/pavement.yaml --weights yolov8n.pt
+python -m src.evaluate --weights runs/pavement_baseline/weights/best.pt --data config/pavement.yaml --split test
+python -m src.export --weights runs/pavement_baseline/weights/best.pt --agent pavement
+python -m src.verify_tflite --model ../app/assets/models/pavement.tflite
+```
+
+If this machine has no CUDA, `src.train` refuses to start unless you pass `--allow-cpu`. It will not fabricate mAP.
+
+## Run the app
+
 ```bash
 cd app
 flutter pub get
 flutter run
 ```
 
-### 2. Backend Server
+Without TFLite weights the UI shows **DEMO MOCK INFERENCE** on gallery import. Video and live camera **do not** stamp mock boxes onto frames.
+
+## Run the mock backend
+
 ```bash
 cd backend
 pip install -r requirements.txt
-uvicorn main:app --host 0.0.0.0 --port 8000 --reload
+uvicorn main:app --host 0.0.0.0 --port 8765
 ```
 
-## Hackathon Demonstration Guide
+## Tests
 
-For a full breakdown of how to demo TariqMap, please see [docs/hackathon-demo.md](docs/hackathon-demo.md). It details how to showcase the offline capability, the sync recovery, and the live camera mode.
+```bash
+cd app && flutter test
+cd training && python -m unittest discover -s tests
+```
 
-## Dataset & Training Audit
+## Docs
 
-Honesty in AI is paramount. Please see [docs/dataset-audit.md](docs/dataset-audit.md) for a comprehensive review of the `Global_Potholes_Dataset-image`. It details known label drifts, missing masks, and our methodology for training an ethical, transparent model.
+- [docs/dataset.md](docs/dataset.md) — labeled vs unlabeled, class taxonomy
+- [docs/dataset-audit.md](docs/dataset-audit.md) — Global Potholes audit (corrected)
+- [docs/video-detection.md](docs/video-detection.md)
+- [docs/training.md](docs/training.md)
+- [docs/evaluation.md](docs/evaluation.md)
+- [app/README.md](app/README.md)
+
+## Models
+
+Do not commit `.pt` / `.tflite` checkpoints. After a validated export, use GitHub Releases (or Git LFS) and put checksums in `app/assets/models/model-bundles.json`.

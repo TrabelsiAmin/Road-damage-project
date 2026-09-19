@@ -1,29 +1,46 @@
 import 'dart:io';
 import 'package:crypto/crypto.dart';
 import 'package:flutter/foundation.dart';
+import 'package:flutter/services.dart' show rootBundle;
 import 'package:http/http.dart' as http;
 import 'package:path_provider/path_provider.dart';
 
 /// URLs for each agent's TFLite model on GitHub Releases.
-/// Replace with your actual release asset URLs after uploading the models.
+///
+/// STATUS: REQUIRES MODEL
+/// Replace these after a validated YOLOv8 → TFLite export. Placeholder
+/// YOUR_ORG URLs are never fetched.
 const _modelUrls = {
-  'cracks':   'https://github.com/YOUR_ORG/TariqMap/releases/latest/download/cracks.tflite',
-  'pavement': 'https://github.com/YOUR_ORG/TariqMap/releases/latest/download/pavement.tflite',
-  'surface':  'https://github.com/YOUR_ORG/TariqMap/releases/latest/download/surface.tflite',
+  'cracks':
+      'https://github.com/YOUR_ORG/TariqMap/releases/latest/download/cracks.tflite',
+  'pavement':
+      'https://github.com/YOUR_ORG/TariqMap/releases/latest/download/pavement.tflite',
+  'surface':
+      'https://github.com/YOUR_ORG/TariqMap/releases/latest/download/surface.tflite',
 };
 
 /// Known SHA-256 checksums for each model file.
-/// Update these after uploading your real model weights.
 const _modelSha256 = {
-  'cracks':   'REPLACE_AFTER_UPLOAD',
+  'cracks': 'REPLACE_AFTER_UPLOAD',
   'pavement': 'REPLACE_AFTER_UPLOAD',
-  'surface':  'REPLACE_AFTER_UPLOAD',
+  'surface': 'REPLACE_AFTER_UPLOAD',
 };
+
+bool _isPlaceholderUrl(String? url) =>
+    url == null ||
+    url.contains('YOUR_ORG') ||
+    url.contains('REPLACE_AFTER');
+
+bool _isPlaceholderChecksum(String? value) =>
+    value == null || value == 'REPLACE_AFTER_UPLOAD';
 
 /// Manages downloading, caching, and verification of TFLite model files.
 ///
-/// On Android/iOS: downloads models to app documents directory on first use.
-/// On web/desktop: always returns null (mock fallback is used).
+/// Lookup order:
+///   1. Previously downloaded + checksum-verified file
+///   2. Bundled Flutter asset `assets/models/<agent>.tflite` (if present)
+///   3. GitHub Release download (skipped while URLs are placeholders)
+///   4. null → DetectionService falls back to mock and reports model pending
 class ModelManager {
   ModelManager._();
   static final ModelManager instance = ModelManager._();
@@ -31,9 +48,7 @@ class ModelManager {
   final Map<String, String?> _cachedPaths = {};
 
   /// Returns the local file path for the given [agentName]'s model,
-  /// or null if not available (web, download failed, etc.).
-  ///
-  /// [onProgress] receives a value 0.0–1.0 during download.
+  /// or null if not available (web, asset pending, download failed).
   Future<String?> localModelPath(
     String agentName, {
     void Function(double progress)? onProgress,
@@ -45,7 +60,6 @@ class ModelManager {
       final dir = await getApplicationDocumentsDirectory();
       final modelsDir = Directory('${dir.path}/tariqmap_models');
       await modelsDir.create(recursive: true);
-
       final file = File('${modelsDir.path}/$agentName.tflite');
 
       if (await file.exists()) {
@@ -53,15 +67,29 @@ class ModelManager {
           _cachedPaths[agentName] = file.path;
           return file.path;
         }
-        // Corrupted — delete and re-download.
         await file.delete();
       }
 
+      final bundled = await _copyBundledAsset(agentName, file);
+      if (bundled != null) {
+        _cachedPaths[agentName] = bundled;
+        return bundled;
+      }
+
       final url = _modelUrls[agentName];
-      if (url == null) return null;
+      if (_isPlaceholderUrl(url)) {
+        debugPrint(
+          '[ModelManager] $agentName TFLite asset is still pending. '
+          'Train, export, then place $agentName.tflite in assets/models/ '
+          'or publish a GitHub Release.',
+        );
+        _cachedPaths[agentName] = null;
+        return null;
+      }
 
       debugPrint('[ModelManager] Downloading $agentName model from $url');
-      final downloaded = await _downloadWithProgress(url, file, onProgress: onProgress);
+      final downloaded =
+          await _downloadWithProgress(url!, file, onProgress: onProgress);
       if (!downloaded) return null;
 
       if (!await _checksumValid(file, agentName)) {
@@ -79,7 +107,22 @@ class ModelManager {
     }
   }
 
-  /// Deletes all cached model files (for settings/reset).
+  Future<String?> _copyBundledAsset(String agentName, File destination) async {
+    try {
+      final data = await rootBundle.load('assets/models/$agentName.tflite');
+      await destination.writeAsBytes(data.buffer.asUint8List(), flush: true);
+      if (!await _checksumValid(destination, agentName)) {
+        await destination.delete();
+        return null;
+      }
+      debugPrint('[ModelManager] Installed bundled asset for $agentName');
+      return destination.path;
+    } catch (_) {
+      // Asset not listed / not present — expected until a real model is exported.
+      return null;
+    }
+  }
+
   Future<void> clearCache() async {
     if (kIsWeb) return;
     try {
@@ -92,8 +135,7 @@ class ModelManager {
 
   Future<bool> _checksumValid(File file, String agentName) async {
     final expected = _modelSha256[agentName];
-    // Skip validation if placeholder is still set (dev mode).
-    if (expected == null || expected == 'REPLACE_AFTER_UPLOAD') return true;
+    if (_isPlaceholderChecksum(expected)) return true;
     final bytes = await file.readAsBytes();
     final actual = sha256.convert(bytes).toString();
     return actual == expected;
@@ -110,6 +152,7 @@ class ModelManager {
       final response = await client.send(request);
       if (response.statusCode != 200) {
         debugPrint('[ModelManager] HTTP ${response.statusCode} for $url');
+        client.close();
         return false;
       }
       final total = response.contentLength ?? 0;
@@ -121,6 +164,7 @@ class ModelManager {
         if (total > 0) onProgress?.call(received / total);
       });
       await sink.close();
+      client.close();
       return true;
     } catch (e) {
       debugPrint('[ModelManager] Download error: $e');

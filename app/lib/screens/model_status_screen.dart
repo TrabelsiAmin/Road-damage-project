@@ -100,9 +100,10 @@ class _ModelStatusScreenState extends State<ModelStatusScreen> {
                           style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
                       SizedBox(height: 6),
                       Text(
-                        '• D90 (Rutting) is visual-only — depth cannot be inferred from a single 2D image.\n'
-                        '• Confidence thresholds are calibrated on RDD2024. Performance on other domains may differ.\n'
-                        '• Night / low-light images are underrepresented in training data.',
+                        '• STATUS: REQUIRES MODEL — no validated TFLite weights are bundled yet.\n'
+                        '• D90 (Rutting) is not present in RDD2022/RDD2024. It remains in the taxonomy but cannot be trained until a labeled source exists.\n'
+                        '• D50/D60 are only trained if RDD D44/D43 (crosswalk blur / white-line blur) are present in the labeled dump.\n'
+                        '• Night / low-light images are typically underrepresented in RDD. Do not claim domain transfer to Tunisia until a local set is evaluated.',
                         style: TextStyle(color: Colors.black54, fontSize: 12, height: 1.5),
                       ),
                     ],

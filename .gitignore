@@ -4,33 +4,113 @@ __pycache__/
 *$py.class
 *.so
 .Python
-env/
-build/
-develop-eggs/
-dist/
-downloads/
-eggs/
-.eggs/
-/*/lib64/
-/lib/
-parts/
-sdist/
-var/
 *.egg-info/
 .installed.cfg
 *.egg
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+htmlcov/
+pip-log.txt
+
+# Virtual environments — never commit
+env/
 venv/
-.venv
+.venv/
+ENV/
+.env/
+.tox/
 
-# macOS
+# Flutter / Dart
+.dart_tool/
+.flutter-plugins
+.flutter-plugins-dependencies
+.packages
+.pub-cache/
+.pub/
+build/
+**/build/
+**/.dart_tool/
+*.iml
+app/ios/Pods/
+app/ios/.symlinks/
+app/android/.gradle/
+app/android/local.properties
+app/android/app/debug/
+app/android/app/profile/
+app/android/app/release/
+
+# Model weights, checkpoints, export artefacts
+# Distribute validated models via GitHub Releases or Git LFS, not git.
+*.pt
+*.pth
+*.ckpt
+*.onnx
+*.tflite
+*.engine
+*.mlmodel
+*.mlpackage
+*.torchscript
+*.bin
+*.h5
+*.pb
+runs/
+wandb/
+ultralytics/
+weights/
+artifacts/models/
+
+# Datasets — never commit image dumps
+Global_Potholes_Dataset-image/
+data/raw/
+data/processed/
+data/rdd2022/
+data/rdd2024/
+datasets/
+**/images/*.jpg
+**/images/*.jpeg
+**/images/*.png
+!training/tests/fixtures/**/*.jpg
+!training/tests/fixtures/**/*.png
+*.zip
+*.tar
+*.tar.gz
+*.7z
+
+# Temporary video frames and generated inspection artefacts
+**/tariqmap_video_frames/
+**/tariqmap_live_frame.jpg
+**/*_frame_*.jpg
+**/contact_sheet*.jpg
+tmp/
+temp/
+.cache/
+generated/
+
+# Secrets and credentials
+.env
+.env.*
+!.env.example
+credentials.json
+**/secrets*
+**/*api*key*
+id_rsa
+id_rsa.pub
+
+# OS / IDE
 .DS_Store
-
-# IDEs
+Thumbs.db
 .idea/
 .vscode/
 *.swp
 *.swo
+*~
 
-# Data
+# Local databases
 *.sqlite3
 *.db
+
+# Logs
+*.log
+logs/

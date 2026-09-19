@@ -30,6 +30,7 @@ dependencies:
   # Video import and frame sampling
   video_player: ^2.9.2
   file_picker: ^8.1.4
+  video_thumbnail: ^0.5.6
   # Typography
   google_fonts: ^6.2.1
   # Share annotated images

@@ -1,21 +1,34 @@
 import 'dart:async';
 import 'dart:io';
+import 'dart:typed_data';
 import 'package:camera/camera.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:uuid/uuid.dart';
 import '../core/app_colors.dart';
 import '../core/constants.dart';
+import '../inference/temporal_smoothing.dart';
+import '../inference/yuv_converter.dart';
 import '../models/observation.dart';
 import '../services/detection_service.dart';
 import '../services/observation_repository.dart';
 import 'result_screen.dart';
 
+class _ConvertJob {
+  const _ConvertJob(this.frame, this.rotation);
+  final RawCameraFrame frame;
+  final int rotation;
+}
+
+Uint8List _convertInIsolate(_ConvertJob job) =>
+    convertFrameToJpeg(job.frame, rotationDegrees: job.rotation);
+
 /// Full-screen live camera view with real-time bounding-box overlay.
 ///
-/// Detection runs on every [_frameInterval]-th camera frame so the UI stays
-/// responsive. On capture the current frame is frozen, saved as an Observation,
-/// and the ResultScreen is pushed.
+/// Frames are converted from YUV420 / NV21 / BGRA (not assumed JPEG),
+/// run through DetectionService with mock boxes disabled, temporally
+/// smoothed, and painted on the camera preview (not the whole UI stack).
 class CameraDetectionScreen extends StatefulWidget {
   const CameraDetectionScreen({
     super.key,
@@ -37,17 +50,19 @@ class _CameraDetectionScreenState extends State<CameraDetectionScreen>
   CameraController? _controller;
   List<CameraDescription> _cameras = [];
   bool _initialized = false;
-  bool _processing = false;
+  bool _inferenceBusy = false;
   bool _capturing = false;
   int _frameCount = 0;
-  static const int _frameInterval = 5; // run inference every 5th frame
+  static const int _frameInterval = 5;
 
   List<Detection> _liveDetections = [];
   final _uuid = const Uuid();
+  final _smoother = TemporalSmoother();
 
   double _fps = 0;
   int _lastLatency = 0;
   DateTime? _lastFrameTime;
+  String? _statusNote;
 
   @override
   void initState() {
@@ -63,7 +78,16 @@ class _CameraDetectionScreenState extends State<CameraDetectionScreen>
       await _startCamera(_cameras.first);
     } catch (e) {
       debugPrint('[Camera] Init error: $e');
+      if (mounted) setState(() => _statusNote = 'Camera init failed: $e');
     }
+  }
+
+  ImageFormatGroup _preferredFormat() {
+    // Do not assume JPEG. Prefer YUV on Android, BGRA on iOS.
+    if (defaultTargetPlatform == TargetPlatform.iOS) {
+      return ImageFormatGroup.bgra8888;
+    }
+    return ImageFormatGroup.yuv420;
   }
 
   Future<void> _startCamera(CameraDescription desc) async {
@@ -71,59 +95,84 @@ class _CameraDetectionScreenState extends State<CameraDetectionScreen>
       desc,
       ResolutionPreset.high,
       enableAudio: false,
-      imageFormatGroup: ImageFormatGroup.jpeg,
+      imageFormatGroup: _preferredFormat(),
     );
     await controller.initialize();
     if (!mounted) return;
+    _smoother.reset();
     setState(() {
       _controller = controller;
       _initialized = true;
+      if (widget.detectionService.usingMock) {
+        _statusNote =
+            'REQUIRES MODEL: live boxes are disabled until TFLite weights are installed.';
+      }
     });
     controller.startImageStream(_onCameraFrame);
   }
 
   void _onCameraFrame(CameraImage frame) {
-    if (_processing || _capturing) return;
+    if (_inferenceBusy || _capturing || _controller == null) return;
     _frameCount++;
     if (_frameCount % _frameInterval != 0) return;
 
-    _processing = true;
+    _inferenceBusy = true;
+    final sw = Stopwatch()..start();
     _runDetectionOnFrame(frame).then((results) {
       if (!mounted) return;
-      final detections = results.expand((r) => r.detections).toList();
+      final raw = results.expand((r) => r.detections).toList();
+      final smoothed = _smoother.update(raw);
       final now = DateTime.now();
       if (_lastFrameTime != null) {
         final elapsed = now.difference(_lastFrameTime!).inMilliseconds;
         _fps = elapsed > 0 ? (1000 / elapsed * _frameInterval) : 0;
       }
       _lastFrameTime = now;
-      
-      // Calculate max latency across agents for diagnostic overlay
-      final maxLatency = results.fold<int>(0, (max, r) => r.latencyMs != null && r.latencyMs! > max ? r.latencyMs! : max);
-      
+      final measured = sw.elapsedMilliseconds;
+      final reported = results.fold<int>(
+        0,
+        (max, r) => r.latencyMs != null && r.latencyMs! > max ? r.latencyMs! : max,
+      );
       setState(() {
-        _liveDetections = detections;
-        _lastLatency = maxLatency;
+        _liveDetections = smoothed;
+        _lastLatency = reported > 0 ? reported : measured;
       });
-      _processing = false;
+    }).catchError((Object e) {
+      debugPrint('[Camera] inference error: $e');
+    }).whenComplete(() {
+      _inferenceBusy = false;
     });
+  }
+
+  RawCameraFrame _toRaw(CameraImage image) {
+    final name = image.format.group.name;
+    final format = switch (name) {
+      'jpeg' => 'jpeg',
+      'bgra8888' => 'bgra8888',
+      'nv21' => 'nv21',
+      _ => 'yuv420',
+    };
+    return RawCameraFrame(
+      width: image.width,
+      height: image.height,
+      format: format,
+      planes: image.planes.map((p) => Uint8List.fromList(p.bytes)).toList(),
+      bytesPerRow: image.planes.map((p) => p.bytesPerRow).toList(),
+      bytesPerPixel: image.planes.map((p) => p.bytesPerPixel ?? 1).toList(),
+    );
   }
 
   Future<List<AgentResult>> _runDetectionOnFrame(CameraImage frame) async {
     try {
-      // Convert camera image to a temp JPEG file for the detection service.
-      if (frame.format.group == ImageFormatGroup.jpeg) {
-        final bytes = frame.planes.first.bytes;
-        final tempDir = Directory.systemTemp;
-        final tempFile = File('${tempDir.path}/tariqmap_live_frame.jpg');
-        await tempFile.writeAsBytes(bytes);
-        final results = await widget.detectionService.detectAll(tempFile);
-        return results;
-      }
+      final raw = _toRaw(frame);
+      final rotation = _controller?.description.sensorOrientation ?? 0;
+      final jpeg = await compute(_convertInIsolate, _ConvertJob(raw, rotation));
+      if (jpeg.isEmpty) return const [];
+      return widget.detectionService.detectAllBytes(jpeg, allowMock: false);
     } catch (e) {
       debugPrint('[Camera] Frame inference error: $e');
+      return const [];
     }
-    return [];
   }
 
   Future<void> _capture() async {
@@ -131,7 +180,6 @@ class _CameraDetectionScreenState extends State<CameraDetectionScreen>
     setState(() => _capturing = true);
 
     try {
-      // Stop stream, take high-quality photo, restart stream.
       await _controller!.stopImageStream();
       final photo = await _controller!.takePicture();
 
@@ -143,7 +191,10 @@ class _CameraDetectionScreenState extends State<CameraDetectionScreen>
       } catch (_) {}
 
       final imageFile = File(photo.path);
-      final results = await widget.detectionService.detectAll(imageFile);
+      final results = await widget.detectionService.detectAll(
+        imageFile,
+        allowMock: false,
+      );
       final observation = Observation(
         id: _uuid.v4(),
         captureId: _uuid.v4(),
@@ -165,8 +216,8 @@ class _CameraDetectionScreenState extends State<CameraDetectionScreen>
         );
       }
 
-      // Restart stream after returning.
       if (mounted && _controller != null) {
+        _smoother.reset();
         await _controller!.startImageStream(_onCameraFrame);
       }
     } catch (e) {
@@ -215,14 +266,29 @@ class _CameraDetectionScreenState extends State<CameraDetectionScreen>
 
   @override
   Widget build(BuildContext context) {
+    final preview = _controller;
+
     return Scaffold(
       backgroundColor: Colors.black,
       body: Stack(
         fit: StackFit.expand,
         children: [
-          // ── Camera preview ──────────────────────────────────────
-          if (_initialized && _controller != null)
-            CameraPreview(_controller!)
+          if (_initialized && preview != null)
+            Center(
+              child: AspectRatio(
+                aspectRatio: preview.value.aspectRatio,
+                child: Stack(
+                  fit: StackFit.expand,
+                  children: [
+                    CameraPreview(preview),
+                    if (_liveDetections.isNotEmpty)
+                      CustomPaint(
+                        painter: _LiveBoxPainter(_liveDetections),
+                      ),
+                  ],
+                ),
+              ),
+            )
           else
             const Center(
               child: Column(
@@ -235,15 +301,6 @@ class _CameraDetectionScreenState extends State<CameraDetectionScreen>
               ),
             ),
 
-          // ── Bounding box overlay ─────────────────────────────────
-          if (_initialized && _liveDetections.isNotEmpty && _controller != null)
-            Positioned.fill(
-              child: CustomPaint(
-                painter: _LiveBoxPainter(_liveDetections),
-              ),
-            ),
-
-          // ── Top bar ─────────────────────────────────────────────
           Positioned(
             top: 0, left: 0, right: 0,
             child: SafeArea(
@@ -251,7 +308,6 @@ class _CameraDetectionScreenState extends State<CameraDetectionScreen>
                 padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
                 child: Row(
                   children: [
-                    // Back button
                     GestureDetector(
                       onTap: () => Navigator.of(context).pop(),
                       child: Container(
@@ -264,7 +320,6 @@ class _CameraDetectionScreenState extends State<CameraDetectionScreen>
                       ),
                     ),
                     const SizedBox(width: 12),
-                    // Detection counter
                     Container(
                       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
                       decoration: BoxDecoration(
@@ -279,7 +334,6 @@ class _CameraDetectionScreenState extends State<CameraDetectionScreen>
                       ),
                     ),
                     const Spacer(),
-                    // Diagnostics
                     Column(
                       crossAxisAlignment: CrossAxisAlignment.end,
                       children: [
@@ -289,7 +343,7 @@ class _CameraDetectionScreenState extends State<CameraDetectionScreen>
                         ),
                         if (_lastLatency > 0)
                           Text(
-                            '${_lastLatency}ms Inf',
+                            '${_lastLatency}ms inf',
                             style: const TextStyle(color: Colors.white54, fontSize: 11),
                           ),
                       ],
@@ -300,7 +354,20 @@ class _CameraDetectionScreenState extends State<CameraDetectionScreen>
             ),
           ),
 
-          // ── Live detection label strip ───────────────────────────
+          if (_statusNote != null)
+            Positioned(
+              top: 88, left: 12, right: 12,
+              child: Container(
+                padding: const EdgeInsets.all(10),
+                decoration: BoxDecoration(
+                  color: const Color(0xCC5C4A00),
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: Text(_statusNote!,
+                    style: const TextStyle(color: Colors.white, fontSize: 12)),
+              ),
+            ),
+
           if (_liveDetections.isNotEmpty)
             Positioned(
               bottom: 140,
@@ -327,7 +394,6 @@ class _CameraDetectionScreenState extends State<CameraDetectionScreen>
               ),
             ),
 
-          // ── Bottom controls ──────────────────────────────────────
           Positioned(
             bottom: 0, left: 0, right: 0,
             child: SafeArea(
@@ -336,13 +402,11 @@ class _CameraDetectionScreenState extends State<CameraDetectionScreen>
                 child: Row(
                   mainAxisAlignment: MainAxisAlignment.spaceEvenly,
                   children: [
-                    // Switch camera
                     _ControlButton(
                       icon: Icons.flip_camera_android_outlined,
                       label: 'Flip',
                       onTap: _cameras.length > 1 ? _switchCamera : null,
                     ),
-                    // Capture shutter
                     GestureDetector(
                       onTap: _capturing ? null : _capture,
                       child: AnimatedContainer(
@@ -362,7 +426,6 @@ class _CameraDetectionScreenState extends State<CameraDetectionScreen>
                             : const Icon(Icons.camera, color: Colors.black, size: 32),
                       ),
                     ),
-                    // Placeholder for symmetry
                     const _ControlButton(icon: Icons.info_outline, label: 'Info', onTap: null),
                   ],
                 ),
@@ -374,10 +437,6 @@ class _CameraDetectionScreenState extends State<CameraDetectionScreen>
     );
   }
 }
-
-// ---------------------------------------------------------------------------
-// Live bounding box painter
-// ---------------------------------------------------------------------------
 
 class _LiveBoxPainter extends CustomPainter {
   _LiveBoxPainter(this.detections);
@@ -395,15 +454,11 @@ class _LiveBoxPainter extends CustomPainter {
         b.height * size.height,
       );
 
-      // Glow
       canvas.drawRect(rect.inflate(4),
           Paint()..color = color.withAlpha(50)..style = PaintingStyle.fill);
-
-      // Box
       canvas.drawRect(rect,
           Paint()..color = color..style = PaintingStyle.stroke..strokeWidth = 2.5);
 
-      // Label
       final label = '${TariqMapConstants.labelFor(d.classCode)}  ${(d.confidence * 100).toStringAsFixed(0)}%';
       final tp = TextPainter(
         text: TextSpan(text: label, style: const TextStyle(color: Colors.black, fontSize: 11, fontWeight: FontWeight.w700)),
@@ -419,11 +474,6 @@ class _LiveBoxPainter extends CustomPainter {
   @override
   bool shouldRepaint(_LiveBoxPainter old) => old.detections != detections;
 }
-
-
-// ---------------------------------------------------------------------------
-// Small icon button used in bottom controls
-// ---------------------------------------------------------------------------
 
 class _ControlButton extends StatelessWidget {
   const _ControlButton({required this.icon, required this.label, required this.onTap});

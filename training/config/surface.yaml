@@ -1,0 +1,8 @@
+path: data/processed/surface
+train: images/train
+val: images/val
+test: images/test
+names:
+  0: D50
+  1: D60
+  2: D90

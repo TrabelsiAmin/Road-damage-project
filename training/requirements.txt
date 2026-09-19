@@ -1,0 +1,9 @@
+ultralytics>=8.3.0
+onnx>=1.16.0
+onnxruntime>=1.18.0
+pyyaml>=6.0
+pillow>=10.0
+numpy>=1.26
+scipy>=1.11        # for calibration helpers
+matplotlib>=3.8    # for confusion matrix / PR curve plots
+tqdm>=4.66

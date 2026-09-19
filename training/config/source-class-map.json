@@ -1,0 +1,48 @@
+{
+  "D00": {
+    "description": "Longitudinal crack",
+    "agent": "cracks",
+    "aliases": ["longitudinal_crack", "longitudinal crack", "linear_crack", "0"],
+    "rdd2024_class_id": 0
+  },
+  "D10": {
+    "description": "Transverse crack",
+    "agent": "cracks",
+    "aliases": ["transverse_crack", "transverse crack", "1"],
+    "rdd2024_class_id": 1
+  },
+  "D20": {
+    "description": "Alligator/crocodile cracking",
+    "agent": "pavement",
+    "aliases": ["alligator_crack", "alligator crack", "crocodile_crack", "fatigue_crack", "2"],
+    "rdd2024_class_id": 2
+  },
+  "D40": {
+    "description": "Pothole",
+    "agent": "pavement",
+    "aliases": ["pothole", "potholes", "pot_hole", "hole", "3"],
+    "rdd2024_class_id": 3
+  },
+  "D50": {
+    "description": "Faded pedestrian crossing marking",
+    "agent": "surface",
+    "aliases": ["crosswalk_blur", "faded_crossing", "pedestrian_crossing", "4"],
+    "rdd2024_class_id": 4
+  },
+  "D60": {
+    "description": "Faded lane marking",
+    "agent": "surface",
+    "aliases": ["white_line_blur", "faded_lane", "lane_marking", "5"],
+    "rdd2024_class_id": 5
+  },
+  "D90": {
+    "description": "Visual rutting / ornieriage (no depth measurement from 2D image)",
+    "agent": "surface",
+    "aliases": ["rutting", "rut", "deformation", "6"],
+    "rdd2024_class_id": 6,
+    "limitation": "2D image cannot measure rut depth — severity is visual only"
+  },
+  "_exclusion_policy": "Any source class not listed above MUST be written to the exclusion report. Do NOT silently merge unknown classes.",
+  "_schema_version": "1.0",
+  "_last_updated": "2026-09-19"
+}

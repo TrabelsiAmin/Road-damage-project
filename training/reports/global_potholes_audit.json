@@ -1,0 +1,30 @@
+{
+  "audit_version": "1.0",
+  "audit_date_utc": "2026-09-19T12:26:57.862439+00:00",
+  "dataset_path": "C:\\manus\\TariqMap\\Global_Potholes_Dataset-image",
+  "image_count": 29120,
+  "image_extensions": {
+    ".jpg": 29120
+  },
+  "annotation_status": "UNLABELED",
+  "annotation_files_found": {},
+  "annotation_classes_verified": false,
+  "class_mapping": "NOT_POSSIBLE \u2014 no annotations",
+  "duplicate_hash_sample": {
+    "sample_size": 200,
+    "duplicates_in_sample": 0
+  },
+  "image_dimensions": {
+    "status": "skipped \u2014 Pillow not installed"
+  },
+  "train_val_test_split": "NOT_PRESENT \u2014 flat directory",
+  "license": "No license file found in dataset root",
+  "verdict": "STOP: Dataset is unlabeled. Annotate with CVAT, Roboflow, or LabelStudio, then re-run this audit. Do not attempt to train until annotation_status == LABELED.",
+  "actionable_next_steps": [
+    "1. Annotate images using CVAT (https://cvat.ai) or Roboflow with class D40 (pothole) at minimum.",
+    "2. Export annotations in YOLO format.",
+    "3. Run audit_dataset.py again to verify annotation count.",
+    "4. Run prepare_dataset.py with --class-map to split into agent datasets.",
+    "5. Run train.py for each agent after dataset validation passes."
+  ]
+}

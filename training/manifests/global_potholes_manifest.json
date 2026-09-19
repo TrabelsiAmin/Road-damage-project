@@ -1,0 +1,16 @@
+{
+  "manifest_version": "1.0",
+  "dataset_name": "global_potholes_dataset-image",
+  "source_path": "C:\\manus\\TariqMap\\Global_Potholes_Dataset-image",
+  "image_count": 29120,
+  "annotation_status": "UNLABELED",
+  "class_mapping": "NOT_POSSIBLE \u2014 no annotations",
+  "audit_date_utc": "2026-09-19T12:26:57.862439+00:00",
+  "audit_report_path": "reports\\global_potholes_audit.json",
+  "tariqmap_agent_mapping": {
+    "D40": {
+      "status": "REQUIRES_ANNOTATION",
+      "note": "Images may contain potholes but no labels exist yet"
+    }
+  }
+}

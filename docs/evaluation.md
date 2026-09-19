@@ -4,7 +4,7 @@
 
 **NOT RUN** on this branch. There is no `best.pt`, so there are no numbers.
 
-`src.evaluate` writes `status: NOT_RUN` when weights are missing instead of filling mAP with placeholders.
+`src.evaluate` writes `status: NOT_RUN` when weights are missing instead of filling mAP with placeholders. Fine-tune comparison (`src.compare_runs`) is also **NOT RUN** — it refuses reports that are not `status: OK`.
 
 ## Protocol (when a labeled test split exists)
 

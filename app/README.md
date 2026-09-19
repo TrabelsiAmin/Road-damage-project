@@ -8,7 +8,7 @@ Offline-first road inspection client.
 | --- | --- |
 | Gallery import | **CURRENTLY WORKING** — mock boxes if no TFLite (banner on) |
 | Result screen / SQLite queue / sync client | **CURRENTLY WORKING** against the **DEMO/MOCK** backend |
-| Video import | **CURRENTLY WORKING** frame pipeline; **REQUIRES MODEL**; no muxed output video |
+| Video import | **CURRENTLY WORKING** frame pipeline; **REQUIRES MODEL**; encoded MP4 **when FFmpeg is on PATH** (verified decode); contact sheet otherwise |
 | Live camera | **CURRENTLY WORKING** YUV/BGRA path + preview-aligned overlay; **REQUIRES MODEL** |
 | TFLite | Runner + letterbox **CURRENTLY WORKING**; weights **REQUIRES MODEL** |
 | Web | Mock-only (no `dart:io` camera/video extract) |
@@ -30,11 +30,11 @@ Android emulator/device is the intended target. iOS project files were not part 
 3. RGB float32 `[0, 1]`, NHWC
 4. YOLOv8 `cx, cy, w, h` + class scores
 5. Inverse letterbox → normalised original-image boxes
-6. Class-aware NMS (IoU 0.45, conf 0.35)
+6. Class-aware NMS (IoU 0.45, conf 0.35, max 50) — overridable in Settings
 
 Live camera does **not** assume JPEG. Android frames are converted from YUV420 (or NV21); iOS from BGRA8888. Boxes are painted on the `CameraPreview` `AspectRatio`, not the full-screen `Stack`.
 
-Video frames are real JPEGs from `video_thumbnail`. Mock detections are disabled on that path.
+Video frames are real JPEGs from `video_thumbnail`. Mock detections are disabled on that path. If `ffmpeg`/`ffprobe` exist, sampled frames are muxed to H.264 MP4 and decoded before the app reports success.
 
 ## Installing a real model
 

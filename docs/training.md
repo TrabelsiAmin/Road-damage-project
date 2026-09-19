@@ -4,7 +4,15 @@
 
 **REQUIRES LABELED DATA** and a GPU for a serious YOLOv8 run.
 
-This environment (and many laptops) has no CUDA. `src.train` exits unless `--allow-cpu` is passed. No mAP, precision, or recall figures are recorded in this repo because **no training run has completed on RDD**.
+`python -m src.check_environment` on this branch recorded (`training/reports/environment.json`):
+
+- nvidia-smi: **not found**
+- torch / ultralytics: **not installed**
+- local RDD XML: **0**
+- `can_train_yolov8`: **false**
+- FFmpeg: **present** (video muxer only)
+
+`src.train` exits unless `--allow-cpu` is passed. No mAP, precision, or recall figures are recorded in this repo because **no training run has completed on RDD**.
 
 ## Do not
 

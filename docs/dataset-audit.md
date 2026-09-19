@@ -25,6 +25,16 @@ The images may still be used as unlabeled demo/reference photos in the mobile ap
 
 Use RDD2022/RDD2024 (Pascal VOC). See [dataset.md](dataset.md).
 
+Probe recorded 2026-09-19 (`training/reports/rdd_access.json`):
+
+| Field | Value |
+| --- | --- |
+| Figshare | article **21431547**, HTTP 200 |
+| Zip | `RDD2022_released_through_CRDDC2022.zip` **13,264,172,619** bytes |
+| Zip downloaded | **No** (size; this machine has no GPU to train anyway) |
+| Official label_map.pbtxt | D00, D10, D20, D40 only |
+| Local XML | **0** |
+
 Until that extract lives on the training machine:
 
 - baseline mAP: **not computed**

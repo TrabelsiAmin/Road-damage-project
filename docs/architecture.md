@@ -26,13 +26,13 @@ The three agent calls run independently. If one model fails, the observation is 
 
 ## Model bundles
 
-Each model is packaged with a manifest:
+Each model is packaged with a manifest. Runtime NMS/confidence are also user-configurable in Settings (`InferenceConfig`); they default to the contract below and do **not** change letterbox geometry.
 
 ```json
 {
   "bundleVersion": "2026.09.0",
   "agent": "cracks",
-  "format": "onnx",
+  "format": "tflite",
   "inputSize": 640,
   "classes": ["D00", "D10"],
   "normalization": "0..1 RGB",

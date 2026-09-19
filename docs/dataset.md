@@ -25,7 +25,9 @@ Until someone annotates those photos, they must not enter `src.train`.
 | Format | Pascal VOC XML + JPEG, per-country subsets |
 | Train? | **Yes**, after `src.convert_rdd_voc` |
 
-This repository does not bundle RDD. `python -m src.download_rdd` only locates a local extract and prints the official URLs.
+This repository does not bundle RDD. `python -m src.download_rdd --fetch-metadata` probes Figshare **article 21431547** and can save the official `label_map.pbtxt` (D00/D10/D20/D40 only). The labeled zip is **13,264,172,619 bytes (~13.3 GB)** and was **not** downloaded in the last probe (`training/reports/rdd_access.json`).
+
+Country layout (from the published directory listing): China_Drone, China_MotorBike, Czech, India, Japan, Norway, United_States — VOC XML under `train/annotations/xmls` plus `train/images` (some countries also have unlabeled `test/images`).
 
 ## TariqMap class taxonomy
 

@@ -9,7 +9,7 @@ This repository is a working product slice, not a trained production model.
 | Area | Status |
 | --- | --- |
 | Still-image capture + observation log + mock/demo banners | **CURRENTLY WORKING** (demo/mock until a real model is installed) |
-| Video: MP4/MOV → JPEG frame extract → inference → annotated frames + contact sheet | **CURRENTLY WORKING** (pipeline). **REQUIRES MODEL** for real boxes. Encoded output MP4 is **not** produced — see [docs/video-detection.md](docs/video-detection.md) |
+| Video: MP4/MOV → JPEG frame extract → inference → annotated frames + contact sheet | **CURRENTLY WORKING** (pipeline). **REQUIRES MODEL** for real boxes. Encoded output MP4 is **CURRENTLY WORKING** when FFmpeg is on PATH (verified H.264 decode); **NOT AVAILABLE** on stock Android/iOS — see [docs/video-detection.md](docs/video-detection.md) |
 | Live camera YUV/BGRA conversion, preview-aligned boxes, temporal smoothing, latency | **CURRENTLY WORKING** (pipeline). **REQUIRES MODEL** for real boxes |
 | TFLite runner (letterbox + inverse mapping + YOLO decode) | **CURRENTLY WORKING** (code). **REQUIRES MODEL** (no `.tflite` is bundled) |
 | FastAPI observation ingest | **DEMO/MOCK** (in-memory, no auth) |
@@ -38,7 +38,8 @@ Pipeline:
 
 ```bash
 cd training
-python -m src.download_rdd --dest data/raw/rdd2022          # locates; does not scrape
+python -m src.check_environment
+python -m src.download_rdd --fetch-metadata --dest data/raw/rdd2022
 python -m src.convert_rdd_voc --source data/raw/rdd2022 --output data/raw/rdd_yolo
 python -m src.analyze_labeled_dataset --dataset data/raw/rdd_yolo --output reports/rdd_analysis.json
 python -m src.prepare_dataset --source data/raw/rdd_yolo --output data/processed --class-map config/source-class-map.json
@@ -48,7 +49,13 @@ python -m src.export --weights runs/pavement_baseline/weights/best.pt --agent pa
 python -m src.verify_tflite --model ../app/assets/models/pavement.tflite
 ```
 
-If this machine has no CUDA, `src.train` refuses to start unless you pass `--allow-cpu`. It will not fabricate mAP.
+`download_rdd --fetch-metadata` records Figshare access; it does not pull the 13.3 GB zip. If this machine has no CUDA, `src.train` refuses to start unless you pass `--allow-cpu`. It will not fabricate mAP.
+
+Desktop video mux (FFmpeg):
+
+```bash
+python -m src.process_video --input clip.mp4 --output /tmp/annotated.mp4 --fps 2
+```
 
 ## Run the app
 

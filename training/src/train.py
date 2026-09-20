@@ -41,6 +41,11 @@ AGENTS: dict[str, list[str]] = {
     "surface":  ["D50", "D60", "D90"],  # WP4 Agent Marquage & Surface
 }
 
+# Tesla T4 ~15 GB: start at 16, OOM fallback 8. Never CPU-train WP3.
+T4_BATCH = 16
+T4_BATCH_OOM_FALLBACK = 8
+CUDA_REQUIRED_WP3 = "CUDA GPU required for WP3 training."
+
 
 # ---------------------------------------------------------------------------
 # Reproducibility
@@ -140,6 +145,9 @@ def train(
     finetune: bool = False,
     batch: int | None = None,
     run_name: str | None = None,
+    optimizer: str | None = None,
+    lr0: float | None = None,
+    exist_ok: bool = False,
 ) -> None:
     classes = AGENTS.get(agent)
     if classes is None:
@@ -164,6 +172,8 @@ def train(
         has_cuda = False
 
     if not has_cuda and not allow_cpu:
+        if agent == "pavement":
+            raise SystemExit(CUDA_REQUIRED_WP3)
         raise SystemExit(
             "No GPU detected. Refusing to start a CPU YOLOv8 run that cannot "
             "finish in a reasonable time. Pass --allow-cpu to override, or run "
@@ -189,10 +199,14 @@ def train(
         "save_period": 10,
         "val": True,
         "plots": True,
-        "exist_ok": False,
+        "exist_ok": exist_ok,
     })
     if batch is not None:
         train_params["batch"] = batch
+    if optimizer:
+        train_params["optimizer"] = optimizer
+    if lr0 is not None:
+        train_params["lr0"] = lr0
     if finetune:
         # Lower LR for fine-tuning an already trained road-damage checkpoint.
         train_params["lr0"] = float(train_params.get("lr0", 0.01)) * 0.1
@@ -255,6 +269,55 @@ def train(
     print(f"[train] Next: python -m src.export --weights {run_dir}/weights/best.pt --agent {agent}")
 
 
+def _is_oom(exc: BaseException) -> bool:
+    name = type(exc).__name__.lower()
+    if "outofmemory" in name:
+        return True
+    text = str(exc).lower()
+    return "out of memory" in text or "cuda oom" in text
+
+
+def train_t4_safe(
+    **kwargs,
+) -> int:
+    """Train with Tesla T4 ~15GB batch policy: 16, OOM fallback 8.
+
+    Never falls back to CPU. Documented for Colab T4; do not use batch=-1.
+    Returns the batch size that completed.
+    """
+    try:
+        import torch
+    except ImportError as exc:
+        raise SystemExit(CUDA_REQUIRED_WP3) from exc
+    if not torch.cuda.is_available():
+        raise SystemExit(CUDA_REQUIRED_WP3)
+
+    last_error: BaseException | None = None
+    for i, batch in enumerate((T4_BATCH, T4_BATCH_OOM_FALLBACK)):
+        kwargs["batch"] = batch
+        if i > 0:
+            kwargs["exist_ok"] = True
+        print(
+            f"[train] Tesla T4 ~15GB VRAM: trying batch={batch} "
+            f"(primary {T4_BATCH}, OOM fallback {T4_BATCH_OOM_FALLBACK})"
+        )
+        try:
+            train(**kwargs)
+            return batch
+        except Exception as exc:
+            last_error = exc
+            if not _is_oom(exc) or batch == T4_BATCH_OOM_FALLBACK:
+                raise
+            print("[train] CUDA OOM at batch=16; emptying cache and retrying batch=8")
+            try:
+                torch.cuda.empty_cache()
+            except Exception:
+                pass
+    if last_error:
+        raise last_error
+    raise SystemExit("WP3 T4 training did not start")
+
+
 # ---------------------------------------------------------------------------
 # CLI
 # ---------------------------------------------------------------------------
@@ -285,15 +348,28 @@ def main() -> None:
         action="store_true",
         help="Fine-tune mode: lower LR, expect --weights to be a previous best.pt",
     )
-    parser.add_argument("--batch", type=int, default=None, help="Override batch size")
+    parser.add_argument(
+        "--batch",
+        type=int,
+        default=None,
+        help="Override batch size. WP3 T4: 16, OOM fallback 8 (see --t4-safe).",
+    )
     parser.add_argument(
         "--name",
         default=None,
         help="Ultralytics run name (default: <agent>_baseline or <agent>_ft). WP3 Colab uses wp3_baseline.",
     )
+    parser.add_argument("--optimizer", default=None, help="Override optimizer (WP3 baseline: SGD)")
+    parser.add_argument("--lr0", type=float, default=None, help="Override lr0 (WP3 baseline: 0.01)")
+    parser.add_argument("--exist-ok", action="store_true", help="Allow overwriting an existing Ultralytics run dir")
+    parser.add_argument(
+        "--t4-safe",
+        action="store_true",
+        help="WP3 Colab: try batch 16 then 8 on Tesla T4 ~15GB. Never CPU.",
+    )
     args = parser.parse_args()
 
-    train(
+    train_kwargs = dict(
         agent=args.agent,
         data_config=args.data,
         weights=args.weights,
@@ -306,7 +382,14 @@ def main() -> None:
         finetune=args.finetune,
         batch=args.batch,
         run_name=args.name,
+        optimizer=args.optimizer,
+        lr0=args.lr0,
+        exist_ok=args.exist_ok,
     )
+    if args.t4_safe:
+        train_t4_safe(**train_kwargs)
+    else:
+        train(**train_kwargs)
 
 
 if __name__ == "__main__":

@@ -46,6 +46,31 @@ CANDIDATE_ROOTS = (
     Path("/content/drive/MyDrive/Road-damage-project/training/data/processed/pavement"),
 )
 
+EXPECTED_REPO_FILES = (
+    "training/config/pavement.yaml",
+    "training/reports/dataset_report.json",
+    "training/reports/METRICS.md",
+    "training/src/verify_wp3_dataset.py",
+    "training/src/eval_wp3.py",
+    "training/src/eval_small_objects.py",
+    "training/evaluation/compare_wp3_models.py",
+    "training/colab/WP3_YOLOv8_training.ipynb",
+    "docs/wp3-training.md",
+)
+
+DATA_RECOVERY_INSTRUCTIONS = (
+    "Prepared WP3 JPEGs are missing (training/data/ is gitignored). "
+    "Do NOT wget the 13.3GB RDD2022 zip by default. Recover data with one of: "
+    "(1) Google Drive: mount Drive and unzip pavement_wp3_splits.zip "
+    "(processed pavement splits only) or set WP3_PAVEMENT_ROOT to that folder; "
+    "(2) If an RDD extract is already on disk, run "
+    "`python -m src.convert_rdd_voc --source <RDD_EXTRACT> --output data/rdd_yolo` "
+    "then `python -m src.prepare_dataset --source data/rdd_yolo "
+    "--output data/processed --class-map config/source-class-map.json --seed 42` "
+    "and point --root at data/processed/pavement. "
+    "Never auto-download RDD2022_released_through_CRDDC2022.zip in this notebook."
+)
+
 
 def locate_pavement_root(explicit: Path | None = None) -> Path | None:
     if explicit is not None:
@@ -70,10 +95,15 @@ def _images(directory: Path) -> list[Path]:
 
 
 def write_colab_yaml(dataset_root: Path, dest: Path) -> Path:
-    """Write a YOLO data YAML with an absolute path for Colab cwd."""
+    """Write a YOLO data YAML with an absolute path for Colab cwd.
+
+    Names and split keys are copied from training/config/pavement.yaml
+    (0: D20, 1: D40). Only `path` is rewritten to the absolute dataset root.
+    """
     dest.parent.mkdir(parents=True, exist_ok=True)
     dest.write_text(
-        "# Auto-generated for Colab. WP3 pavement only. Do not re-split.\n"
+        "# Auto-generated for Colab from training/config/pavement.yaml.\n"
+        "# WP3 pavement only. Do not re-split. Do not invent class names.\n"
         f"path: {dataset_root.resolve()}\n"
         "train: images/train\n"
         "val: images/val\n"
@@ -83,6 +113,92 @@ def write_colab_yaml(dataset_root: Path, dest: Path) -> Path:
         "  1: D40\n"
     )
     return dest
+
+
+def check_wp3_repo(repo_root: Path) -> dict[str, Any]:
+    """Fail clearly if WP3 config/docs/scripts are missing. Splits may be gitignored."""
+    errors: list[str] = []
+    present: list[str] = []
+    yaml_names: dict[str, str] | None = None
+    yaml_path = repo_root / "training" / "config" / "pavement.yaml"
+    if not (repo_root / "training" / "config" / "pavement.yaml").exists():
+        # Allow being called with the training/ directory as root.
+        alt = repo_root / "config" / "pavement.yaml"
+        if alt.exists():
+            repo_root = repo_root.parent
+            yaml_path = repo_root / "training" / "config" / "pavement.yaml"
+
+    for rel in EXPECTED_REPO_FILES:
+        path = repo_root / rel
+        if path.is_file():
+            present.append(rel)
+        else:
+            errors.append(f"missing expected WP3 file: {rel}")
+
+    if yaml_path.is_file():
+        text = yaml_path.read_text()
+        try:
+            import yaml  # type: ignore
+
+            cfg = yaml.safe_load(text) or {}
+            names = cfg.get("names") or {}
+            if isinstance(names, dict):
+                yaml_names = {str(k): str(v) for k, v in names.items()}
+            elif isinstance(names, list):
+                yaml_names = {str(i): str(v) for i, v in enumerate(names)}
+            mapped = {}
+            if isinstance(names, dict):
+                mapped = {int(k): str(v) for k, v in names.items()}
+            elif isinstance(names, list):
+                mapped = {i: str(v) for i, v in enumerate(names)}
+            if mapped.get(0) != "D20" or mapped.get(1) != "D40":
+                errors.append(f"{yaml_path}: names must be 0:D20 1:D40, got {mapped}")
+            extra = set(mapped.values()) - {"D20", "D40"}
+            if extra:
+                errors.append(f"{yaml_path}: extra classes not allowed in WP3: {sorted(extra)}")
+            for code in FORBIDDEN_WP_CODES:
+                if code in list(mapped.values()):
+                    errors.append(f"{yaml_path}: WP2/WP4 class {code} must not be in pavement.yaml names")
+        except ImportError:
+            if "0: D20" not in text or "1: D40" not in text:
+                errors.append(f"{yaml_path}: names must include 0: D20 and 1: D40")
+
+    processed = repo_root / "training" / "data" / "processed" / "pavement"
+    processed_state = {
+        "path": str(processed),
+        "exists": processed.exists(),
+        "labels_train": (
+            len(list((processed / "labels" / "train").glob("*.txt")))
+            if (processed / "labels" / "train").is_dir()
+            else 0
+        ),
+        "images_train": len(_images(processed / "images" / "train")),
+        "note": (
+            "Processed splits live under training/data/ which is gitignored. "
+            "A missing folder on Colab is expected until Drive unzip or local convert."
+        ),
+    }
+
+    return {
+        "status": "OK" if not errors else "FAIL",
+        "repo_root": str(repo_root),
+        "present": present,
+        "errors": errors,
+        "yaml_path": str(yaml_path),
+        "yaml_names": yaml_names,
+        "processed_splits": processed_state,
+        "wp": "WP3",
+        "forbidden_in_wp3": list(FORBIDDEN_WP_CODES),
+    }
+
+
+def _bin_640(nw: float, nh: float) -> str:
+    char = 640.0 * ((max(nw, 0.0) * max(nh, 0.0)) ** 0.5)
+    if char < 32.0:
+        return "lt_32"
+    if char < 64.0:
+        return "32_64"
+    return "gt_64"
 
 
 def verify(
@@ -97,15 +213,29 @@ def verify(
     box_ids: Counter = Counter()
     named_boxes: Counter = Counter()
     bad_lines = 0
-    mismatched_pairs = 0
+    invalid_boxes = 0
+    missing_images = 0
+    missing_labels = 0
+    class_ids_seen: set[int] = set()
+    small_est_640 = {
+        name: {"lt_32": 0, "32_64": 0, "gt_64": 0, "total": 0} for name in CLASS_NAMES.values()
+    }
+    jpeg_status = "UNKNOWN"
 
     if not root.exists():
-        errors.append(
-            f"WP3 pavement root not found: {root}. "
-            "Images are gitignored. Upload/rsync training/data/processed/pavement "
-            "or unzip pavement_wp3_splits.zip and set --root / WP3_PAVEMENT_ROOT."
+        errors.append(f"WP3 pavement root not found: {root}. {DATA_RECOVERY_INSTRUCTIONS}")
+        return _report(
+            root, yaml_path, errors, warnings, split_images, split_labels,
+            box_ids, named_boxes, bad_lines, extra={
+                "jpeg_status": "MISSING_ROOT",
+                "invalid_boxes": 0,
+                "missing_images": 0,
+                "missing_labels": 0,
+                "class_ids_seen": [],
+                "data_recovery": DATA_RECOVERY_INSTRUCTIONS,
+                "small_object_est_640": small_est_640,
+            },
         )
-        return _report(root, yaml_path, errors, warnings, split_images, split_labels, box_ids, named_boxes, bad_lines)
 
     seen_stems: set[str] = set()
     for split in SPLITS:
@@ -116,7 +246,7 @@ def verify(
         split_images[split] = len(images)
         split_labels[split] = len(labels)
         if not images:
-            errors.append(f"{split}: no images in {img_dir}")
+            warnings.append(f"{split}: no JPEG/PNG files in {img_dir}")
         if not labels:
             errors.append(f"{split}: no labels in {lbl_dir}")
         img_stems = {p.stem for p in images}
@@ -124,10 +254,10 @@ def verify(
         missing_lbl = sorted(img_stems - lbl_stems)
         missing_img = sorted(lbl_stems - img_stems)
         if missing_lbl:
-            mismatched_pairs += len(missing_lbl)
+            missing_labels += len(missing_lbl)
             errors.append(f"{split}: {len(missing_lbl)} images missing labels (e.g. {missing_lbl[:3]})")
         if missing_img:
-            mismatched_pairs += len(missing_img)
+            missing_images += len(missing_img)
             errors.append(f"{split}: {len(missing_img)} labels missing images (e.g. {missing_img[:3]})")
         overlap = seen_stems & img_stems
         if overlap:
@@ -141,7 +271,7 @@ def verify(
                 parts = line.split()
                 if len(parts) != 5:
                     bad_lines += 1
-                    errors.append(f"{label}:{line_no}: expected 5 YOLO fields")
+                    errors.append(f"{label}:{line_no}: malformed label, expected 5 YOLO fields")
                     continue
                 raw_cls, *coords = parts
                 try:
@@ -149,23 +279,38 @@ def verify(
                     vals = [float(c) for c in coords]
                 except ValueError:
                     bad_lines += 1
-                    errors.append(f"{label}:{line_no}: non-numeric fields")
+                    errors.append(f"{label}:{line_no}: malformed label, non-numeric fields")
                     continue
+                class_ids_seen.add(cls)
                 if cls not in ALLOWED_CLASS_IDS:
                     errors.append(
                         f"{label}:{line_no}: class id {cls} is not WP3 (must be 0=D20 or 1=D40). "
                         "D00/D10/D50/D60/D90 must not appear in pavement labels."
                     )
                     continue
-                if any(not 0.0 <= v <= 1.0 for v in vals):
-                    errors.append(f"{label}:{line_no}: coordinate out of [0,1]: {vals}")
+                if any(not 0.0 <= v <= 1.0 for v in vals) or vals[2] <= 0 or vals[3] <= 0:
+                    invalid_boxes += 1
+                    errors.append(f"{label}:{line_no}: invalid box {vals}")
                     continue
-                cx, cy, w, h = vals
-                if w <= 0 or h <= 0:
-                    errors.append(f"{label}:{line_no}: non-positive box {w}x{h}")
-                    continue
+                _, _, w, h = vals
                 box_ids[cls] += 1
                 named_boxes[CLASS_NAMES[cls]] += 1
+                small_est_640[CLASS_NAMES[cls]]["total"] += 1
+                small_est_640[CLASS_NAMES[cls]][_bin_640(w, h)] += 1
+
+    extra_ids = sorted(class_ids_seen - ALLOWED_CLASS_IDS)
+    if extra_ids:
+        errors.append(f"non-WP3 class ids present: {extra_ids} (only 0=D20 and 1=D40 allowed)")
+
+    images_total = sum(split_images.values())
+    labels_total = sum(split_labels.values())
+    if images_total == 0:
+        jpeg_status = "GITIGNORED_OR_MISSING"
+        errors.append(DATA_RECOVERY_INSTRUCTIONS)
+    elif missing_images:
+        jpeg_status = "PARTIAL"
+    else:
+        jpeg_status = "PRESENT"
 
     if yaml_path is not None:
         if not yaml_path.exists():
@@ -174,9 +319,6 @@ def verify(
             text = yaml_path.read_text()
             if "D20" not in text or "D40" not in text:
                 errors.append(f"{yaml_path}: names must include D20 and D40")
-            for code in FORBIDDEN_WP_CODES:
-                # comments may mention other WPs; require names block not list them as keys
-                pass
             try:
                 import yaml  # type: ignore
                 cfg = yaml.safe_load(text)
@@ -192,10 +334,14 @@ def verify(
                 extra = set(mapped.values()) - {"D20", "D40"}
                 if extra:
                     errors.append(f"{yaml_path}: extra classes not allowed in WP3: {sorted(extra)}")
+                for code in FORBIDDEN_WP_CODES:
+                    if code in list(mapped.values()):
+                        errors.append(f"{yaml_path}: WP2/WP4 class {code} is not allowed in WP3")
             except ImportError:
                 warnings.append("PyYAML not installed; YAML names checked as text only")
 
-    if check_expected_counts and not errors:
+    count_errors_before = len(errors)
+    if check_expected_counts and jpeg_status == "PRESENT" and not extra_ids and bad_lines == 0 and invalid_boxes == 0:
         for split, key in (("train", "train_images"), ("val", "val_images"), ("test", "test_images")):
             got = split_images.get(split, 0)
             expected = EXPECTED_COUNTS[key]
@@ -213,13 +359,42 @@ def verify(
             got = int(named_boxes.get(name, 0))
             if got != expected:
                 errors.append(f"{name} boxes {got} != expected {expected}")
+    elif check_expected_counts and jpeg_status == "PRESENT" and count_errors_before == 0:
+        pass
 
-    if mismatched_pairs:
-        warnings.append(f"image/label mismatches: {mismatched_pairs}")
+    if labels_total and jpeg_status != "PRESENT":
+        warnings.append(
+            f"labels present ({labels_total}) but JPEGs are {jpeg_status}. "
+            "Image counts 7380/1581/1582 cannot be confirmed until images are restored."
+        )
+
+    small_objects: dict[str, Any] | None = None
+    if jpeg_status == "PRESENT":
+        try:
+            from src.eval_small_objects import analyze_root
+
+            small_objects = analyze_root(root)
+        except Exception as exc:  # pragma: no cover - optional
+            warnings.append(f"small-object pixel bins unavailable: {exc}")
 
     return _report(
         root, yaml_path, errors, warnings, split_images, split_labels,
         box_ids, named_boxes, bad_lines,
+        extra={
+            "jpeg_status": jpeg_status,
+            "invalid_boxes": invalid_boxes,
+            "missing_images": missing_images,
+            "missing_labels": missing_labels,
+            "class_ids_seen": sorted(class_ids_seen),
+            "data_recovery": DATA_RECOVERY_INSTRUCTIONS,
+            "small_object_est_640": small_est_640,
+            "small_objects_pixel": small_objects,
+            "note_d40_small": (
+                "Hypothesis (not a trained metric): D40 potholes are often small at "
+                "imgsz=640. Compare small_object_est_640['D40'] and pixel bins when "
+                "images are present. Model D40 AP is NOT_RUN until eval_wp3 status=OK."
+            ),
+        },
     )
 
 
@@ -233,9 +408,10 @@ def _report(
     box_ids: Counter,
     named_boxes: Counter,
     bad_lines: int,
+    extra: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     ok = not errors
-    return {
+    payload: dict[str, Any] = {
         "status": "OK" if ok else "FAIL",
         "verified_at_utc": datetime.now(timezone.utc).isoformat(),
         "root": str(root),
@@ -243,6 +419,7 @@ def _report(
         "agent": "pavement",
         "wp": "WP3",
         "classes": {"0": "D20", "1": "D40"},
+        "forbidden_classes": list(FORBIDDEN_WP_CODES),
         "depth_estimation": False,
         "split_images": split_images,
         "split_labels": split_labels,
@@ -257,9 +434,12 @@ def _report(
         "warnings": warnings,
         "note": (
             "WP3 only. Do not mix D00/D10 (WP2) or D50/D60/D90 (WP4). "
-            "Do not re-run prepare_dataset.py on this folder."
+            "Do not re-run prepare_dataset.py on an already-correct seed-42 folder."
         ),
     }
+    if extra:
+        payload.update(extra)
+    return payload
 
 
 def main() -> None:
@@ -283,11 +463,10 @@ def main() -> None:
     if root is None:
         report = {
             "status": "FAIL",
-            "errors": [
-                "Could not locate training/data/processed/pavement. "
-                "Images are gitignored. Provide --root or WP3_PAVEMENT_ROOT."
-            ],
+            "errors": [DATA_RECOVERY_INSTRUCTIONS],
+            "jpeg_status": "MISSING_ROOT",
             "expected_counts": EXPECTED_COUNTS,
+            "data_recovery": DATA_RECOVERY_INSTRUCTIONS,
         }
         print(json.dumps(report, indent=2))
         sys.exit(2)

@@ -10,12 +10,20 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
 
-from src.verify_wp3_dataset import EXPECTED_COUNTS, verify, write_colab_yaml
+from src.verify_wp3_dataset import (
+    EXPECTED_COUNTS,
+    DATA_RECOVERY_INSTRUCTIONS,
+    check_wp3_repo,
+    verify,
+    write_colab_yaml,
+)
 from src.eval_wp3 import evaluate_wp3
 from src.eval_small_objects import analyze_split, _bin_name
 from src.verify_tflite import inspect_tflite
-from src.pack_wp3_artifacts import pack
+from src.pack_wp3_artifacts import pack, stage_artifacts
+from src.train import CUDA_REQUIRED_WP3, T4_BATCH, T4_BATCH_OOM_FALLBACK, _is_oom
 from evaluation.compare_wp3_models import compare
+from evaluation.select_wp3_best import select_best
 
 
 def _write_yolo_pair(root: Path, split: str, stem: str, line: str, size: tuple[int, int] | None = None) -> None:
@@ -186,8 +194,153 @@ class PackArtifactsTests(unittest.TestCase):
             manifest = pack(root, out)
             self.assertTrue(out.exists())
             self.assertEqual(manifest["weight_files"], [])
+            self.assertEqual(manifest["tflite_files"], [])
             self.assertEqual(manifest["status"], "NOT_RUN")
             self.assertTrue(any("pavement.yaml" in p for p in manifest["included"]))
+
+    def test_stage_without_weights_is_not_run(self):
+        with tempfile.TemporaryDirectory() as td:
+            root = Path(td)
+            (root / "config").mkdir()
+            (root / "config" / "pavement.yaml").write_text("names:\n  0: D20\n  1: D40\n")
+            dest = root / "artifacts"
+            manifest = stage_artifacts(root, dest)
+            self.assertEqual(manifest["status"], "NOT_RUN")
+            self.assertTrue((dest / "pavement.yaml").is_file())
+            self.assertFalse((dest / "best.pt").exists())
+
+
+class MissingJpegAndBoxTests(unittest.TestCase):
+    def test_labels_without_images_is_explicit_gitignored_failure(self):
+        with tempfile.TemporaryDirectory() as td:
+            root = Path(td) / "pavement"
+            for split, stem in (("train", "a"), ("val", "b"), ("test", "c")):
+                (root / "labels" / split).mkdir(parents=True, exist_ok=True)
+                (root / "images" / split).mkdir(parents=True, exist_ok=True)
+                (root / "labels" / split / f"{stem}.txt").write_text("0 0.5 0.5 0.2 0.2\n")
+            report = verify(root, None, check_expected_counts=False)
+            self.assertEqual(report["status"], "FAIL")
+            self.assertEqual(report["jpeg_status"], "GITIGNORED_OR_MISSING")
+            self.assertTrue(any("Do NOT wget" in e for e in report["errors"]))
+            self.assertIn("convert_rdd_voc", DATA_RECOVERY_INSTRUCTIONS)
+            self.assertIn("prepare_dataset", DATA_RECOVERY_INSTRUCTIONS)
+
+    def test_malformed_and_invalid_boxes_are_counted(self):
+        with tempfile.TemporaryDirectory() as td:
+            root = Path(td) / "pavement"
+            _write_yolo_pair(root, "train", "a", "0 0.5 0.5")
+            _write_yolo_pair(root, "val", "b", "1 1.5 0.4 0.1 0.1")
+            _write_yolo_pair(root, "test", "c", "0 0.3 0.3 0.2 0.2")
+            report = verify(root, None, check_expected_counts=False)
+            self.assertEqual(report["status"], "FAIL")
+            self.assertGreaterEqual(report["bad_lines"], 1)
+            self.assertGreaterEqual(report["invalid_boxes"], 1)
+
+    def test_repo_check_finds_pavement_yaml_names(self):
+        repo = ROOT.parent
+        report = check_wp3_repo(repo)
+        self.assertEqual(report["status"], "OK", report.get("errors"))
+        self.assertEqual(report["yaml_names"]["0"], "D20")
+        self.assertEqual(report["yaml_names"]["1"], "D40")
+
+
+class SelectBestTests(unittest.TestCase):
+    def test_not_run_does_not_write_weights(self):
+        with tempfile.TemporaryDirectory() as td:
+            td = Path(td)
+            dest = td / "best.pt"
+            report = select_best(
+                [
+                    {
+                        "name": "baseline",
+                        "metrics_path": td / "missing.json",
+                        "weights_path": td / "missing.pt",
+                    }
+                ],
+                dest,
+            )
+            self.assertEqual(report["status"], "NOT_RUN")
+            self.assertFalse(dest.exists())
+            self.assertIsNone(report["selected"])
+
+    def test_ranks_d40_then_d20(self):
+        with tempfile.TemporaryDirectory() as td:
+            td = Path(td)
+
+            def write(name, d20, d40, m50, size):
+                metrics = {
+                    "status": "OK",
+                    "metrics": {
+                        "mAP50": m50,
+                        "per_class": {
+                            "D20": {"AP50": d20},
+                            "D40": {"AP50": d40},
+                        },
+                    },
+                }
+                (td / f"{name}.json").write_text(json.dumps(metrics))
+                w = td / f"{name}.pt"
+                w.write_bytes(b"x" * size)
+
+            write("a", 0.9, 0.4, 0.8, 100)
+            write("b", 0.5, 0.7, 0.6, 200)
+            dest = td / "out" / "best.pt"
+            report = select_best(
+                [
+                    {"name": "a", "metrics_path": td / "a.json", "weights_path": td / "a.pt"},
+                    {"name": "b", "metrics_path": td / "b.json", "weights_path": td / "b.pt"},
+                ],
+                dest,
+            )
+            self.assertEqual(report["status"], "OK")
+            self.assertEqual(report["selected"], "b")
+            self.assertTrue(dest.is_file())
+
+
+class TrainHelpersTests(unittest.TestCase):
+    def test_t4_batch_policy_and_cuda_message(self):
+        self.assertEqual(T4_BATCH, 16)
+        self.assertEqual(T4_BATCH_OOM_FALLBACK, 8)
+        self.assertEqual(CUDA_REQUIRED_WP3, "CUDA GPU required for WP3 training.")
+        self.assertTrue(_is_oom(RuntimeError("CUDA out of memory")))
+        self.assertFalse(_is_oom(RuntimeError("file not found")))
+
+
+class NotebookSpecTests(unittest.TestCase):
+    def test_notebook_json_parses_and_matches_spec(self):
+        path = ROOT / "colab" / "WP3_YOLOv8_training.ipynb"
+        nb = json.loads(path.read_text())
+        self.assertEqual(nb["nbformat"], 4)
+        self.assertGreaterEqual(len(nb["cells"]), 12)
+        text = "\n".join(
+            "".join(c.get("source") or []) if isinstance(c.get("source"), list) else str(c.get("source") or "")
+            for c in nb["cells"]
+        )
+        self.assertIn("CUDA GPU required for WP3 training.", text)
+        self.assertIn("nvidia-smi", text)
+        self.assertIn("requirements.txt", text)
+        self.assertIn("7380", text)
+        self.assertIn("1581", text)
+        self.assertIn("1582", text)
+        self.assertIn("training/config/pavement.yaml", text)
+        self.assertIn("SGD", text)
+        self.assertIn("0.01", text)
+        self.assertIn("yolov8n", text.lower())
+        self.assertIn("yolov8s", text.lower())
+        self.assertIn("convert_rdd_voc", text)
+        self.assertIn("prepare_dataset", text)
+        self.assertIn("Do NOT wget", text)
+        self.assertNotIn("%pip -q install -U ultralytics torch", text)
+        code_text = "\n".join(
+            "".join(c.get("source") or []) if isinstance(c.get("source"), list) else str(c.get("source") or "")
+            for c in nb["cells"]
+            if c.get("cell_type") == "code"
+        )
+        self.assertNotIn("batch=-1", code_text.replace(" ", ""))
+        self.assertNotIn("allow_cpu=True", text)
+        self.assertNotIn("ndownloader.figshare", text)
+        self.assertNotRegex(text, r"mAP50\s*=\s*0\.\d")
+        self.assertIn("NOT YET EXECUTED", text)
 
 
 if __name__ == "__main__":

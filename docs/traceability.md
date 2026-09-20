@@ -55,7 +55,7 @@ Flow: Acquisition → Validation/Prétraitement → Orchestration → WP2/WP3/WP
 
 | # | Specification requirement | WP | Repository component | Status | Missing implementation | Planned change | Test |
 | --- | --- | --- | --- | --- | --- | --- | --- |
-| 1 | D40 potholes belong only to WP3 Agent Chaussée | WP3 | `TariqMapConstants.agentClasses['pavement']`, `training/config/pavement.yaml`, `prepare_dataset.py` | **TESTED** | Real `pavement.tflite` weights | Train WP3 baseline (sibling agent), then export | `observation_test` `agentFor('D40')`; `test_contracts.py`; `test_distill.py` |
+| 1 | D40 potholes belong only to WP3 Agent Chaussée | WP3 | `TariqMapConstants.agentClasses['pavement']`, `training/config/pavement.yaml`, `prepare_dataset.py`, `training/colab/WP3_YOLOv8_training.ipynb` | **TESTED** | Real `pavement.tflite` weights | Train WP3 on Colab T4 (`WP3_YOLOv8_training.ipynb`), then export | `observation_test` `agentFor('D40')`; `test_contracts.py`; `test_wp3_pipeline.py` |
 | 2 | D20 alligator only on WP3; visual 2D; **no depth estimation** | WP3 | `depthEstimationEnabled = false`; D90 limitation in class map | **IMPLEMENTED** / **TESTED** (flag) | None for the prohibition | Keep 2D-only in model cards | `gps_enrichment_test` (flag); class-map JSON `limitation` |
 | 3 | WP3 small-object (pothole/alligator) evaluation | WP3 | `src.eval_small_objects`, `docs/wp3-training.md`, Colab notebook | **IMPLEMENTED** / **TESTED** (GT bins + guards) | No trained detector recall | Run Colab eval after baseline | `tests/test_wp3_pipeline.py` |
 | 4 | WP2 only D00 longitudinal + D10 transverse | WP2 | `cracks.yaml`, agentClasses | **TESTED** | Real `cracks.tflite` | Train after WP3 baseline | `test_contracts.py`; `observation_test` disjoint classes |

@@ -28,5 +28,8 @@ A simple FastAPI mock backend designed to ingest sync data from the TariqMap Flu
 ## Endpoints
 
 - `GET /v1/health`: Returns server status and observation count
-- `POST /v1/observations`: Upload an Observation (idempotent)
+- `POST /v1/observations`: Upload an Observation (idempotent). GPS-missing payloads (`gpsAvailable: false`, lat/lon 0) are accepted.
 - `GET /v1/stats`: Returns analytics based on uploaded observations
+- `GET /v1/contract`: Read-only actors (peers) and incident statuses (`DETECTED`…`ARCHIVED`)
+
+Incident CRUD, SIG matching, and RAG are **PLANNED**. This mock is not a production GIS.

@@ -67,3 +67,5 @@ notes:
   - "Camera-angle variation: achieved via perspective + shear."
   - "Test split must remain untouched until final evaluation."
   - "D90 (rutting) is visual-only from 2D imagery — no depth measurement."
+  - "WP3 pavement (D20/D40) is the first student to train and distill (src.distill)."
+  - "augmentation.training describes the student (YOLOv8n); teacher/KD is a later step."

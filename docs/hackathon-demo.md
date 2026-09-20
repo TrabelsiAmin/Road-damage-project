@@ -34,4 +34,4 @@ This document provides a step-by-step guide on how to present TariqMap to the ju
 6. **Backend Check**: (Optional) Open the FastAPI backend logs on your laptop to show the incoming POST requests containing the full JSON payload, complete with GPS coordinates and priority scores.
 
 ## 4. Closing Argument
-TariqMap is not a UI prototype; it's a robust pipeline. We audited the dataset, trained the model, deployed it to the edge, handled offline SQLite persistence, and built a resilient sync engine. It is ready for the field.
+TariqMap is an offline-first capture and multi-agent detection slice: audited data strategy, three disjoint agents (WP3 pavement first), honest mock banners when weights are missing, SQLite persistence, and a retryable sync queue. SIG matching, incident dashboards, and RAG are specified, not shipped as production. No mAP is claimed until `src.evaluate` reports `status: OK`.

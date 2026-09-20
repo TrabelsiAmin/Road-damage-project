@@ -12,6 +12,7 @@ import '../core/app_colors.dart';
 import '../inference/annotation_renderer.dart';
 import '../models/observation.dart';
 import '../services/detection_service.dart';
+import '../services/observation_repository.dart';
 import '../services/territorial_service.dart';
 import '../services/video_frame_extractor.dart';
 import '../services/video_muxer.dart';
@@ -36,10 +37,14 @@ class VideoImportScreen extends StatefulWidget {
     super.key,
     required this.service,
     required this.actor,
+    this.repository,
   });
 
   final DetectionService service;
   final String actor;
+  /// When set, each extracted frame is persisted as an Observation (WP1).
+  /// GPS-missing frames are still saved (`gpsAvailable: false`).
+  final ObservationRepository? repository;
 
   @override
   State<VideoImportScreen> createState() => _VideoImportScreenState();
@@ -229,17 +234,25 @@ class _VideoImportScreenState extends State<VideoImportScreen> {
             annotatedPaths.add(annotatedPath);
           }
 
+          final persistedPath = await _persistFrameJpeg(
+            File(annotatedPath ?? frame.file.path),
+          );
           final obs = Observation(
             id: const Uuid().v4(),
             captureId: const Uuid().v4(),
-            imagePath: annotatedPath ?? frame.file.path,
+            imagePath: persistedPath,
             createdAt: DateTime.now().toUtc(),
             latitude: position?.latitude ?? 0.0,
             longitude: position?.longitude ?? 0.0,
+            gpsAvailable: position != null,
+            sourceVideoPath: _videoFile?.path,
+            frameTimestampMs: frame.timestampMs,
             accuracyMeters: position?.accuracy,
             agentResults: agentResults,
             actor: widget.actor,
+            annotatedImagePath: annotatedPath,
           );
+          await widget.repository?.save(obs);
           _results.add(_FrameResult(
             timestampMs: frame.timestampMs,
             observation: obs,
@@ -279,6 +292,24 @@ class _VideoImportScreenState extends State<VideoImportScreen> {
         _processing = false;
         _status = 'Video inference failed: $e';
       });
+    }
+  }
+
+  /// Copy a sampled JPEG out of the session temp dir so WP1 observations
+  /// survive [VideoFrameExtractor.cleanup] on dispose.
+  Future<String> _persistFrameJpeg(File source) async {
+    try {
+      final docs = await getApplicationDocumentsDirectory();
+      final dir = Directory(p.join(docs.path, 'tariqmap_frames'));
+      await dir.create(recursive: true);
+      final dest = File(p.join(
+        dir.path,
+        '${DateTime.now().millisecondsSinceEpoch}_${p.basename(source.path)}',
+      ));
+      await source.copy(dest.path);
+      return dest.path;
+    } catch (_) {
+      return source.path;
     }
   }
 

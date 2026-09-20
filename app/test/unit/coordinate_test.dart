@@ -58,6 +58,18 @@ void main() {
       expect(d.classLabel, equals('Pothole'));
     });
 
+    test('stableId and classId match the domain UML aliases', () {
+      const d = Detection(
+        agent: 'pavement', classCode: 'D40', confidence: 0.9,
+        box: BoundingBox(x: 0.2, y: 0.3, width: 0.1, height: 0.1),
+      );
+      expect(d.classId, 'D40');
+      expect(d.bbox, d.box);
+      expect(d.stableId, contains('pavement_D40'));
+      expect(d.toJson()['detectionId'], d.stableId);
+      expect(d.toJson()['detectedAt'], isNull);
+    });
+
     test('unknown classCode has stable classLabel fallback', () {
       const d = Detection(
         agent: 'test', classCode: 'D99', confidence: 0.5,

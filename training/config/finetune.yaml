@@ -1,6 +1,8 @@
 # Fine-tune from a baseline best.pt. Same evaluation protocol as baseline.
+# PRIORITY: WP3 pavement (D20/D40, small-object recall, visual 2D only).
 # python -m src.train --agent pavement --data config/pavement.yaml \
 #     --weights runs/pavement_baseline/weights/best.pt --finetune --epochs 50
+# Distillation (later): python -m src.distill --agent pavement --plan-only
 
 model: best.pt
 imgsz: 640

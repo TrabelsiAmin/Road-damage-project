@@ -155,6 +155,9 @@ class ObservationDao {
     'created_at':          obs.createdAt.toUtc().toIso8601String(),
     'latitude':            obs.latitude,
     'longitude':           obs.longitude,
+    'gps_available':       obs.gpsAvailable ? 1 : 0,
+    'source_video_path':   obs.sourceVideoPath,
+    'frame_timestamp_ms':  obs.frameTimestampMs,
     'accuracy_meters':     obs.accuracyMeters,
     'actor':               obs.actor,
     'sync_status':         obs.syncStatus.name,
@@ -226,6 +229,9 @@ class ObservationDao {
       createdAt:           DateTime.parse(row['created_at'] as String),
       latitude:            (row['latitude']  as num).toDouble(),
       longitude:           (row['longitude'] as num).toDouble(),
+      gpsAvailable:        (row['gps_available'] as int?) != 0,
+      sourceVideoPath:     row['source_video_path'] as String?,
+      frameTimestampMs:    row['frame_timestamp_ms'] as int?,
       accuracyMeters:      row['accuracy_meters'] != null
           ? (row['accuracy_meters'] as num).toDouble()
           : null,

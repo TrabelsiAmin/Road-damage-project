@@ -20,7 +20,7 @@ class AppDatabase {
   }
 
   static const _dbName    = 'tariqmap.db';
-  static const _dbVersion = 1;
+  static const _dbVersion = 2;
 
   // ── Schema ────────────────────────────────────────────────────────────────
 
@@ -33,6 +33,9 @@ class AppDatabase {
       created_at          TEXT NOT NULL,
       latitude            REAL NOT NULL,
       longitude           REAL NOT NULL,
+      gps_available       INTEGER NOT NULL DEFAULT 1,
+      source_video_path   TEXT,
+      frame_timestamp_ms  INTEGER,
       accuracy_meters     REAL,
       actor               TEXT NOT NULL,
       sync_status         TEXT NOT NULL DEFAULT 'pending',
@@ -115,8 +118,22 @@ class AppDatabase {
   }
 
   Future<void> _onUpgrade(Database db, int oldVersion, int newVersion) async {
-    // Add migration blocks here for future schema versions.
-    // e.g.: if (oldVersion < 2) { await db.execute('ALTER TABLE ...'); }
+    if (oldVersion < 2) {
+      await db.execute(
+        'ALTER TABLE observations ADD COLUMN gps_available INTEGER NOT NULL DEFAULT 1',
+      );
+      await db.execute(
+        'ALTER TABLE observations ADD COLUMN source_video_path TEXT',
+      );
+      await db.execute(
+        'ALTER TABLE observations ADD COLUMN frame_timestamp_ms INTEGER',
+      );
+      // Existing 0,0 rows were captured without a fix — mark for WP5 enrichment.
+      await db.execute(
+        'UPDATE observations SET gps_available = 0 '
+        'WHERE latitude = 0 AND longitude = 0',
+      );
+    }
     debugPrint('[AppDatabase] Migrating $oldVersion → $newVersion');
   }
 

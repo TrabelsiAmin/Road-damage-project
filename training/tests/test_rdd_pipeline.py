@@ -166,6 +166,26 @@ class PrepareGuardTests(unittest.TestCase):
                 prepare(src, Path(td) / "out", ROOT / "config" / "source-class-map.json", (0.7, 0.15, 0.15))
             self.assertIn("STOP", str(ctx.exception))
 
+    def test_splits_d40_to_pavement_agent_only(self):
+        with tempfile.TemporaryDirectory() as td:
+            src = Path(td) / "yolo"
+            (src / "images").mkdir(parents=True)
+            (src / "labels").mkdir()
+            (src / "images" / "hole.jpg").write_bytes(b"x")
+            (src / "labels" / "hole.txt").write_text("3 0.5 0.5 0.2 0.2\n")
+            out = Path(td) / "processed"
+            summary = prepare(
+                src, out, ROOT / "config" / "source-class-map.json", (0.7, 0.15, 0.15)
+            )
+            self.assertEqual(summary["class_distribution"]["D40"], 1)
+            self.assertEqual(summary["agent_image_counts"]["pavement"], 1)
+            self.assertEqual(summary["agent_image_counts"]["cracks"], 0)
+            self.assertEqual(summary["agent_image_counts"]["surface"], 0)
+            pavement_labels = list((out / "pavement").rglob("*.txt"))
+            self.assertTrue(pavement_labels)
+            self.assertTrue(pavement_labels[0].read_text().startswith("1 "))  # D40 → local id 1
+            self.assertFalse(list((out / "cracks").rglob("*.txt")))
+
 
 class VocAnalyzeTests(unittest.TestCase):
     def test_counts_raw_and_mapped_and_excludes_rdd_d50(self):

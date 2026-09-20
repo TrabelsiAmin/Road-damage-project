@@ -94,11 +94,13 @@ class _HomeScreenState extends State<HomeScreen> {
       try {
         position = await _location.currentPosition();
       } catch (e) {
-        setState(() => _message = 'GPS unavailable: $e. Observation will have 0,0 coords.');
+        setState(() => _message =
+            'GPS unavailable: $e. Observation is kept for later enrichment.');
       }
 
       final imageFile = File(picked.path);
       final results   = await _detection.detectAll(imageFile);
+      final hasGps = position != null;
       final obs = Observation(
         id:           _uuid.v4(),
         captureId:    _uuid.v4(),
@@ -106,6 +108,7 @@ class _HomeScreenState extends State<HomeScreen> {
         createdAt:    DateTime.now().toUtc(),
         latitude:     position?.latitude  ?? 0.0,
         longitude:    position?.longitude ?? 0.0,
+        gpsAvailable: hasGps,
         accuracyMeters: position?.accuracy,
         actor:        _actor,
         agentResults: results,
@@ -153,8 +156,9 @@ class _HomeScreenState extends State<HomeScreen> {
     await Navigator.of(context).push(
       MaterialPageRoute<void>(
         builder: (_) => VideoImportScreen(
-          service: _detection,
-          actor:   _actor,
+          service:    _detection,
+          actor:      _actor,
+          repository: _repository,
         ),
       ),
     );

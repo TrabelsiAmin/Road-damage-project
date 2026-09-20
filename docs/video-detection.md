@@ -32,6 +32,8 @@ Video file
        → ffmpeg decode to null (must be silent)
        → save MP4 under app documents /tariqmap_videos/
   → session JPEG directory deleted on screen dispose; muxed MP4 is kept
+  → each frame is also saved as an Observation (source video path + timestamp;
+     GPS 0 / gpsAvailable=false if location is missing — never dropped)
 ```
 
 Platform extraction uses Android `MediaMetadataRetriever` / iOS `AVAssetImageGenerator` through `video_thumbnail`. Desktop/training uses the same concat recipe via `python -m src.process_video`.

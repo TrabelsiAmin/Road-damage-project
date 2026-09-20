@@ -30,6 +30,9 @@ class ApiClient implements ObservationSyncClient {
       'createdAt': obs.createdAt.toUtc().toIso8601String(),
       'latitude': obs.latitude,
       'longitude': obs.longitude,
+      'gpsAvailable': obs.gpsAvailable,
+      'sourceVideoPath': obs.sourceVideoPath,
+      'frameTimestampMs': obs.frameTimestampMs,
       'accuracyMeters': obs.accuracyMeters,
       'actor': obs.actor,
       'syncStatus': 'synced',
@@ -44,6 +47,8 @@ class ApiClient implements ObservationSyncClient {
         'agent': r.agent,
         'detections': r.detections.map((d) => {
           'agent': d.agent,
+          'detectionId': d.stableId,
+          'classId': d.classId,
           'classCode': d.classCode,
           'classLabel': d.classCode, // Could map to TariqMapConstants.labelFor(d.classCode)
           'confidence': d.confidence,

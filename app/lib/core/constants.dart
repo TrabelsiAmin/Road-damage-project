@@ -3,6 +3,11 @@
 /// All D-codes, labels, agent assignments, and severity weights are defined
 /// here once and imported everywhere else.  Changing a label requires only
 /// editing this file.
+///
+/// Work-package mapping (must stay disjoint at deployment):
+///   WP2 Agent Fissures  → cracks   → D00, D10
+///   WP3 Agent Chaussée  → pavement → D20, D40   (training/inference PRIORITY)
+///   WP4 Agent Marquage  → surface  → D50, D60, D90
 class TariqMapConstants {
   TariqMapConstants._();
 
@@ -10,11 +15,19 @@ class TariqMapConstants {
   static const allCodes = <String>['D00', 'D10', 'D20', 'D40', 'D50', 'D60', 'D90'];
 
   // ── Agent → class mapping ────────────────────────────────────────────────
+  /// Three independent runners. Do not collapse into one YOLO at deploy time.
   static const agentClasses = <String, List<String>>{
-    'cracks':   ['D00', 'D10'],
-    'pavement': ['D20', 'D40'],
-    'surface':  ['D50', 'D60', 'D90'],
+    'cracks':   ['D00', 'D10'], // WP2
+    'pavement': ['D20', 'D40'], // WP3 — PRIORITY (alligator + pothole, 2D only)
+    'surface':  ['D50', 'D60', 'D90'], // WP4
   };
+
+  /// WP3 is the training and on-device inference priority.
+  static const priorityAgent = 'pavement';
+  static const priorityClasses = <String>['D20', 'D40'];
+
+  /// Visual 2D only. Never infer physical depth / rut depth from a still.
+  static const depthEstimationEnabled = false;
 
   // ── Human-readable labels ────────────────────────────────────────────────
   static const labels = <String, String>{
@@ -49,11 +62,25 @@ class TariqMapConstants {
     'D60': 0.50,  // Faded lane
   };
 
-  // ── Actor names ──────────────────────────────────────────────────────────
+  // ── Actor names (peers — no institutional hierarchy in the platform) ─────
   static const actors = <String>[
     'Municipality',
     'Ministry of Equipment',
     'Tunisia Autoroutes',
+  ];
+
+  /// RAG, when introduced, is decision-support only. The actor decides.
+  static const ragIsDecisionSupportOnly = true;
+
+  // ── Incident lifecycle (WP5). Specification-aligned; persistence is PLANNED.
+  /// DETECTED → ANALYZED → ASSIGNED → IN_PROGRESS → RESOLVED → ARCHIVED
+  static const incidentStatuses = <String>[
+    'DETECTED',
+    'ANALYZED',
+    'ASSIGNED',
+    'IN_PROGRESS',
+    'RESOLVED',
+    'ARCHIVED',
   ];
 
   // ── Model bundle ─────────────────────────────────────────────────────────

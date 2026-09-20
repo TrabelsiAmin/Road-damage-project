@@ -1,16 +1,17 @@
 """TariqMap YOLOv8n training entry point.
 
-Trains one agent at a time with:
-- Deterministic seed
-- Augmentation from augmentation.yaml
-- Early stopping
-- Best-checkpoint saving
-- Per-class validation metrics on test split
-- Model card generation
+Trains one agent at a time. WP3 pavement (D20/D40) is the training priority.
 
-Usage:
-    python -m src.train --agent cracks --data config/cracks.yaml --weights yolov8n.pt
+Do not train a unified 7-class detector for deployment. RDD may be converted
+as a whole, then split by prepare_dataset.py into cracks / pavement / surface.
+
+Validated ML path after this baseline:
+    teacher → knowledge distillation (src.distill stub) → student →
+    quantization → TFLite (src.export). No fabricated metrics.
+
+Usage (WP3 first):
     python -m src.train --agent pavement --data config/pavement.yaml --weights yolov8n.pt
+    python -m src.train --agent cracks --data config/cracks.yaml --weights yolov8n.pt
     python -m src.train --agent surface --data config/surface.yaml --weights yolov8n.pt
 """
 from __future__ import annotations
@@ -35,9 +36,9 @@ except ImportError:  # pragma: no cover
 # ---------------------------------------------------------------------------
 
 AGENTS: dict[str, list[str]] = {
-    "cracks":   ["D00", "D10"],
-    "pavement": ["D20", "D40"],
-    "surface":  ["D50", "D60", "D90"],
+    "cracks":   ["D00", "D10"],       # WP2 Agent Fissures
+    "pavement": ["D20", "D40"],       # WP3 Agent Chaussée — PRIORITY
+    "surface":  ["D50", "D60", "D90"],  # WP4 Agent Marquage & Surface
 }
 
 
@@ -105,6 +106,7 @@ def _write_model_card(
         "metrics": results,
         "limitations": [
             "D90 (rutting) is visual-only — no depth measurement from 2D image.",
+            "WP3 pavement (D20/D40) is the training/inference priority.",
             "Performance may degrade on images outside the training domain (different countries, cameras).",
             "Minimum object size: ~32×32 pixels at 640 input resolution.",
             "Night-time / very dark images not well represented in training data.",
@@ -258,7 +260,8 @@ def train(
 
 def main() -> None:
     parser = argparse.ArgumentParser(description="Train a TariqMap detection agent")
-    parser.add_argument("--agent", required=True, choices=list(AGENTS), help="Agent to train")
+    parser.add_argument("--agent", required=True, choices=list(AGENTS),
+                        help="Agent to train. Prefer --agent pavement (WP3) first.")
     parser.add_argument("--data", type=Path, required=True, help="Path to YOLO data YAML")
     parser.add_argument("--weights", default="yolov8n.pt", help="Starting weights (YOLOv8n by default)")
     parser.add_argument("--epochs", type=int, default=150, help="Max training epochs")

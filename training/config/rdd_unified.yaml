@@ -1,4 +1,8 @@
 # Unified 7-class YOLO data YAML. Paths are local after convert + prepare.
+# Used for conversion/audit of RDD, NOT for deployment.
+# After prepare_dataset.py the three agent YAMLs (cracks/pavement/surface)
+# are the training and TFLite targets. Do not ship a mixed 7-class detector.
+# WP3 pavement (D20/D40) is the first baseline to train.
 # D90 will have zero labels on RDD2022 — do not train a surface agent until
 # analyze_labeled_dataset.py reports D50/D60 presence.
 

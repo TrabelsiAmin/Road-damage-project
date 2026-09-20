@@ -13,6 +13,7 @@ Endpoints:
     GET  /v1/observations/{id}     — Get one observation by id
     GET  /v1/health                — Health check
     GET  /v1/stats                 — Aggregate stats (count, priority distribution)
+    GET  /v1/contract              — Actors (peers) + incident lifecycle (read-only)
 
 Mobile app integration:
     Set the sync endpoint in api_client.dart to http://<dev-machine-ip>:8080/v1/observations
@@ -27,6 +28,7 @@ from fastapi import FastAPI, HTTPException, Request, status
 from fastapi.middleware.cors import CORSMiddleware
 
 from schemas import ObservationUpload, HealthResponse, StatsResponse
+from lifecycle import ACTORS, INCIDENT_STATUSES
 
 app = FastAPI(
     title="TariqMap API",
@@ -84,12 +86,13 @@ async def create_observation(
     _observations[obs_id] = stored
 
     logger.info(
-        "New observation: id=%s actor=%s detections=%d lat=%s lon=%s",
+        "New observation: id=%s actor=%s detections=%d lat=%s lon=%s gps=%s",
         obs_id,
         body.actor,
         sum(len(r.detections) for r in body.agent_results),
         body.latitude,
         body.longitude,
+        body.gpsAvailable,
     )
 
     return {"status": "created", "id": obs_id}
@@ -117,6 +120,21 @@ def get_observation(obs_id: str) -> dict:
     if obs is None:
         raise HTTPException(status_code=404, detail=f"Observation not found: {obs_id}")
     return obs
+
+
+@app.get("/v1/contract", tags=["infrastructure"])
+def contract() -> dict:
+    """Read-only contract for actors and incident statuses.
+
+    Incident CRUD, SIG matching, and RAG are PLANNED — not implemented here.
+    """
+    return {
+        "actors": list(ACTORS),
+        "actors_are_peers": True,
+        "incident_statuses": list(INCIDENT_STATUSES),
+        "rag_role": "decision_support_only",
+        "gps_missing_policy": "keep_observation_for_later_enrichment",
+    }
 
 
 @app.get("/v1/stats", response_model=StatsResponse, tags=["statistics"])

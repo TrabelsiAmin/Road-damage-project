@@ -1,7 +1,10 @@
 """Full dataset preparation pipeline for TariqMap.
 
 Converts any RDD/YOLO-format road damage dataset into three agent-specific YOLO
-datasets: cracks, pavement, surface.
+datasets: cracks (WP2), pavement (WP3 PRIORITY), surface (WP4).
+
+Deployment keeps three runners. This script may ingest a unified RDD dump
+and then split it — that is training-data prep, not a mixed production model.
 
 Rules enforced by this script
 -------------------------------
@@ -47,9 +50,9 @@ from src.fsutil import place_file
 # ---------------------------------------------------------------------------
 
 AGENTS: dict[str, list[str]] = {
-    "cracks":   ["D00", "D10"],
-    "pavement": ["D20", "D40"],
-    "surface":  ["D50", "D60", "D90"],
+    "cracks":   ["D00", "D10"],       # WP2
+    "pavement": ["D20", "D40"],       # WP3 PRIORITY
+    "surface":  ["D50", "D60", "D90"],  # WP4
 }
 
 ALL_CODES: list[str] = [c for codes in AGENTS.values() for c in codes]

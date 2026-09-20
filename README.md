@@ -2,7 +2,19 @@
 
 Offline-first Flutter app for road-defect detection (images, sampled video frames, live camera) plus a training pipeline for YOLOv8 → TFLite.
 
-This repository is a working product slice, not a trained production model.
+This repository is a working product slice, not a trained production model and not a production SIG/RAG system. See [docs/traceability.md](docs/traceability.md) for specification → code status (**PLANNED / IMPLEMENTED / TESTED / VALIDATED / PARTIAL**).
+
+## Work packages (must remain)
+
+| WP | Role | Classes / duty |
+| --- | --- | --- |
+| WP1 | Acquisition & orchestration | Image / video frames / camera. Video is never passed as MP4 to the detector. |
+| WP2 | Agent Fissures | D00, D10 |
+| WP3 | Agent Chaussée (**priority**) | D20, D40. Visual 2D only. **No depth.** |
+| WP4 | Agent Marquage & Surface | D50, D60, D90 |
+| WP5 | SIG, incidents, decision | GPS optional; unmatched kept for enrichment. Actors are peers. RAG = support only. |
+
+Three TFLite runners at deploy time. RDD may be converted then **split** (`training/src/prepare_dataset.py`). ML path: baseline → teacher → KD (`training/src/distill.py` stub) → student → quantize → export.
 
 ## Status at a glance
 
@@ -12,7 +24,10 @@ This repository is a working product slice, not a trained production model.
 | Video: MP4/MOV → JPEG frame extract → inference → annotated frames + contact sheet | **CURRENTLY WORKING** (pipeline). **REQUIRES MODEL** for real boxes. Encoded output MP4 is **CURRENTLY WORKING** when FFmpeg is on PATH (verified H.264 decode); **NOT AVAILABLE** on stock Android/iOS — see [docs/video-detection.md](docs/video-detection.md) |
 | Live camera YUV/BGRA conversion, preview-aligned boxes, temporal smoothing, latency | **CURRENTLY WORKING** (pipeline). **REQUIRES MODEL** for real boxes |
 | TFLite runner (letterbox + inverse mapping + YOLO decode) | **CURRENTLY WORKING** (code). **REQUIRES MODEL** (no `.tflite` is bundled) |
-| FastAPI observation ingest | **DEMO/MOCK** (in-memory, no auth) |
+| FastAPI observation ingest | **DEMO/MOCK** (in-memory, no auth). `/v1/contract` exposes actor + incident statuses. SIG/incidents/RAG **PLANNED** |
+| Incident lifecycle | **PARTIAL** — constants `DETECTED→…→ARCHIVED`; no incident store |
+| GPS missing | **IMPLEMENTED** — observation + detections are saved (`gpsAvailable: false`) |
+| Knowledge distillation | **PLANNED/STUB** — `python -m src.distill --agent pavement --plan-only` (no metrics) |
 | Global Potholes 29,120 JPEGs | **DEMO/REFERENCE only**. Unlabeled. **Not used for training.** Removed from git tracking |
 | YOLOv8 baseline / fine-tune / mAP | **REQUIRES LABELED DATA** + GPU. Metrics are **not claimed** |
 | D50 / D60 (faded markings) | Trainable **only if** RDD D44 / D43 exist in the dump you download |
@@ -45,6 +60,7 @@ python -m src.analyze_labeled_dataset --dataset data/raw/rdd_yolo --output repor
 python -m src.prepare_dataset --source data/raw/rdd_yolo --output data/processed --class-map config/source-class-map.json
 python -m src.train --agent pavement --data config/pavement.yaml --weights yolov8n.pt
 python -m src.evaluate --weights runs/pavement_baseline/weights/best.pt --data config/pavement.yaml --split test
+python -m src.distill --agent pavement --plan-only
 python -m src.export --weights runs/pavement_baseline/weights/best.pt --agent pavement
 python -m src.verify_tflite --model ../app/assets/models/pavement.tflite
 ```
@@ -80,10 +96,13 @@ uvicorn main:app --host 0.0.0.0 --port 8765
 ```bash
 cd app && flutter test
 cd training && python -m unittest discover -s tests
+cd backend && python -m unittest discover -s tests
 ```
 
 ## Docs
 
+- [docs/traceability.md](docs/traceability.md) — specification → WP → code → status
+- [docs/architecture.md](docs/architecture.md) — WP1–5 folder map, domain UML, ML path
 - [docs/dataset.md](docs/dataset.md) — labeled vs unlabeled, class taxonomy
 - [docs/dataset-audit.md](docs/dataset-audit.md) — Global Potholes audit (corrected)
 - [docs/video-detection.md](docs/video-detection.md)

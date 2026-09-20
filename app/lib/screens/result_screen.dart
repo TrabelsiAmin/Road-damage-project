@@ -460,8 +460,19 @@ class _MetaSection extends StatelessWidget {
     children: [
       const Text('Location & Metadata', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 15)),
       const SizedBox(height: 10),
-      _MetaRow(icon: Icons.location_on_outlined, label: 'GPS',
-          value: '${observation.latitude.toStringAsFixed(5)}, ${observation.longitude.toStringAsFixed(5)}'),
+      _MetaRow(
+        icon: Icons.location_on_outlined,
+        label: 'GPS',
+        value: observation.gpsAvailable
+            ? '${observation.latitude.toStringAsFixed(5)}, ${observation.longitude.toStringAsFixed(5)}'
+            : 'Missing — observation kept for later enrichment',
+      ),
+      if (observation.sourceVideoPath != null)
+        _MetaRow(
+          icon: Icons.videocam_outlined,
+          label: 'Source video',
+          value: observation.sourceVideoPath!,
+        ),
       if (observation.accuracyMeters != null)
         _MetaRow(icon: Icons.my_location, label: 'Accuracy',
             value: '±${observation.accuracyMeters!.toStringAsFixed(0)} m'),

@@ -1,5 +1,11 @@
 """Export trained YOLOv8 weights to TFLite for mobile deployment.
 
+Last step of the validated path:
+    baseline → teacher → KD (src.distill) → student → quantize → this export.
+
+Until KD exists, export the baseline student (prefer WP3 pavement first).
+Three files: cracks.tflite, pavement.tflite, surface.tflite — never one mixed model.
+
 Exports float32, float16, and int8 TFLite variants, computes SHA-256
 checksums, and updates the model-bundles.json manifest.
 

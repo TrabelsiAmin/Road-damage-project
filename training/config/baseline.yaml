@@ -26,6 +26,10 @@ candidates:
   - {model: yolov8s.pt, imgsz: 960}
 
 notes:
-  - Start with YOLOv8n 640 for mobile deployment.
+  - Start with WP3 pavement (D20/D40) YOLOv8n 640 — training/inference priority.
+  - Then WP2 cracks (D00/D10). WP4 surface only if D50/D60 exist in the dump.
   - Choose among candidates using the same test split and src.evaluate.
   - Higher resolution helps small cracks/potholes; it also increases latency.
+  - Do not collapse the three agents into one deployable YOLO.
+  - Knowledge distillation: see src.distill (stub until a teacher exists).
+  - No depth estimation from 2D imagery.

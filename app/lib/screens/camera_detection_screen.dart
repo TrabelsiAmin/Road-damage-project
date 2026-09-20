@@ -207,6 +207,7 @@ class _CameraDetectionScreenState extends State<CameraDetectionScreen>
         createdAt: DateTime.now().toUtc(),
         latitude: position?.latitude ?? 0,
         longitude: position?.longitude ?? 0,
+        gpsAvailable: position != null,
         accuracyMeters: position?.accuracy,
         actor: widget.actor,
         agentResults: results,

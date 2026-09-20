@@ -10,7 +10,9 @@ Offline-first road inspection client.
 | Result screen / SQLite queue / sync client | **CURRENTLY WORKING** against the **DEMO/MOCK** backend |
 | Video import | **CURRENTLY WORKING** frame pipeline; **REQUIRES MODEL**; encoded MP4 **when FFmpeg is on PATH** (verified decode); contact sheet otherwise |
 | Live camera | **CURRENTLY WORKING** YUV/BGRA path + preview-aligned overlay; **REQUIRES MODEL** |
-| TFLite | Runner + letterbox **CURRENTLY WORKING**; weights **REQUIRES MODEL** |
+| TFLite | Runner + letterbox **CURRENTLY WORKING**; weights **REQUIRES MODEL** (three agents: cracks / pavement / surface) |
+| GPS missing | Observation + detections **CURRENTLY WORKING** (`gpsAvailable: false`) |
+| Incident / SIG / RAG | **PLANNED** (lifecycle constants only) |
 | Web | Mock-only (no `dart:io` camera/video extract) |
 
 ## Run

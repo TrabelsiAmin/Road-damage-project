@@ -9,3 +9,5 @@ Honesty rules:
 - Report precision, recall, mAP50, mAP50-95, per-class AP, confusion, small-object recall.
 - A combined score must not hide a weak class (especially D00/D10/D20/D40).
 - **No accuracy is claimed in this repository** until `src.evaluate` has been run on real weights.
+- Knowledge distillation (`src.distill`) is a stub: it records a plan, not student mAP.
+- WP3 pavement (D20/D40, small-object recall, 2D only) is the first agent on this path.

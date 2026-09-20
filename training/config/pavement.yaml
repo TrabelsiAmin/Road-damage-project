@@ -1,3 +1,7 @@
+# WP3 PRIORITY — Agent Chaussée (pavement).
+# Classes: D20 alligator crack, D40 pothole. Visual 2D only. NO depth.
+# Training/inference priority over WP2 cracks and WP4 surface.
+# Deploy as pavement.tflite — do not merge into a 7-class YOLO at runtime.
 path: data/processed/pavement
 train: images/train
 val: images/val

@@ -1,18 +1,18 @@
 {
-  "probed_at_utc": "2026-09-19T19:28:26.892605+00:00",
+  "probed_at_utc": "2026-09-20T12:19:34.905231+00:00",
   "local": {
-    "path": "/tmp/tariqmap-work/Road-damage-project/training/data/raw/rdd2022",
-    "exists": false,
-    "xml_count": 0,
-    "image_count": 0,
-    "usable": false,
+    "path": "data/raw/rdd2022",
+    "exists": true,
+    "xml_count": 38385,
+    "image_count": 47420,
+    "usable": true,
     "official_sources": {
       "rdd2022_figshare": "https://figshare.com/articles/dataset/RDD2022_-_The_multi-national_Road_Damage_Dataset_released_through_CRDDC_2022/21431547",
       "rdd2022_figshare_api": "https://api.figshare.com/v2/articles/21431547",
       "rdd2022_paper": "https://arxiv.org/abs/2209.08538",
       "github": "https://github.com/sekilab/RoadDamageDetector"
     },
-    "note": "Place an RDD2022/RDD2024 extract here (JPEG + XML). Do not point this tool at Global_Potholes_Dataset-image."
+    "note": "Labeled RDD VOC XML found. Outer Figshare zip is 7 nested country zips."
   },
   "remote": {
     "article_id": 21431547,
@@ -21,32 +21,6 @@
     "http_status": 200,
     "error": null,
     "title": "RDD2022 - The multi-national Road Damage Dataset released through CRDDC'2022",
-    "files": [
-      {
-        "id": 38030910,
-        "name": "RDD2022_released_through_CRDDC2022.zip",
-        "size_bytes": 13264172619,
-        "download_url": "https://ndownloader.figshare.com/files/38030910"
-      },
-      {
-        "id": 38030823,
-        "name": "Directory_Structure_CRDDC_RDD2022.txt",
-        "size_bytes": 1161,
-        "download_url": "https://ndownloader.figshare.com/files/38030823"
-      },
-      {
-        "id": 38030826,
-        "name": "File_List_CRDDC_RDD2022.txt",
-        "size_bytes": 3250534,
-        "download_url": "https://ndownloader.figshare.com/files/38030826"
-      },
-      {
-        "id": 38030820,
-        "name": "label_map.pbtxt",
-        "size_bytes": 127,
-        "download_url": "https://ndownloader.figshare.com/files/38030820"
-      }
-    ],
     "zip": {
       "id": 38030910,
       "name": "RDD2022_released_through_CRDDC2022.zip",
@@ -54,22 +28,28 @@
       "download_url": "https://ndownloader.figshare.com/files/38030910"
     }
   },
-  "metadata_files": [
-    {
-      "name": "label_map.pbtxt",
-      "http_status": 200,
-      "error": null,
-      "path": "/tmp/tariqmap-work/Road-damage-project/training/reports/rdd2022_meta/label_map.pbtxt",
-      "bytes": 127
-    },
-    {
-      "name": "Directory_Structure_CRDDC_RDD2022.txt",
-      "http_status": 200,
-      "error": null,
-      "path": "/tmp/tariqmap-work/Road-damage-project/training/reports/rdd2022_meta/Directory_Structure_CRDDC_RDD2022.txt",
-      "bytes": 1161
-    }
-  ],
-  "zip_downloaded": false,
-  "note": "RDD2022 is reachable on Figshare (article 21431547). The labeled zip is 13264172619 bytes (~13.3 GB). This environment did not download the images. Official CRDDC label_map lists D00/D10/D20/D40 only; D43\u2192D60 and D44\u2192D50 remain conditional if those names appear in XML. D90 is absent."
+  "download": {
+    "ok": true,
+    "expected_size_bytes": 13264172619,
+    "bytes_after": 13264172619,
+    "wget_returncode": 0,
+    "elapsed": "5m17s",
+    "average_rate": "39.9 MB/s"
+  },
+  "extract": {
+    "ok": true,
+    "xml_count": 38385,
+    "image_count": 47420,
+    "nested_country_zips": [
+      "China_Drone.zip",
+      "China_MotorBike.zip",
+      "Czech.zip",
+      "India.zip",
+      "Japan.zip",
+      "Norway.zip",
+      "United_States.zip"
+    ]
+  },
+  "zip_downloaded": true,
+  "note": "RDD2022 Figshare article 21431547 downloaded and extracted on 2026-09-20. Zip size matched 13264172619 bytes. Official label_map lists D00/D10/D20/D40 only; XML also contains D43 (793) and D44 (5057) which map to TariqMap D60/D50. D90 is absent. RDD D50-other (3581) is excluded."
 }

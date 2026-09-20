@@ -1,6 +1,6 @@
 {
   "status": "OK",
-  "inspected_at_utc": "2026-09-19T19:28:26.926607+00:00",
+  "inspected_at_utc": "2026-09-20T12:19:34.905231+00:00",
   "ffmpeg": "/usr/bin/ffmpeg",
   "ffprobe": "/usr/bin/ffprobe",
   "cuda": {
@@ -15,16 +15,19 @@
     "installed": false
   },
   "labeled_extract": {
-    "path": "/tmp/tariqmap-work/Road-damage-project/training/data/raw/rdd2022",
-    "exists": false,
-    "xml_count": 0,
-    "usable": false
+    "path": "data/raw/rdd2022",
+    "exists": true,
+    "xml_count": 38385,
+    "usable": true
   },
   "can_train_yolov8": false,
   "can_mux_video": true,
+  "disk": {
+    "path": "/tmp/tariqmap-work/Road-damage-project/training",
+    "free_bytes": 200868728832
+  },
   "notes": [
     "No NVIDIA GPU. src.train will refuse unless --allow-cpu.",
-    "No local RDD VOC XML. Do not train on Global Potholes.",
     "ultralytics is not installed in this environment.",
     "FFmpeg CLI present \u2014 annotated MP4 muxer can run here."
   ]

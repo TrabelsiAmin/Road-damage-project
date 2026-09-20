@@ -38,7 +38,7 @@ WP5 SIG, attribution, incidents, decision
   RAG: PLANNED, decision-support only
 ```
 
-Training may convert a unified RDD dump (`training/config/rdd_unified.yaml`) and then **split** it (`prepare_dataset.py`). Deployment must keep three runners. Do not ship one 7-class YOLO.
+Training may convert a unified RDD dump (`training/config/rdd_unified.yaml`) and then **split** it (`prepare_dataset.py`). On 2026-09-20 that convert+split **did run** (measured counts in `training/reports/dataset_report.json`). YOLOv8 training did **not** run (no GPU). Deployment must keep three runners. Do not ship one 7-class YOLO.
 
 ## Runtime pipeline
 

@@ -1,0 +1,29 @@
+{
+  "prepared_at": "2026-09-20T12:18:59.618344+00:00",
+  "source": "/tmp/rdd-data/rdd_yolo",
+  "output": "/tmp/rdd-data/processed",
+  "class_map": "/tmp/tariqmap-work/Road-damage-project/training/config/source-class-map.json",
+  "total_images_found": 25641,
+  "duplicate_hash_groups": 1,
+  "duplicate_images_removed": 1,
+  "missing_labels": 0,
+  "exclusion_entries": 0,
+  "class_distribution": {
+    "D10": 11829,
+    "D00": 26013,
+    "D20": 10616,
+    "D40": 6544,
+    "D50": 5057,
+    "D60": 793
+  },
+  "agent_image_counts": {
+    "cracks": 16939,
+    "pavement": 10543,
+    "surface": 4708
+  },
+  "split_protocol": "filename_md5_hash 70:15:15 seed=42",
+  "duplicate_pair": [
+    "United_States_003917.jpg",
+    "United_States_001623.jpg"
+  ]
+}

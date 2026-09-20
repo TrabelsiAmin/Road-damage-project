@@ -1,0 +1,150 @@
+{
+  "report_kind": "measured_dataset_and_pipeline_status",
+  "generated_at_utc": "2026-09-20T12:20:00Z",
+  "data_strategy": "OPTION_A_do_not_train_on_unlabeled_global_potholes",
+  "source": {
+    "figshare_article_id": 21431547,
+    "zip_name": "RDD2022_released_through_CRDDC2022.zip",
+    "zip_bytes": 13264172619,
+    "zip_downloaded": true,
+    "wget_exit": 0,
+    "nested_layout": "outer zip contains 7 country zips",
+    "official_label_map": ["D00", "D10", "D20", "D40"],
+    "global_potholes_used": false
+  },
+  "file_inventory_from_official_listing": {
+    "xml_total": 38385,
+    "image_total": 47420,
+    "unlabeled_test_images": 9035,
+    "note": "Path inventory from File_List_CRDDC_RDD2022.txt, not class labels. See rdd2022_file_list_inventory.json."
+  },
+  "voc_extract": {
+    "xml_count": 38385,
+    "image_file_count": 47420,
+    "xml_parse_errors": 0,
+    "xml_empty_no_objects": 11724,
+    "object_count": 65712,
+    "image_sizes_px": {
+      "width_min": 512,
+      "width_max": 4040,
+      "height_min": 512,
+      "height_max": 2044
+    },
+    "bbox_pixel_area": {
+      "count": 65710,
+      "min": 6.0,
+      "max": 1005171.5676,
+      "mean": 26925.375481
+    },
+    "small_objects_area_lt_32px": {
+      "total": 5195,
+      "percent_of_valid_boxes": 7.91
+    },
+    "degenerate_boxes_skipped": 2,
+    "degenerate_examples": [
+      "Japan_001265.xml D20 bw=0 bh=1",
+      "Japan_006156.xml D50(rdd-other) bw=1 bh=1"
+    ]
+  },
+  "raw_class_distribution": {
+    "D00": 26016,
+    "D10": 11830,
+    "D20": 10617,
+    "D40": 6544,
+    "D43": 793,
+    "D44": 5057,
+    "D50_rdd_other": 3581,
+    "D90": 0,
+    "Repair": 1046,
+    "D01": 179,
+    "D11": 45,
+    "Block crack": 3,
+    "D0w0": 1
+  },
+  "mapped_tariqmap_boxes_before_dedup": {
+    "D00": 26016,
+    "D10": 11830,
+    "D20": 10616,
+    "D40": 6544,
+    "D50": 5057,
+    "D60": 793,
+    "D90": 0
+  },
+  "mapping": {
+    "D00": "D00 1:1",
+    "D10": "D10 1:1",
+    "D20": "D20 1:1 (1 degenerate box dropped)",
+    "D40": "D40 1:1",
+    "D44": "D50 faded pedestrian crossing — PRESENT",
+    "D43": "D60 faded lane marking — PRESENT",
+    "D50_rdd_other": "EXCLUDED (not TariqMap D50)",
+    "D90": "ABSENT — not mapped"
+  },
+  "exclusions": {
+    "count": 4856,
+    "by_reason": [
+      {"raw_class": "D50", "reason": "RDD other, not TariqMap D50", "count": 3581},
+      {"raw_class": "Repair", "count": 1046},
+      {"raw_class": "D01", "count": 179},
+      {"raw_class": "D11", "count": 45},
+      {"raw_class": "Block crack", "count": 3},
+      {"raw_class": "D0w0", "count": 1},
+      {"raw_class": "D20", "reason": "degenerate box", "count": 1}
+    ]
+  },
+  "yolo_conversion": {
+    "xml_files": 38385,
+    "converted_images": 25642,
+    "skipped_empty_after_mapping": 12743,
+    "skipped_missing_image": 0,
+    "d90_emitted": 0,
+    "image_placement": "hardlink"
+  },
+  "dedup": {
+    "duplicate_hash_groups": 1,
+    "duplicate_images_removed": 1,
+    "md5": "23703dadedec2953afe73a27266e5639",
+    "files": ["United_States_003917.jpg", "United_States_001623.jpg"]
+  },
+  "mapped_tariqmap_boxes_after_dedup": {
+    "D00": 26013,
+    "D10": 11829,
+    "D20": 10616,
+    "D40": 6544,
+    "D50": 5057,
+    "D60": 793,
+    "D90": 0
+  },
+  "filename_hash_splits_70_15_15": {
+    "cracks_WP2_D00_D10": {"images": 16939, "train": 11857, "val": 2540, "test": 2542, "annotations": 37842},
+    "pavement_WP3_D20_D40": {"images": 10543, "train": 7380, "val": 1581, "test": 1582, "annotations": 17160},
+    "surface_WP4_D50_D60_D90": {"images": 4708, "train": 3295, "val": 706, "test": 707, "annotations": 5850, "note": "D90 has zero boxes; D50/D60 only"}
+  },
+  "weak_class_dataset_side_not_map": {
+    "status": "DATASET_SIDE_ONLY",
+    "D00": "42.75% of mapped boxes; 5.25% small (<32px)",
+    "D10": "19.44% of mapped boxes; 4.87% small",
+    "D20": "17.44% of mapped boxes; 0.19% small (alligator boxes are large)",
+    "D40": "10.75% of mapped boxes; 20.22% small — highest small-object rate among mapped classes",
+    "D50": "8.31% (from D44); rare small boxes",
+    "D60": "1.30% (from D43, 793 boxes) — severe class imbalance",
+    "D90": "ABSENT"
+  },
+  "training": {
+    "baseline": "NOT_RUN",
+    "finetune": "NOT_RUN",
+    "distill": "STUB_NOT_RUN",
+    "reason": "nvidia-smi not found; torch/ultralytics not installed; src.train refused CPU without --allow-cpu. No mAP/precision/recall fabricated."
+  },
+  "tflite": {
+    "status": "MODEL_PENDING",
+    "ok_for_flutter": false,
+    "bundled": false
+  },
+  "inference": {
+    "image": "REQUIRES_MODEL",
+    "video_pipeline": "CURRENTLY_WORKING_without_real_boxes",
+    "camera_pipeline": "CURRENTLY_WORKING_without_real_boxes",
+    "camera_device_on_this_linux_vm": "NOT_AVAILABLE"
+  }
+}

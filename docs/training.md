@@ -2,17 +2,18 @@
 
 ## Status
 
-**REQUIRES LABELED DATA** and a GPU for a serious YOLOv8 run.
+**LABELED RDD IS ON DISK.** Detector training is **NOT RUN** — this VM has no NVIDIA GPU.
 
 `python -m src.check_environment` on this branch recorded (`training/reports/environment.json`):
 
-- nvidia-smi: **not found** (on the last probe of this clone)
-- torch / ultralytics: **not installed** (on that probe)
-- local RDD XML: **0**
+- nvidia-smi: **not found**
+- torch / ultralytics: **not installed**
+- local RDD XML: **38,385** (usable)
 - `can_train_yolov8`: **false**
 - FFmpeg: **present** (video muxer only)
+- disk free at probe: **200,868,728,832** bytes
 
-A sibling agent may be running a real RDD2022 WP3 train on this branch. This file does not invent mAP. `src.train` exits unless `--allow-cpu` is passed. No precision or recall figures are recorded unless `src.evaluate` writes `status: OK`.
+`src.train` exits unless `--allow-cpu` is passed. No precision, recall, or mAP figures are recorded unless `src.evaluate` writes `status: OK`. Dataset measurements: [dataset.md](dataset.md).
 
 ## Work-package split (keep three agents)
 
@@ -20,7 +21,7 @@ A sibling agent may be running a real RDD2022 WP3 train on this branch. This fil
 | --- | --- | --- | --- |
 | pavement | WP3 Agent Chaussée | D20, D40 | **First baseline / first TFLite** |
 | cracks | WP2 Agent Fissures | D00, D10 | After WP3 |
-| surface | WP4 Marquage & Surface | D50, D60, D90 | Only if RDD D44/D43 exist; D90 is absent |
+| surface | WP4 Marquage & Surface | D50, D60, D90 | D44/D43 **present** on this dump; D90 absent |
 
 `rdd_unified.yaml` is for conversion/audit. `prepare_dataset.py` splits to the three YAMLs above. Do not deploy a mixed 7-class detector.
 
@@ -76,7 +77,7 @@ Hyperparameters default from `config/augmentation.yaml` / `config/baseline.yaml`
 7. Small-object investigation (WP3 D20/D40 first): compare YOLOv8n/640 vs YOLOv8s/640 vs YOLOv8s/960 **only if VRAM allows**. Pick using validation + mobile latency, not parameter count.
 8. When a teacher exists: `python -m src.distill --agent pavement` (currently stub / `NOT_RUN`).
 
-The surface agent (D50/D60/D90) should be skipped when `analyze_labeled_dataset` reports those classes absent.
+The surface agent can be prepared (D50/D60 boxes exist). Do not claim D90 performance: that class has **zero** labels.
 
 ## Export
 

@@ -1,5 +1,6 @@
 import unittest
 import xml.etree.ElementTree as ET
+import zipfile
 from pathlib import Path
 import sys
 import tempfile
@@ -13,7 +14,7 @@ from src.analyze_voc import analyze_voc
 from src.evaluate import evaluate
 from src.verify_tflite import inspect_tflite
 from src.prepare_dataset import prepare
-from src.download_rdd import locate, can_download, EXPECTED_ZIP_BYTES
+from src.download_rdd import locate, can_download, EXPECTED_ZIP_BYTES, extract_zip
 from src.summarize_file_list import summarize
 from src.export import export_tflite
 from src.check_environment import inspect
@@ -166,6 +167,25 @@ class PrepareGuardTests(unittest.TestCase):
                 prepare(src, Path(td) / "out", ROOT / "config" / "source-class-map.json", (0.7, 0.15, 0.15))
             self.assertIn("STOP", str(ctx.exception))
 
+    def test_filename_hash_split_is_complete(self):
+        with tempfile.TemporaryDirectory() as td:
+            src = Path(td) / "src"
+            (src / "images").mkdir(parents=True)
+            (src / "labels").mkdir(parents=True)
+            for i in range(20):
+                (src / "images" / f"im{i}.jpg").write_bytes(b"img" + bytes([i]))
+                (src / "labels" / f"im{i}.txt").write_text("3 0.5 0.5 0.2 0.2\n")
+            out = Path(td) / "out"
+            summary = prepare(src, out, ROOT / "config" / "source-class-map.json", (0.7, 0.15, 0.15))
+            self.assertEqual(summary["agent_image_counts"]["pavement"], 20)
+            self.assertEqual(summary["duplicate_images_removed"], 0)
+            n_train = len(list((out / "pavement" / "images" / "train").iterdir()))
+            n_val = len(list((out / "pavement" / "images" / "val").iterdir()))
+            n_test = len(list((out / "pavement" / "images" / "test").iterdir()))
+            self.assertEqual(n_train + n_val + n_test, 20)
+            self.assertGreater(n_train, 0)
+            self.assertGreater(n_test, 0)
+
     def test_splits_d40_to_pavement_agent_only(self):
         with tempfile.TemporaryDirectory() as td:
             src = Path(td) / "yolo"
@@ -261,6 +281,30 @@ class DownloadGuardTests(unittest.TestCase):
         self.assertTrue(can_download(EXPECTED_ZIP_BYTES + 3 * 1024 ** 3, EXPECTED_ZIP_BYTES))
         self.assertFalse(can_download(1000, EXPECTED_ZIP_BYTES))
         self.assertTrue(can_download(0, 0))
+
+    def test_extract_unpacks_nested_country_zips(self):
+        with tempfile.TemporaryDirectory() as td:
+            td = Path(td)
+            country = td / "inner_src" / "Japan" / "train"
+            xml_dir = country / "annotations" / "xmls"
+            img_dir = country / "images"
+            xml_dir.mkdir(parents=True)
+            img_dir.mkdir(parents=True)
+            _write_voc(xml_dir / "Japan_1.xml", "D40")
+            (img_dir / "Japan_1.jpg").write_bytes(b"jpeg")
+            inner_zip = td / "Japan.zip"
+            with zipfile.ZipFile(inner_zip, "w") as zf:
+                zf.write(xml_dir / "Japan_1.xml", "Japan/train/annotations/xmls/Japan_1.xml")
+                zf.write(img_dir / "Japan_1.jpg", "Japan/train/images/Japan_1.jpg")
+            outer_zip = td / "RDD2022.zip"
+            with zipfile.ZipFile(outer_zip, "w") as zf:
+                zf.write(inner_zip, "RDD2022/Japan.zip")
+            dest = td / "extract"
+            report = extract_zip(outer_zip, dest)
+            self.assertTrue(report["ok"], report)
+            self.assertEqual(report["xml_count"], 1)
+            self.assertTrue(list(dest.rglob("Japan_1.xml")))
+            self.assertTrue(list(dest.rglob("Japan_1.jpg")))
 
 
 class ExportGuardTests(unittest.TestCase):

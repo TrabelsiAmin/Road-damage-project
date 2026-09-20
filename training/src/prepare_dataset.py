@@ -140,17 +140,21 @@ def prepare(
 
     # Duplicate detection
     print(f"[prepare] Found {len(images)} images. Checking for duplicates…")
+    image_hashes: dict[Path, str] = {}
     hash_to_images: dict[str, list[Path]] = defaultdict(list)
     for img in images:
-        hash_to_images[_md5(img)].append(img)
+        digest = _md5(img)
+        image_hashes[img] = digest
+        hash_to_images[digest].append(img)
     duplicates = {h: paths for h, paths in hash_to_images.items() if len(paths) > 1}
+    duplicate_extras = 0
     if duplicates:
-        dup_count = sum(len(v) - 1 for v in duplicates.values())
-        print(f"[prepare] WARNING: {dup_count} duplicate images found — keeping first occurrence.")
+        duplicate_extras = sum(len(v) - 1 for v in duplicates.values())
+        print(f"[prepare] WARNING: {duplicate_extras} duplicate images found — keeping first occurrence.")
         deduped: list[Path] = []
         seen_hashes: set[str] = set()
         for img in images:
-            h = _md5(img)
+            h = image_hashes[img]
             if h not in seen_hashes:
                 seen_hashes.add(h)
                 deduped.append(img)
@@ -259,7 +263,8 @@ def prepare(
         "output": str(output.resolve()),
         "class_map": str(class_map_path.resolve()),
         "total_images_found": len(images),
-        "duplicate_images_removed": len(duplicates),
+        "duplicate_hash_groups": len(duplicates),
+        "duplicate_images_removed": duplicate_extras,
         "missing_labels": len(missing_labels),
         "exclusion_entries": len(exclusion_log),
         "class_distribution": dict(class_distribution),

@@ -34,6 +34,13 @@ def _images(root: Path) -> list[Path]:
     return sorted(p for p in root.rglob("*") if p.suffix.lower() in IMAGE_EXTENSIONS)
 
 
+def _index_images(root: Path) -> dict[str, Path]:
+    index: dict[str, Path] = {}
+    for path in _images(root):
+        index.setdefault(path.stem, path)
+    return index
+
+
 def _probe_size(path: Path) -> tuple[int, int] | None:
     try:
         from PIL import Image
@@ -78,6 +85,7 @@ def analyze(dataset: Path) -> dict[str, Any]:
 
     labels_dir = dataset / "labels" if (dataset / "labels").exists() else dataset
     images_dir = dataset / "images" if (dataset / "images").exists() else dataset
+    image_index = _index_images(images_dir)
 
     for label in sorted(labels_dir.rglob("*.txt")):
         if label.name in {"classes.txt", "conversion_summary.json"}:
@@ -86,16 +94,7 @@ def analyze(dataset: Path) -> dict[str, Any]:
         if not lines:
             continue
         labeled_images += 1
-        img = None
-        for ext in IMAGE_EXTENSIONS:
-            candidate = images_dir / f"{label.stem}{ext}"
-            if candidate.exists():
-                img = candidate
-                break
-            found = list(images_dir.rglob(f"{label.stem}{ext}"))
-            if found:
-                img = found[0]
-                break
+        img = image_index.get(label.stem)
         size = _probe_size(img) if img else None
         if size:
             widths.append(size[0])

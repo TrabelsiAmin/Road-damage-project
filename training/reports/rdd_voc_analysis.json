@@ -1,0 +1,235 @@
+{
+  "analyzed_at_utc": "2026-09-20T12:04:18.090286+00:00",
+  "source": "/tmp/rdd-data/rdd2022",
+  "xml_count": 38385,
+  "image_file_count": 47420,
+  "xml_parsed_ok": 38385,
+  "xml_empty_no_objects": 11724,
+  "object_count": 65712,
+  "raw_class_distribution": {
+    "D10": 11830,
+    "D00": 26016,
+    "D20": 10617,
+    "Repair": 1046,
+    "D40": 6544,
+    "Block crack": 3,
+    "D44": 5057,
+    "D01": 179,
+    "D11": 45,
+    "D50": 3581,
+    "D43": 793,
+    "D0w0": 1
+  },
+  "mapped_tariqmap_distribution": {
+    "D10": 11830,
+    "D00": 26016,
+    "D20": 10616,
+    "D40": 6544,
+    "D50": 5057,
+    "D60": 793
+  },
+  "unmapped_class_distribution": {
+    "Repair": 1046,
+    "Block crack": 3,
+    "D01": 179,
+    "D11": 45,
+    "D50": 3580,
+    "D0w0": 1
+  },
+  "d43_count_raw": 793,
+  "d44_count_raw": 5057,
+  "d50_rdd_other_count_raw": 3581,
+  "d90_count_raw": 0,
+  "d50_mapped_status": "PRESENT",
+  "d60_mapped_status": "PRESENT",
+  "d90_mapped_status": "ABSENT",
+  "xml_per_country": {
+    "China_Drone": 2401,
+    "China_MotorBike": 1977,
+    "Czech": 2829,
+    "India": 7706,
+    "Japan": 10506,
+    "Norway": 8161,
+    "United_States": 4805
+  },
+  "raw_classes_per_country": {
+    "China_Drone": {
+      "D10": 1263,
+      "D00": 1426,
+      "D20": 293,
+      "Repair": 769,
+      "D40": 86,
+      "Block crack": 3
+    },
+    "China_MotorBike": {
+      "Repair": 277,
+      "D20": 641,
+      "D00": 2678,
+      "D40": 235,
+      "D10": 1096
+    },
+    "Czech": {
+      "D00": 988,
+      "D40": 197,
+      "D10": 399,
+      "D20": 161
+    },
+    "India": {
+      "D40": 3187,
+      "D44": 1062,
+      "D00": 1555,
+      "D20": 2021,
+      "D01": 179,
+      "D11": 45,
+      "D10": 68,
+      "D50": 28,
+      "D43": 57,
+      "D0w0": 1
+    },
+    "Japan": {
+      "D20": 6199,
+      "D40": 2243,
+      "D10": 3979,
+      "D00": 4049,
+      "D44": 3995,
+      "D43": 736,
+      "D50": 3553
+    },
+    "Norway": {
+      "D00": 8570,
+      "D20": 468,
+      "D40": 461,
+      "D10": 1730
+    },
+    "United_States": {
+      "D10": 3295,
+      "D00": 6750,
+      "D20": 834,
+      "D40": 135
+    }
+  },
+  "bbox_pixel_area": {
+    "count": 65710,
+    "min": 6.0,
+    "max": 1005171.5676,
+    "mean": 26925.375481
+  },
+  "bbox_pixel_width": {
+    "count": 65710,
+    "min": 2.0,
+    "max": 2375.11,
+    "mean": 165.881495
+  },
+  "bbox_pixel_height": {
+    "count": 65710,
+    "min": 2.0,
+    "max": 1105.0,
+    "mean": 121.287128
+  },
+  "bbox_normalized_area": {
+    "count": 65710,
+    "min": 1.3e-05,
+    "max": 0.940847,
+    "mean": 0.04612
+  },
+  "image_sizes_from_xml": {
+    "sampled": 38385,
+    "width_min": 512,
+    "width_max": 4040,
+    "height_min": 512,
+    "height_max": 2044
+  },
+  "small_objects_area_lt_32px": {
+    "by_raw_class": {
+      "D10": 576,
+      "D00": 1367,
+      "D40": 1323,
+      "Repair": 11,
+      "D20": 20,
+      "D44": 32,
+      "D50": 1865,
+      "D43": 1
+    },
+    "by_mapped_class": {
+      "D10": 576,
+      "D00": 1367,
+      "D40": 1323,
+      "D20": 20,
+      "D50": 32,
+      "D60": 1
+    },
+    "total": 5195,
+    "percent_of_valid_boxes": 7.91
+  },
+  "issue_counts": {
+    "degenerate_box": 2
+  },
+  "issues_sample": [
+    {
+      "kind": "degenerate_box",
+      "xml": "data/raw/rdd2022/Japan/train/annotations/xmls/Japan_001265.xml",
+      "raw_class": "D20",
+      "bw": 0.0,
+      "bh": 1.0
+    },
+    {
+      "kind": "degenerate_box",
+      "xml": "data/raw/rdd2022/Japan/train/annotations/xmls/Japan_006156.xml",
+      "raw_class": "D50",
+      "bw": 1.0,
+      "bh": 1.0
+    }
+  ],
+  "weak_class_dataset_notes": {
+    "status": "DATASET_SIDE_ONLY \u2014 no trained detector, so this is imbalance/size risk not mAP",
+    "classes": [
+      {
+        "class": "D00",
+        "mapped_boxes": 26016,
+        "share_of_mapped_boxes_pct": 42.75,
+        "small_boxes": 1367,
+        "small_pct_of_class": 5.25
+      },
+      {
+        "class": "D10",
+        "mapped_boxes": 11830,
+        "share_of_mapped_boxes_pct": 19.44,
+        "small_boxes": 576,
+        "small_pct_of_class": 4.87
+      },
+      {
+        "class": "D20",
+        "mapped_boxes": 10616,
+        "share_of_mapped_boxes_pct": 17.44,
+        "small_boxes": 20,
+        "small_pct_of_class": 0.19
+      },
+      {
+        "class": "D40",
+        "mapped_boxes": 6544,
+        "share_of_mapped_boxes_pct": 10.75,
+        "small_boxes": 1323,
+        "small_pct_of_class": 20.22
+      },
+      {
+        "class": "D50",
+        "mapped_boxes": 5057,
+        "share_of_mapped_boxes_pct": 8.31,
+        "small_boxes": 32,
+        "small_pct_of_class": 0.63
+      },
+      {
+        "class": "D60",
+        "mapped_boxes": 793,
+        "share_of_mapped_boxes_pct": 1.3,
+        "small_boxes": 1,
+        "small_pct_of_class": 0.13
+      }
+    ],
+    "raw_d43": 793,
+    "raw_d44": 5057,
+    "raw_d50_other_excluded": 3581,
+    "raw_d90": 0
+  },
+  "verdict": "LABELED_VOC \u2014 run convert_rdd_voc.py"
+}

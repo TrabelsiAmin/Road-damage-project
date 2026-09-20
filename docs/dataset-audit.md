@@ -1,6 +1,6 @@
 # TariqMap Dataset Audit
 
-**Date**: 2026-09-19  
+**Date**: 2026-09-20  
 **Strategy**: Option A — do not train on unlabeled images.
 
 ## Global Potholes dump
@@ -25,19 +25,19 @@ The images may still be used as unlabeled demo/reference photos in the mobile ap
 
 Use RDD2022/RDD2024 (Pascal VOC). See [dataset.md](dataset.md).
 
-Probe recorded 2026-09-19 (`training/reports/rdd_access.json`):
+Probe recorded 2026-09-20 (`training/reports/rdd_access.json` and `dataset_report.json`):
 
 | Field | Value |
 | --- | --- |
 | Figshare | article **21431547**, HTTP 200 |
 | Zip | `RDD2022_released_through_CRDDC2022.zip` **13,264,172,619** bytes |
-| Zip downloaded | **No** (size; this machine has no GPU to train anyway) |
-| Official label_map.pbtxt | D00, D10, D20, D40 only |
-| Local XML | **0** |
+| Zip downloaded | **Yes** (wget exit 0, size matched) |
+| Extract | **38,385** XML, **47,420** JPEG (matches File_List) |
+| Official label_map.pbtxt | D00, D10, D20, D40 only (XML also has D43/D44) |
 
-Until that extract lives on the training machine:
+Detector metrics on this machine:
 
-- baseline mAP: **not computed**
+- baseline mAP: **not computed** (no GPU; `src.train` refused CPU)
 - per-class AP: **not computed**
 - confusion matrix: **not computed**
 

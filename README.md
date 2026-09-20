@@ -29,9 +29,9 @@ Three TFLite runners at deploy time. RDD may be converted then **split** (`train
 | GPS missing | **IMPLEMENTED** — observation + detections are saved (`gpsAvailable: false`) |
 | Knowledge distillation | **PLANNED/STUB** — `python -m src.distill --agent pavement --plan-only` (no metrics) |
 | Global Potholes 29,120 JPEGs | **DEMO/REFERENCE only**. Unlabeled. **Not used for training.** Removed from git tracking |
-| YOLOv8 baseline / fine-tune / mAP | **REQUIRES LABELED DATA** + GPU. Metrics are **not claimed** |
-| D50 / D60 (faded markings) | Trainable **only if** RDD D44 / D43 exist in the dump you download |
-| D90 (rutting) | **ABSENT** from RDD2022/RDD2024 — taxonomy only |
+| YOLOv8 baseline / fine-tune / mAP | **NOT RUN** — RDD2022 is on disk (38,385 XML) but this VM has **no NVIDIA GPU**. `src.train` refused CPU. No mAP claimed |
+| D50 / D60 (faded markings) | **PRESENT** in this dump: D44→D50 **5,057** boxes; D43→D60 **793** boxes (measured) |
+| D90 (rutting) | **ABSENT** from RDD2022 — taxonomy only |
 
 ## Data strategy (Option A)
 
@@ -44,8 +44,8 @@ D00 → D00   longitudinal crack
 D10 → D10   transverse crack
 D20 → D20   alligator crack
 D40 → D40   pothole
-D43 → D60   white-line blur → faded lane marking   (only if present)
-D44 → D50   crosswalk blur → faded crossing        (only if present)
+D43 → D60   white-line blur → faded lane marking   (**793 boxes in this dump**)
+D44 → D50   crosswalk blur → faded crossing        (**5,057 boxes in this dump**)
 D90         not in RDD — do not invent a mapping
 ```
 
@@ -54,9 +54,10 @@ Pipeline:
 ```bash
 cd training
 python -m src.check_environment
-python -m src.download_rdd --fetch-metadata --dest data/raw/rdd2022
+python -m src.download_rdd --fetch-metadata --download-zip --extract --dest data/raw/rdd2022
 python -m src.convert_rdd_voc --source data/raw/rdd2022 --output data/raw/rdd_yolo
-python -m src.analyze_labeled_dataset --dataset data/raw/rdd_yolo --output reports/rdd_analysis.json
+python -m src.analyze_voc --source data/raw/rdd2022 --output reports/rdd_voc_analysis.json
+python -m src.analyze_labeled_dataset --dataset data/raw/rdd_yolo --output reports/rdd_yolo_analysis.json
 python -m src.prepare_dataset --source data/raw/rdd_yolo --output data/processed --class-map config/source-class-map.json
 python -m src.train --agent pavement --data config/pavement.yaml --weights yolov8n.pt
 python -m src.evaluate --weights runs/pavement_baseline/weights/best.pt --data config/pavement.yaml --split test
@@ -65,7 +66,7 @@ python -m src.export --weights runs/pavement_baseline/weights/best.pt --agent pa
 python -m src.verify_tflite --model ../app/assets/models/pavement.tflite
 ```
 
-`download_rdd --fetch-metadata` records Figshare access; it does not pull the 13.3 GB zip. If this machine has no CUDA, `src.train` refuses to start unless you pass `--allow-cpu`. It will not fabricate mAP.
+`download_rdd --download-zip` pulls the 13,264,172,619-byte Figshare zip when disk is sufficient (this VM did). If this machine has no CUDA, `src.train` refuses to start unless you pass `--allow-cpu`. It will not fabricate mAP. Measured dataset numbers: [docs/dataset.md](docs/dataset.md) and `training/reports/dataset_report.json`.
 
 Desktop video mux (FFmpeg):
 

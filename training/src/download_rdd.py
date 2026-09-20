@@ -227,6 +227,7 @@ def extract_zip(zip_path: Path, dest: Path) -> dict:
         "zip_bytes": zsize,
         "disk_free_bytes": free,
         "ok": False,
+        "nested_zips": [],
     }
     if not zip_path.exists():
         report["error"] = f"zip not found: {zip_path}"
@@ -234,31 +235,56 @@ def extract_zip(zip_path: Path, dest: Path) -> dict:
     if free < zsize:
         report["error"] = f"insufficient disk to extract: free={free} zip={zsize}"
         return report
+    first = _unzip_one(zip_path, dest)
+    report["outer_unzip"] = first
+    if not first.get("ok"):
+        report["error"] = first.get("error")
+        return report
+    xml = list(dest.rglob("*.xml"))
+    nested = sorted(p for p in dest.rglob("*.zip") if p.is_file())
+    if not xml and nested:
+        # Figshare 21431547 is a zip of per-country zips.
+        for nz in nested:
+            inner = _unzip_one(nz, dest)
+            inner["nested_zip"] = str(nz)
+            report["nested_zips"].append(inner)
+            if not inner.get("ok"):
+                report["error"] = f"nested unzip failed: {nz}: {inner.get('error')}"
+                return report
+        xml = list(dest.rglob("*.xml"))
+    report["ok"] = len(xml) > 0
+    report["xml_count"] = len(xml)
+    if not report["ok"]:
+        report["error"] = (
+            f"extract finished but no XML under {dest}. "
+            f"nested_zips_found={len(nested)}"
+        )
+    return report
+
+
+def _unzip_one(zip_path: Path, dest: Path) -> dict:
+    dest.mkdir(parents=True, exist_ok=True)
     unzip = shutil.which("unzip")
     if unzip:
         proc = subprocess.run(
-            [unzip, "-q", "-o", str(zip_path), "-d", str(dest)],
+            [unzip, "-qo", str(zip_path), "-d", str(dest)],
             check=False,
             capture_output=True,
             text=True,
         )
-        report["unzip_returncode"] = proc.returncode
         if proc.returncode != 0:
-            report["error"] = proc.stderr.strip() or f"unzip failed rc={proc.returncode}"
-            return report
-    else:
-        try:
-            with zipfile.ZipFile(zip_path) as zf:
-                zf.extractall(dest)
-        except (zipfile.BadZipFile, OSError) as exc:
-            report["error"] = str(exc)
-            return report
-    xml = list(dest.rglob("*.xml"))
-    report["ok"] = len(xml) > 0
-    report["xml_count"] = len(xml)
-    if not report["ok"]:
-        report["error"] = f"extract finished but no XML under {dest}"
-    return report
+            return {
+                "ok": False,
+                "error": proc.stderr.strip() or f"unzip failed rc={proc.returncode}",
+                "unzip_returncode": proc.returncode,
+            }
+        return {"ok": True, "unzip_returncode": 0}
+    try:
+        with zipfile.ZipFile(zip_path) as zf:
+            zf.extractall(dest)
+    except (zipfile.BadZipFile, OSError) as exc:
+        return {"ok": False, "error": str(exc)}
+    return {"ok": True, "method": "zipfile"}
 
 
 def write_access_report(path: Path, payload: dict) -> None:

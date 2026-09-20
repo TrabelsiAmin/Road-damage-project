@@ -1,0 +1,41 @@
+{
+  "exclusion_count": 4856,
+  "by_raw_class_and_reason": [
+    {
+      "raw_class": "D50",
+      "reason": "No scientifically justified mapping to TariqMap taxonomy",
+      "count": 3581
+    },
+    {
+      "raw_class": "Repair",
+      "reason": "No scientifically justified mapping to TariqMap taxonomy",
+      "count": 1046
+    },
+    {
+      "raw_class": "D01",
+      "reason": "No scientifically justified mapping to TariqMap taxonomy",
+      "count": 179
+    },
+    {
+      "raw_class": "D11",
+      "reason": "No scientifically justified mapping to TariqMap taxonomy",
+      "count": 45
+    },
+    {
+      "raw_class": "Block crack",
+      "reason": "No scientifically justified mapping to TariqMap taxonomy",
+      "count": 3
+    },
+    {
+      "raw_class": "D0w0",
+      "reason": "No scientifically justified mapping to TariqMap taxonomy",
+      "count": 1
+    },
+    {
+      "raw_class": "D20",
+      "reason": "degenerate box",
+      "count": 1
+    }
+  ],
+  "note": "Full per-XML exclusion_report.json is local under data/raw/rdd_yolo (gitignored)."
+}

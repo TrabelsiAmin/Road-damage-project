@@ -34,12 +34,13 @@ import argparse
 import hashlib
 import json
 import random
-import shutil
 import sys
 from collections import Counter, defaultdict
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
+
+from src.fsutil import place_file
 
 # ---------------------------------------------------------------------------
 # Constants
@@ -110,6 +111,7 @@ def prepare(
     class_map_path: Path,
     split_fractions: tuple[float, float, float],
     seed: int = 42,
+    link_mode: str = "hardlink",
 ) -> dict[str, Any]:
     """Run the full preparation pipeline. Returns a summary dict."""
 
@@ -240,7 +242,7 @@ def prepare(
             for img_path, _lbl_path, agent_lines in split_records:
                 dest_img = agent_dir / "images" / split_name / img_path.name
                 dest_lbl = agent_dir / "labels" / split_name / (img_path.stem + ".txt")
-                shutil.copy2(img_path, dest_img)
+                place_file(img_path, dest_img, link_mode)
                 dest_lbl.write_text("\n".join(agent_lines))
 
         print(
@@ -280,6 +282,12 @@ def main() -> None:
     parser.add_argument("--class-map", type=Path, required=True, help="source-class-map.json path")
     parser.add_argument("--split", default="70:15:15", help="Train:Val:Test split percentages")
     parser.add_argument("--seed", type=int, default=42, help="Random seed for determinism")
+    parser.add_argument(
+        "--link",
+        choices=("hardlink", "symlink", "copy"),
+        default="hardlink",
+        help="How to place images in split folders (default: hardlink, copy fallback)",
+    )
     args = parser.parse_args()
 
     parts = [float(x) for x in args.split.split(":")]
@@ -287,7 +295,14 @@ def main() -> None:
         raise SystemExit("--split must be three numbers summing to 100, e.g. 70:15:15")
     fractions = tuple(p / 100 for p in parts)
 
-    prepare(args.source, args.output, args.class_map, fractions, seed=args.seed)
+    prepare(
+        args.source,
+        args.output,
+        args.class_map,
+        fractions,
+        seed=args.seed,
+        link_mode=args.link,
+    )
 
 
 if __name__ == "__main__":

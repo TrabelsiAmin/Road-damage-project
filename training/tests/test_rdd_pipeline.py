@@ -7,12 +7,14 @@ import tempfile
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
 
-from src.convert_rdd_voc import voc_xml_to_yolo_lines, UNIFIED_IDS, convert
+from src.convert_rdd_voc import voc_xml_to_yolo_lines, UNIFIED_IDS, convert, _index_images
 from src.analyze_labeled_dataset import analyze
+from src.analyze_voc import analyze_voc
 from src.evaluate import evaluate
 from src.verify_tflite import inspect_tflite
 from src.prepare_dataset import prepare
-from src.download_rdd import locate
+from src.download_rdd import locate, can_download, EXPECTED_ZIP_BYTES
+from src.summarize_file_list import summarize
 from src.export import export_tflite
 from src.check_environment import inspect
 
@@ -95,6 +97,27 @@ class RddConvertTests(unittest.TestCase):
             self.assertEqual(summary["d90_emitted"], 0)
             self.assertTrue((out / "labels" / "im.txt").exists())
 
+    def test_nested_rdd_layout_finds_train_images(self):
+        with tempfile.TemporaryDirectory() as td:
+            root = Path(td) / "RDD2022"
+            xml_dir = root / "Japan" / "train" / "annotations" / "xmls"
+            img_dir = root / "Japan" / "train" / "images"
+            xml_dir.mkdir(parents=True)
+            img_dir.mkdir(parents=True)
+            _write_voc(xml_dir / "Japan_000.xml", "D00")
+            (img_dir / "Japan_000.jpg").write_bytes(b"jpeg")
+            # unlabeled test image must not steal the stem
+            test_dir = root / "Japan" / "test" / "images"
+            test_dir.mkdir(parents=True)
+            (test_dir / "Japan_000.jpg").write_bytes(b"other")
+            index = _index_images(root)
+            self.assertEqual(index["Japan_000"].parent, img_dir)
+            out = Path(td) / "yolo"
+            summary = convert(root, out, ROOT / "config" / "source-class-map.json")
+            self.assertEqual(summary["converted_images"], 1)
+            self.assertEqual(summary["skipped_missing_image"], 0)
+            self.assertTrue((out / "images" / "Japan_000.jpg").exists())
+
 
 class AnalyzeTests(unittest.TestCase):
     def test_unlabeled_dir_is_stop(self):
@@ -144,12 +167,80 @@ class PrepareGuardTests(unittest.TestCase):
             self.assertIn("STOP", str(ctx.exception))
 
 
-class DownloadLocateTests(unittest.TestCase):
+class VocAnalyzeTests(unittest.TestCase):
+    def test_counts_raw_and_mapped_and_excludes_rdd_d50(self):
+        with tempfile.TemporaryDirectory() as td:
+            src = Path(td)
+            _write_voc(src / "a.xml", "D00", xmin=10, ymin=10, xmax=80, ymax=80)
+            _write_voc(src / "b.xml", "D43", xmin=10, ymin=10, xmax=40, ymax=40)
+            _write_voc(src / "c.xml", "D50", xmin=10, ymin=10, xmax=40, ymax=40)
+            report = analyze_voc(src, ROOT / "config" / "source-class-map.json")
+            self.assertEqual(report["xml_count"], 3)
+            self.assertEqual(report["raw_class_distribution"]["D00"], 1)
+            self.assertEqual(report["raw_class_distribution"]["D43"], 1)
+            self.assertEqual(report["mapped_tariqmap_distribution"]["D00"], 1)
+            self.assertEqual(report["mapped_tariqmap_distribution"]["D60"], 1)
+            self.assertEqual(report["unmapped_class_distribution"]["D50"], 1)
+            self.assertEqual(report["d90_mapped_status"], "ABSENT")
+            self.assertEqual(report["d50_mapped_status"], "ABSENT")
+            self.assertEqual(report["d60_mapped_status"], "PRESENT")
+
+    def test_flags_degenerate_box(self):
+        with tempfile.TemporaryDirectory() as td:
+            src = Path(td)
+            _write_voc(src / "bad.xml", "D40", xmin=10, ymin=10, xmax=10, ymax=12)
+            report = analyze_voc(src, ROOT / "config" / "source-class-map.json")
+            self.assertGreaterEqual(report["issue_counts"].get("degenerate_box", 0), 1)
+
+
+class FileListTests(unittest.TestCase):
+    def test_counts_xml_and_unlabeled_test_images(self):
+        with tempfile.TemporaryDirectory() as td:
+            listing = Path(td) / "File_List.txt"
+            listing.write_text(
+                "\n".join(
+                    [
+                        "C:.",
+                        "+---Japan",
+                        "|   +---test",
+                        "|   |   \\---images",
+                        "|   |           Japan_t.jpg",
+                        "|   \\---train",
+                        "|       +---annotations",
+                        "|       |   \\---xmls",
+                        "|       |           Japan_000.xml",
+                        "|       \\---images",
+                        "|               Japan_000.jpg",
+                        "\\---Czech",
+                        "    \\---train",
+                        "        +---annotations",
+                        "        |   \\---xmls",
+                        "        |           Czech_000.xml",
+                        "        \\---images",
+                        "                Czech_000.jpg",
+                    ]
+                )
+            )
+            report = summarize(listing)
+            self.assertEqual(report["xml_total"], 2)
+            self.assertEqual(report["image_total"], 3)
+            self.assertEqual(report["unlabeled_test_images"], 1)
+            self.assertEqual(report["per_country"]["Japan"]["train"]["xml"], 1)
+            self.assertEqual(report["per_country"]["Japan"]["test"]["image"], 1)
+            self.assertEqual(report["kind"], "official_file_inventory_not_class_labels")
+
+
+class DownloadGuardTests(unittest.TestCase):
     def test_empty_dir_is_not_usable(self):
         with tempfile.TemporaryDirectory() as td:
             report = locate(Path(td))
             self.assertFalse(report["usable"])
             self.assertEqual(report["xml_count"], 0)
+
+    def test_can_download_requires_slack(self):
+        self.assertTrue(can_download(EXPECTED_ZIP_BYTES + 3 * 1024 ** 3, EXPECTED_ZIP_BYTES))
+        self.assertFalse(can_download(1000, EXPECTED_ZIP_BYTES))
+        self.assertTrue(can_download(0, 0))
 
 
 class ExportGuardTests(unittest.TestCase):
@@ -167,6 +258,8 @@ class EnvironmentTests(unittest.TestCase):
             self.assertFalse(report["labeled_extract"]["usable"])
             self.assertFalse(report["can_train_yolov8"])
             self.assertIn("cuda", report)
+            self.assertIn("disk", report)
+            self.assertGreater(report["disk"]["free_bytes"], 0)
 
 
 if __name__ == "__main__":

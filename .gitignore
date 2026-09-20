@@ -78,6 +78,9 @@ datasets/
 *.tar.gz
 *.7z
 
+# Official Figshare file listing is 3.2 MB; keep the JSON inventory instead
+training/reports/rdd2022_meta/File_List_CRDDC_RDD2022.txt
+
 # Temporary video frames and generated inspection artefacts
 **/tariqmap_video_frames/
 **/tariqmap_live_frame.jpg

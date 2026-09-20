@@ -20,6 +20,8 @@ from collections import Counter
 from pathlib import Path
 from typing import Any
 
+from src.fsutil import place_file
+
 IMAGE_EXTENSIONS = {".jpg", ".jpeg", ".png", ".bmp", ".webp"}
 
 # Canonical YOLO class ids for a unified 7-class dataset.
@@ -123,7 +125,34 @@ def voc_xml_to_yolo_lines(
     return lines, counts
 
 
-def _find_image(xml_path: Path, images_root: Path | None) -> Path | None:
+def _index_images(source: Path) -> dict[str, Path]:
+    """Map image stem → path. Prefer train/ over unlabeled test/ when both exist.
+
+    Nested RDD layout is Country/train/annotations/xmls/*.xml + Country/train/images/*.jpg.
+    A per-XML rglob would be O(n²) on ~38k files and the old sibling lookup
+    pointed at train/annotations/images instead of train/images.
+    """
+    index: dict[str, Path] = {}
+    if not source.exists():
+        return index
+    for path in source.rglob("*"):
+        if not path.is_file() or path.suffix.lower() not in IMAGE_EXTENSIONS:
+            continue
+        existing = index.get(path.stem)
+        if existing is None:
+            index[path.stem] = path
+            continue
+        prefer_new = "train" in path.parts and "test" in existing.parts
+        if prefer_new:
+            index[path.stem] = path
+    return index
+
+
+def _find_image(xml_path: Path, images_root: Path | None, index: dict[str, Path] | None = None) -> Path | None:
+    if index is not None:
+        found = index.get(xml_path.stem)
+        if found is not None:
+            return found
     stem = xml_path.stem
     search_roots = [xml_path.parent]
     if images_root is not None:
@@ -133,15 +162,12 @@ def _find_image(xml_path: Path, images_root: Path | None) -> Path | None:
             candidate = root / f"{stem}{ext}"
             if candidate.exists():
                 return candidate
-            # RDD often stores images in a sibling JPEGImages / images folder
-            for sub in ("JPEGImages", "images", "Image"):
-                candidate = root.parent / sub / f"{stem}{ext}"
-                if candidate.exists():
-                    return candidate
-    matches = list((images_root or xml_path.parent).rglob(f"{stem}.*"))
-    for m in matches:
-        if m.suffix.lower() in IMAGE_EXTENSIONS:
-            return m
+            # xmls/ -> annotations/ -> train/; images live at train/images
+            for ancestor in (root.parent, root.parent.parent):
+                for sub in ("JPEGImages", "images", "Image"):
+                    candidate = ancestor / sub / f"{stem}{ext}"
+                    if candidate.exists():
+                        return candidate
     return None
 
 
@@ -149,17 +175,19 @@ def convert(
     source: Path,
     output: Path,
     class_map_path: Path,
+    link_mode: str = "hardlink",
 ) -> dict[str, Any]:
     class_map = json.loads(class_map_path.read_text())
     rdd_to_dcode = _build_rdd_to_dcode(class_map)
 
-    xmls = sorted(source.rglob("*.xml"))
+    xmls = sorted(p for p in source.rglob("*.xml") if p.is_file())
     if not xmls:
         raise SystemExit(
             f"No Pascal VOC XML files under {source}. "
             "RDD2022 annotations are XML, not the unlabeled Global Potholes dump."
         )
 
+    image_index = _index_images(source)
     images_out = output / "images"
     labels_out = output / "labels"
     images_out.mkdir(parents=True, exist_ok=True)
@@ -170,8 +198,9 @@ def convert(
     converted = 0
     skipped_no_image = 0
     skipped_empty = 0
+    place_counts: Counter = Counter()
 
-    for xml_path in xmls:
+    for i, xml_path in enumerate(xmls, 1):
         try:
             lines, counts = voc_xml_to_yolo_lines(xml_path, rdd_to_dcode, exclusions)
         except Exception as exc:  # noqa: BLE001
@@ -180,22 +209,19 @@ def convert(
         if not lines:
             skipped_empty += 1
             continue
-        image = _find_image(xml_path, source)
+        image = _find_image(xml_path, source, image_index)
         if image is None:
             skipped_no_image += 1
             exclusions.append({"xml": str(xml_path), "reason": "matching image not found"})
             continue
         dest_img = images_out / image.name
         dest_lbl = labels_out / f"{image.stem}.txt"
-        if not dest_img.exists():
-            try:
-                dest_img.write_bytes(image.read_bytes())
-            except OSError:
-                # Fall back to symlink when copy is expensive / not needed for tests
-                dest_img.symlink_to(image.resolve())
+        place_counts[place_file(image, dest_img, link_mode)] += 1
         dest_lbl.write_text("\n".join(lines) + "\n")
         class_counts.update(counts)
         converted += 1
+        if i % 5000 == 0:
+            print(f"[convert] {i}/{len(xmls)} XML processed, {converted} labeled images", flush=True)
 
     summary = {
         "source": str(source.resolve()),
@@ -204,6 +230,8 @@ def convert(
         "converted_images": converted,
         "skipped_empty_after_mapping": skipped_empty,
         "skipped_missing_image": skipped_no_image,
+        "indexed_images": len(image_index),
+        "image_placement": dict(place_counts),
         "class_distribution": dict(class_counts),
         "d90_emitted": class_counts.get("D90", 0),
         "exclusion_count": len(exclusions),
@@ -235,8 +263,14 @@ def main() -> None:
         type=Path,
         default=Path(__file__).resolve().parents[1] / "config" / "source-class-map.json",
     )
+    parser.add_argument(
+        "--link",
+        choices=("hardlink", "symlink", "copy"),
+        default="hardlink",
+        help="How to place JPEGs in the YOLO folder (default: hardlink, copy fallback)",
+    )
     args = parser.parse_args()
-    convert(args.source, args.output, args.class_map)
+    convert(args.source, args.output, args.class_map, link_mode=args.link)
 
 
 if __name__ == "__main__":

@@ -8,6 +8,8 @@ import subprocess
 from datetime import datetime, timezone
 from pathlib import Path
 
+from src.fsutil import disk_free_bytes
+
 
 def _which(name: str) -> str | None:
     return shutil.which(name)
@@ -71,6 +73,10 @@ def inspect(training_root: Path, labeled_hint: Path) -> dict:
         },
         "can_train_yolov8": False,
         "can_mux_video": _which("ffmpeg") is not None and _which("ffprobe") is not None,
+        "disk": {
+            "path": str(training_root),
+            "free_bytes": disk_free_bytes(training_root),
+        },
         "notes": [],
     }
     cuda_ok = bool(report["cuda"].get("available")) or bool(report["torch"].get("cuda"))

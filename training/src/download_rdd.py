@@ -3,10 +3,10 @@
 Official CRDDC'2022 dump (Figshare article 21431547):
   https://figshare.com/articles/dataset/RDD2022_-_The_multi-national_Road_Damage_Dataset_released_through_CRDDC_2022/21431547
 
-The zip is ~13.3 GB. This script:
+The zip is 13,264,172,619 bytes (~13.3 GB). This script:
   - locates a local extract
-  - probes Figshare and can fetch *metadata* (label map, directory listing)
-  - does **not** download the zip unless --download-zip is passed
+  - probes Figshare and can fetch metadata (label map, directory listing, file list)
+  - downloads the zip when --download-zip is passed AND disk is sufficient
   - never scrapes Global Potholes
 
 User must accept the RDD license before downloading images.
@@ -14,12 +14,19 @@ User must accept the RDD license before downloading images.
 from __future__ import annotations
 
 import argparse
+import hashlib
 import json
+import shutil
+import subprocess
 import sys
 import urllib.error
 import urllib.request
+import zipfile
 from datetime import datetime, timezone
 from pathlib import Path
+
+from src.fsutil import disk_free_bytes
+from src.summarize_file_list import summarize as summarize_file_list
 
 FIGSHARE_ARTICLE_ID = 21431547
 FIGSHARE_HTML = (
@@ -39,7 +46,14 @@ OFFICIAL = {
 METADATA_FILES = {
     "label_map.pbtxt": "38030820",
     "Directory_Structure_CRDDC_RDD2022.txt": "38030823",
+    "File_List_CRDDC_RDD2022.txt": "38030826",
 }
+
+EXPECTED_ZIP_BYTES = 13_264_172_619
+ZIP_FILE_ID = "38030910"
+ZIP_NAME = "RDD2022_released_through_CRDDC2022.zip"
+ZIP_URL = f"https://ndownloader.figshare.com/files/{ZIP_FILE_ID}"
+DISK_SLACK_BYTES = 2 * 1024 ** 3
 
 
 def locate(root: Path) -> dict:
@@ -77,7 +91,7 @@ def _http_json(url: str, timeout: int = 30) -> tuple[int, dict | None, str | Non
         return 0, None, str(exc)
 
 
-def _http_bytes(url: str, timeout: int = 30) -> tuple[int, bytes | None, str | None]:
+def _http_bytes(url: str, timeout: int = 60) -> tuple[int, bytes | None, str | None]:
     req = urllib.request.Request(url, headers={"User-Agent": "TariqMap-download_rdd/1.0"})
     try:
         with urllib.request.urlopen(req, timeout=timeout) as resp:
@@ -133,6 +147,120 @@ def fetch_metadata(dest: Path) -> list[dict]:
     return results
 
 
+def _sha256_prefix(path: Path, nbytes: int = 1024 * 1024) -> str:
+    h = hashlib.sha256()
+    with path.open("rb") as fh:
+        h.update(fh.read(nbytes))
+    return h.hexdigest()
+
+
+def can_download(free_bytes: int, remaining_bytes: int, slack: int = DISK_SLACK_BYTES) -> bool:
+    return remaining_bytes <= 0 or free_bytes >= remaining_bytes + slack
+
+
+def download_zip(
+    dest_zip: Path,
+    expected_size: int = EXPECTED_ZIP_BYTES,
+    url: str = ZIP_URL,
+) -> dict:
+    dest_zip.parent.mkdir(parents=True, exist_ok=True)
+    existing = dest_zip.stat().st_size if dest_zip.exists() else 0
+    free = disk_free_bytes(dest_zip.parent)
+    remaining = max(0, expected_size - existing)
+    report: dict = {
+        "url": url,
+        "dest": str(dest_zip),
+        "expected_size_bytes": expected_size,
+        "bytes_before": existing,
+        "disk_free_bytes": free,
+        "ok": False,
+    }
+    if existing == expected_size:
+        report["ok"] = True
+        report["skipped"] = "already complete"
+        report["bytes_after"] = existing
+        return report
+    if not can_download(free, remaining):
+        report["error"] = (
+            f"insufficient disk: free={free} bytes, remaining download={remaining} bytes, "
+            f"need remaining+{DISK_SLACK_BYTES} slack"
+        )
+        return report
+    wget = shutil.which("wget")
+    if wget is None:
+        report["error"] = "wget not found; cannot stream the 13 GB zip"
+        return report
+    cmd = [
+        wget,
+        "-c",
+        "--progress=dot:giga",
+        "--timeout=60",
+        "--tries=0",
+        "--retry-connrefused",
+        "--waitretry=8",
+        "--user-agent=TariqMap-download_rdd/1.0",
+        "-O",
+        str(dest_zip),
+        url,
+    ]
+    proc = subprocess.run(cmd, check=False)
+    after = dest_zip.stat().st_size if dest_zip.exists() else 0
+    report["bytes_after"] = after
+    report["wget_returncode"] = proc.returncode
+    if after == expected_size:
+        report["ok"] = True
+        report["sha256_first_1MiB"] = _sha256_prefix(dest_zip)
+    else:
+        report["error"] = (
+            f"size mismatch after wget rc={proc.returncode}: got {after} expected {expected_size}"
+        )
+    return report
+
+
+def extract_zip(zip_path: Path, dest: Path) -> dict:
+    dest.mkdir(parents=True, exist_ok=True)
+    free = disk_free_bytes(dest)
+    zsize = zip_path.stat().st_size if zip_path.exists() else 0
+    report: dict = {
+        "zip": str(zip_path),
+        "dest": str(dest),
+        "zip_bytes": zsize,
+        "disk_free_bytes": free,
+        "ok": False,
+    }
+    if not zip_path.exists():
+        report["error"] = f"zip not found: {zip_path}"
+        return report
+    if free < zsize:
+        report["error"] = f"insufficient disk to extract: free={free} zip={zsize}"
+        return report
+    unzip = shutil.which("unzip")
+    if unzip:
+        proc = subprocess.run(
+            [unzip, "-q", "-o", str(zip_path), "-d", str(dest)],
+            check=False,
+            capture_output=True,
+            text=True,
+        )
+        report["unzip_returncode"] = proc.returncode
+        if proc.returncode != 0:
+            report["error"] = proc.stderr.strip() or f"unzip failed rc={proc.returncode}"
+            return report
+    else:
+        try:
+            with zipfile.ZipFile(zip_path) as zf:
+                zf.extractall(dest)
+        except (zipfile.BadZipFile, OSError) as exc:
+            report["error"] = str(exc)
+            return report
+    xml = list(dest.rglob("*.xml"))
+    report["ok"] = len(xml) > 0
+    report["xml_count"] = len(xml)
+    if not report["ok"]:
+        report["error"] = f"extract finished but no XML under {dest}"
+    return report
+
+
 def write_access_report(path: Path, payload: dict) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(json.dumps(payload, indent=2))
@@ -153,55 +281,83 @@ def main() -> None:
     parser.add_argument(
         "--fetch-metadata",
         action="store_true",
-        help="Download label_map.pbtxt and directory structure (not the 13GB zip)",
+        help="Download label_map, directory structure, and file list (not the 13GB zip)",
     )
     parser.add_argument(
         "--download-zip",
         action="store_true",
-        help="Download the full RDD2022 zip (≈13 GB). Off by default.",
+        help="Download the full RDD2022 zip if disk is sufficient.",
+    )
+    parser.add_argument(
+        "--zip-path",
+        type=Path,
+        default=None,
+        help="Where to store/read the zip (default: <dest.parent>/RDD2022_released_through_CRDDC2022.zip)",
+    )
+    parser.add_argument(
+        "--extract",
+        action="store_true",
+        help="Extract the zip into --dest after a successful download or if the zip already exists.",
     )
     args = parser.parse_args()
 
     local = locate(args.dest)
     remote = probe_figshare()
     metadata = []
+    file_list_inventory = None
+    meta_dir = Path(__file__).resolve().parents[1] / "reports" / "rdd2022_meta"
     if args.fetch_metadata:
-        meta_dir = Path(__file__).resolve().parents[1] / "reports" / "rdd2022_meta"
         metadata = fetch_metadata(meta_dir)
+        file_list = meta_dir / "File_List_CRDDC_RDD2022.txt"
+        if file_list.exists():
+            file_list_inventory = summarize_file_list(file_list)
+            inv_path = Path(__file__).resolve().parents[1] / "reports" / "rdd2022_file_list_inventory.json"
+            inv_path.write_text(json.dumps(file_list_inventory, indent=2))
 
     zip_info = remote.get("zip") or {}
-    zip_bytes = zip_info.get("size_bytes")
+    zip_bytes = zip_info.get("size_bytes") or EXPECTED_ZIP_BYTES
+    zip_path = args.zip_path or (args.dest.parent / ZIP_NAME)
+    download_result = None
+    extract_result = None
+    if args.download_zip:
+        download_result = download_zip(zip_path, expected_size=int(zip_bytes), url=ZIP_URL)
+    elif zip_path.exists():
+        download_result = {
+            "dest": str(zip_path),
+            "bytes_after": zip_path.stat().st_size,
+            "ok": zip_path.stat().st_size == int(zip_bytes),
+            "skipped": "existing zip, --download-zip not passed",
+        }
+    if args.extract:
+        extract_result = extract_zip(zip_path, args.dest)
+        local = locate(args.dest)
+
+    zip_ok = bool(download_result and download_result.get("ok"))
     report = {
         "probed_at_utc": datetime.now(timezone.utc).isoformat(),
         "local": local,
         "remote": remote,
         "metadata_files": metadata,
-        "zip_downloaded": False,
+        "file_list_inventory": file_list_inventory,
+        "zip_path": str(zip_path),
+        "download": download_result,
+        "extract": extract_result,
+        "zip_downloaded": zip_ok,
         "note": (
             "RDD2022 is reachable on Figshare (article 21431547). "
             f"The labeled zip is {zip_bytes} bytes (~13.3 GB). "
-            "This environment did not download the images. "
             "Official CRDDC label_map lists D00/D10/D20/D40 only; "
             "D43→D60 and D44→D50 remain conditional if those names appear in XML. "
             "D90 is absent."
         ),
     }
-    if args.download_zip:
-        report["zip_downloaded"] = False
-        report["note"] += (
-            " --download-zip was requested but this script refuses to pull 13 GB "
-            "on a cloud agent without an explicit local path and free disk; "
-            "download manually from Figshare."
-        )
 
     write_access_report(args.report, report)
     print(json.dumps(report, indent=2))
-    print("\nTo obtain RDD2022 images:")
-    print(f"  1. Download from {OFFICIAL['rdd2022_figshare']}")
-    print(f"  2. Extract into {args.dest}")
-    print("  3. python -m src.convert_rdd_voc --source <extract> --output data/raw/rdd_yolo")
-    print("  4. python -m src.analyze_labeled_dataset --dataset data/raw/rdd_yolo")
-    print("  5. python -m src.prepare_dataset --source data/raw/rdd_yolo --output data/processed --class-map config/source-class-map.json")
+    if args.download_zip and download_result and not download_result.get("ok"):
+        sys.exit(3)
+    if args.extract and extract_result and not extract_result.get("ok"):
+        sys.exit(4)
     if not local["usable"]:
         sys.exit(2)
 

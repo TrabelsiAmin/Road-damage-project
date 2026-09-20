@@ -82,6 +82,9 @@ datasets/
 # Official Figshare file listing is 3.2 MB; keep the JSON inventory instead
 training/reports/rdd2022_meta/File_List_CRDDC_RDD2022.txt
 
+# Colab-generated absolute YAML / WP3 artefact zip (also covered by *.zip)
+*.colab.yaml
+
 # Temporary video frames and generated inspection artefacts
 **/tariqmap_video_frames/
 **/tariqmap_live_frame.jpg

@@ -2,6 +2,12 @@
 # Classes: D20 alligator crack, D40 pothole. Visual 2D only. NO depth.
 # Training/inference priority over WP2 cracks and WP4 surface.
 # Deploy as pavement.tflite — do not merge into a 7-class YOLO at runtime.
+#
+# Expected split (filename-hash seed 42; DO NOT re-split):
+#   train 7380 / val 1581 / test 1582 images, 17160 boxes
+#   0:D20 10616 boxes, 1:D40 6544 boxes
+# path is relative to the training/ working directory. Colab rewrites it to an
+# absolute path via: python -m src.verify_wp3_dataset --write-colab-yaml ...
 path: data/processed/pavement
 train: images/train
 val: images/val

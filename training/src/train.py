@@ -139,6 +139,7 @@ def train(
     allow_cpu: bool = False,
     finetune: bool = False,
     batch: int | None = None,
+    run_name: str | None = None,
 ) -> None:
     classes = AGENTS.get(agent)
     if classes is None:
@@ -182,7 +183,7 @@ def train(
         "imgsz": imgsz,
         "seed": seed,
         "project": project,
-        "name": f"{agent}{'_ft' if finetune else '_baseline'}",
+        "name": run_name or f"{agent}{'_ft' if finetune else '_baseline'}",
         "pretrained": True,
         "save": True,
         "save_period": 10,
@@ -285,6 +286,11 @@ def main() -> None:
         help="Fine-tune mode: lower LR, expect --weights to be a previous best.pt",
     )
     parser.add_argument("--batch", type=int, default=None, help="Override batch size")
+    parser.add_argument(
+        "--name",
+        default=None,
+        help="Ultralytics run name (default: <agent>_baseline or <agent>_ft). WP3 Colab uses wp3_baseline.",
+    )
     args = parser.parse_args()
 
     train(
@@ -299,6 +305,7 @@ def main() -> None:
         allow_cpu=args.allow_cpu,
         finetune=args.finetune,
         batch=args.batch,
+        run_name=args.name,
     )
 
 

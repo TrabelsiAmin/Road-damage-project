@@ -11,10 +11,15 @@ from pathlib import Path
 from typing import Any
 
 EXPECTED_INPUT_NHWC = [1, 640, 640, 3]
-EXPECTED_CLASS_COUNT = 7
+AGENTS_CLASSES: dict[str, list[str]] = {
+    "cracks":   ["D00", "D10"],
+    "pavement": ["D20", "D40"],
+    "surface":  ["D50", "D60", "D90"],
+}
 
 
-def inspect_tflite(path: Path) -> dict[str, Any]:
+def inspect_tflite(path: Path, expected_classes: int | None = None) -> dict[str, Any]:
+    class_count = expected_classes if expected_classes is not None else 7
     report: dict[str, Any] = {
         "status": "MODEL_PENDING",
         "path": str(path),
@@ -22,6 +27,7 @@ def inspect_tflite(path: Path) -> dict[str, Any]:
         "input_shape": None,
         "output_shape": None,
         "ok_for_flutter": False,
+        "expected_classes": class_count,
         "notes": [],
     }
     if not path.exists():
@@ -77,13 +83,13 @@ def inspect_tflite(path: Path) -> dict[str, Any]:
         channels = min(out_shape[1:]) if len(out_shape) >= 2 else None
         report["notes"].append(
             f"Output shape {out_shape}. Flutter decoder accepts [1, 4+C, N] or [1, N, 4+C] "
-            f"with C={EXPECTED_CLASS_COUNT}."
+            f"with C={class_count}."
         )
-        if channels not in {4 + EXPECTED_CLASS_COUNT, None} and (
-            len(out_shape) >= 3 and 4 + EXPECTED_CLASS_COUNT not in out_shape
+        if channels not in {4 + class_count, None} and (
+            len(out_shape) >= 3 and 4 + class_count not in out_shape
         ):
             report["notes"].append(
-                "WARNING: 4+7 channels not found on the output tensor. "
+                f"WARNING: 4+{class_count} channels not found on the output tensor. "
                 "Class mapping will be wrong."
             )
 
@@ -96,8 +102,18 @@ def main() -> None:
     parser = argparse.ArgumentParser()
     parser.add_argument("--model", type=Path, required=True)
     parser.add_argument("--output", type=Path, default=Path("reports/tflite_verify.json"))
+    parser.add_argument(
+        "--agent",
+        choices=list(AGENTS_CLASSES),
+        default=None,
+        help="If set, expected class count is len(agent classes). WP3 pavement = 2 (D20, D40).",
+    )
+    parser.add_argument("--expected-classes", type=int, default=None)
     args = parser.parse_args()
-    report = inspect_tflite(args.model)
+    n_classes = args.expected_classes
+    if n_classes is None and args.agent:
+        n_classes = len(AGENTS_CLASSES[args.agent])
+    report = inspect_tflite(args.model, expected_classes=n_classes)
     args.output.parent.mkdir(parents=True, exist_ok=True)
     args.output.write_text(json.dumps(report, indent=2))
     print(json.dumps(report, indent=2))

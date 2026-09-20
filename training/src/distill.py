@@ -90,7 +90,7 @@ def plan(
         "planned_at_utc": datetime.now(timezone.utc).isoformat(),
         "reason": None,
         "next_steps": [
-            "Train a WP3 pavement baseline (YOLOv8n, 640) if not already running.",
+            "Train WP3 on Colab: training/colab/WP3_YOLOv8_training.ipynb (CUDA required).",
             "Optionally train a teacher (YOLOv8s/960) on the same pavement split.",
             "Re-run this command once teacher weights exist; then implement the KD loop.",
             "Export the student with src.export (float16, then int8) and src.verify_tflite.",

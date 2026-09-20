@@ -57,7 +57,7 @@ Flow: Acquisition → Validation/Prétraitement → Orchestration → WP2/WP3/WP
 | --- | --- | --- | --- | --- | --- | --- | --- |
 | 1 | D40 potholes belong only to WP3 Agent Chaussée | WP3 | `TariqMapConstants.agentClasses['pavement']`, `training/config/pavement.yaml`, `prepare_dataset.py` | **TESTED** | Real `pavement.tflite` weights | Train WP3 baseline (sibling agent), then export | `observation_test` `agentFor('D40')`; `test_contracts.py`; `test_distill.py` |
 | 2 | D20 alligator only on WP3; visual 2D; **no depth estimation** | WP3 | `depthEstimationEnabled = false`; D90 limitation in class map | **IMPLEMENTED** / **TESTED** (flag) | None for the prohibition | Keep 2D-only in model cards | `gps_enrichment_test` (flag); class-map JSON `limitation` |
-| 3 | WP3 small-object (pothole/alligator) evaluation | WP3 | `docs/evaluation.md`, `baseline.yaml` candidates yolov8s/960, `finetune.yaml` objective | **PLANNED** | No labeled test split run; no small-object recall | After baseline: `src.evaluate` on D20/D40 subset | `src.evaluate` writes `NOT_RUN` without weights (`test_rdd_pipeline.py`) |
+| 3 | WP3 small-object (pothole/alligator) evaluation | WP3 | `src.eval_small_objects`, `docs/wp3-training.md`, Colab notebook | **IMPLEMENTED** / **TESTED** (GT bins + guards) | No trained detector recall | Run Colab eval after baseline | `tests/test_wp3_pipeline.py` |
 | 4 | WP2 only D00 longitudinal + D10 transverse | WP2 | `cracks.yaml`, agentClasses | **TESTED** | Real `cracks.tflite` | Train after WP3 baseline | `test_contracts.py`; `observation_test` disjoint classes |
 | 5 | WP4 D50 faded crossing, D60 faded lane, D90 visual rutting; separate from WP3 | WP4 | `surface.yaml`; D43→D60, D44→D50 mapping | **PARTIAL** | D90 absent from RDD; D50/D60 only if D43/D44 exist | Skip surface train if `analyze_labeled_dataset` reports missing | `test_rdd_pipeline.py` D43/D44/D90 |
 | 6 | Do not collapse WP2/WP3/WP4 into one YOLO at deploy | WP2–4 | Three TFLite runners in `DetectionService`; `rdd_unified.yaml` is audit-only | **IMPLEMENTED** / **TESTED** | Bundled weights | Keep three `*.tflite` files | `test_contracts.py`; `test_distill.py` rejects agent `unified` |
@@ -70,8 +70,8 @@ Flow: Acquisition → Validation/Prétraitement → Orchestration → WP2/WP3/WP
 | 13 | Incident lifecycle DETECTED→ANALYZED→ASSIGNED→IN_PROGRESS→RESOLVED→ARCHIVED | WP5 | `app/lib/models/incident.dart`, `backend/lifecycle.py`, `GET /v1/contract` | **PARTIAL** (constants) | No incident entity, no PATCH machine, no UI | Persist incidents after operator confirm | Dart + Python lifecycle tests |
 | 14 | Incident fields: incidentId, detectedAt, severity, priority, status, description | WP5 | Observation has id, createdAt, priorityScore/Label | **PLANNED** | No Incident model instance / table | Add after observation→incident confirm | — |
 | 15 | RAG = decision support only; actor decides | WP5 | Flag `ragIsDecisionSupportOnly`; docs | **PLANNED** | No RAG index, no LLM, no recommendation UI | Introduce retrieval over manuals only as advice | Constant test |
-| 16 | Teacher → KD → Student → Quantization → Deploy | ML | `src.train` baseline; `src.distill` stub; `src.export` float16/int8 | **PARTIAL** | No teacher, no KD loop, no `.pt`/`.tflite` | Baseline first (in progress elsewhere); then teacher/KD | `test_distill.py` `metrics is None` |
-| 17 | First baseline then teacher/student/distill/opt/eval/deploy | ML | README + `docs/training.md` order; WP3 first | **PLANNED** (docs) | No completed baseline on this clone | Do not start a second 13GB RDD download / full train here | `evaluate` NOT_RUN guard |
+| 16 | Teacher → KD → Student → Quantization → Deploy | ML | `src.train` baseline; Colab WP3 notebook; `src.distill` stub; `src.export` float16/int8 | **PARTIAL** | No teacher, no KD loop, no `.pt`/`.tflite` | Train WP3 on Colab GPU; then teacher/KD | `test_distill.py` `metrics is None`; `test_wp3_pipeline.py` |
+| 17 | First baseline then teacher/student/distill/opt/eval/deploy | ML | `training/colab/WP3_YOLOv8_training.ipynb`; WP3 first | **IMPLEMENTED** (notebook) / metrics **NOT RUN** | No completed baseline | Do not re-download 13GB RDD; do not CPU-train | `eval_wp3` NOT_RUN guard |
 | 18 | On-device TFLite (letterbox, inverse map, NMS) | WP1–4 | `tflite_agent_runner.dart`, `letterbox_math.dart`, `nms.dart` | **IMPLEMENTED** / **TESTED** (code) | Weights **REQUIRES MODEL** | Install three verified bundles | `inference_pipeline_test.dart`, `nms_test.dart` |
 | 19 | FastAPI observation ingest | WP5 | `backend/main.py` POST `/v1/observations` | **IMPLEMENTED** (demo/mock) | No auth, no disk, no GIS | Keep mock until real backend | Manual; contract unit tests |
 | 20 | Offline SQLite observation log + sync queue | WP1 / WP5 | `observation_dao.dart`, `SyncCoordinator` | **IMPLEMENTED** / **TESTED** | Sync against mock only | Idempotent POST already | `sync_state_test.dart` |
@@ -84,13 +84,14 @@ Flow: Acquisition → Validation/Prétraitement → Orchestration → WP2/WP3/WP
 
 | Item | Status |
 | --- | --- |
-| Class split D20/D40 only | TESTED |
+| Class split D20/D40 only | TESTED (`verify_wp3_dataset`, 7380/1581/1582) |
 | Separate pavement runner | IMPLEMENTED |
 | Visual 2D / no depth | IMPLEMENTED (policy + docs) |
-| Small-object protocol | PLANNED (eval not run) |
-| YOLOv8 baseline metrics | NOT RUN — do not fabricate |
+| Small-object protocol | IMPLEMENTED (GT bins); model AP **NOT RUN** |
+| YOLOv8 baseline metrics | **NOT RUN** — Colab notebook ready; do not fabricate |
 | Teacher / KD / student | STUB (`src.distill`) |
 | Quantized TFLite on device | REQUIRES MODEL |
+| Colab pipeline | IMPLEMENTED — `training/colab/WP3_YOLOv8_training.ipynb` |
 
 ## Honesty constraints
 

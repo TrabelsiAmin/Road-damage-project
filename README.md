@@ -29,7 +29,7 @@ Three TFLite runners at deploy time. RDD may be converted then **split** (`train
 | GPS missing | **IMPLEMENTED** — observation + detections are saved (`gpsAvailable: false`) |
 | Knowledge distillation | **PLANNED/STUB** — `python -m src.distill --agent pavement --plan-only` (no metrics) |
 | Global Potholes 29,120 JPEGs | **DEMO/REFERENCE only**. Unlabeled. **Not used for training.** Removed from git tracking |
-| YOLOv8 baseline / fine-tune / mAP | **NOT RUN** — RDD2022 is on disk (38,385 XML) but this VM has **no NVIDIA GPU**. `src.train` refused CPU. No mAP claimed |
+| YOLOv8 baseline / fine-tune / mAP | **NOT RUN** — Colab notebook ready (`training/colab/WP3_YOLOv8_training.ipynb`). This VM has no GPU. **No mAP claimed** |
 | D50 / D60 (faded markings) | **PRESENT** in this dump: D44→D50 **5,057** boxes; D43→D60 **793** boxes (measured) |
 | D90 (rutting) | **ABSENT** from RDD2022 — taxonomy only |
 
@@ -108,6 +108,7 @@ cd backend && python -m unittest discover -s tests
 - [docs/dataset-audit.md](docs/dataset-audit.md) — Global Potholes audit (corrected)
 - [docs/video-detection.md](docs/video-detection.md)
 - [docs/training.md](docs/training.md)
+- [docs/wp3-training.md](docs/wp3-training.md) — Colab WP3 (metrics **NOT RUN**)
 - [docs/evaluation.md](docs/evaluation.md)
 - [app/README.md](app/README.md)
 

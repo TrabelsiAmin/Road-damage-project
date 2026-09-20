@@ -13,7 +13,9 @@
 - FFmpeg: **present** (video muxer only)
 - disk free at probe: **200,868,728,832** bytes
 
-`src.train` exits unless `--allow-cpu` is passed. No precision, recall, or mAP figures are recorded unless `src.evaluate` writes `status: OK`. Dataset measurements: [dataset.md](dataset.md).
+`src.train` exits unless `--allow-cpu` is passed. No precision, recall, or mAP figures are recorded unless `src.evaluate` / `src.eval_wp3` writes `status: OK`. Dataset measurements: [dataset.md](dataset.md).
+
+WP3 Colab (CUDA required): [wp3-training.md](wp3-training.md) and `training/colab/WP3_YOLOv8_training.ipynb`. **Training: NOT YET EXECUTED.** Do not pass `--allow-cpu`. Do not re-split the pavement folder (7380/1581/1582).
 
 ## Work-package split (keep three agents)
 
@@ -54,11 +56,11 @@ baseline (YOLOv8n, WP3 pavement, imgsz 640)
 2. Convert VOC → YOLO: `python -m src.convert_rdd_voc`
 3. Audit: `python -m src.analyze_labeled_dataset`
 4. Split per agent: `python -m src.prepare_dataset`
-5. Baseline **WP3 first** (YOLOv8n, 640):
+5. Baseline **WP3 first** (YOLOv8n, 640) — on Colab GPU, not this CPU VM:
 
 ```bash
 python -m src.train --agent pavement --data config/pavement.yaml \
-  --weights yolov8n.pt --epochs 100 --imgsz 640 --seed 42
+  --weights yolov8n.pt --epochs 100 --imgsz 640 --seed 42 --name wp3_baseline
 ```
 
 Hyperparameters default from `config/augmentation.yaml` / `config/baseline.yaml`:

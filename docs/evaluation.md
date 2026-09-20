@@ -45,4 +45,4 @@ Selection rule: prefer the model that improves **small-damage** detection enough
 
 ## Mobile inference
 
-Until a TFLite file exists, on-device latency is **not measured** (the live camera overlay shows 0 ms or conversion time only, with a REQUIRES MODEL banner). This Linux VM has **no phone/camera device**, so live camera inference was **NOT RUN** here. After install, the camera HUD prints the interpreter `latencyMs`.
+Until a TFLite file exists, on-device latency is **not measured**. WP3 comparison after Colab: `python evaluation/compare_wp3_models.py --baseline reports/wp3/baseline/metrics.json --improved reports/wp3/final/metrics.json` — it prints NOT_RUN until both files have `status: OK`.

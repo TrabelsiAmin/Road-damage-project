@@ -6,11 +6,13 @@ Requires a labeled RDD extract. Refuses `Global_Potholes_Dataset-image`.
 
 WP3 pavement (`--agent pavement`, D20/D40) is the training priority. Keep three agent datasets after `prepare_dataset.py`.
 
+Google Colab (CUDA): [`docs/wp3-training.md`](../docs/wp3-training.md) and `colab/WP3_YOLOv8_training.ipynb`. **Training: NOT YET EXECUTED.**
+
 ```bash
 pip install -r requirements.txt
 python -m unittest discover -s tests
 python -m src.check_environment
-python -m src.download_rdd --fetch-metadata
+python -m src.verify_wp3_dataset --root data/processed/pavement --yaml config/pavement.yaml
 python -m src.distill --agent pavement --plan-only
 python -m src.process_video --input clip.mp4 --output /tmp/annotated.mp4 --fps 2
 ```

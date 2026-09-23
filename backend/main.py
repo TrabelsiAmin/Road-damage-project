@@ -1,4 +1,4 @@
-"""TariqMap fake backend server.
+"""TariqMap backend server.
 
 Implements the observation upload contract for local development and hackathon demo.
 This is NOT a production server — no authentication, no real storage, no GIS.
@@ -13,9 +13,15 @@ Endpoints:
     GET  /v1/observations/{id}     — Get one observation by id
     GET  /v1/health                — Health check
     GET  /v1/stats                 — Aggregate stats (count, priority distribution)
+    POST /v1/detect                — Server-side YOLO inference (requires ONNX models in backend/models/)
 
 Mobile app integration:
     Set the sync endpoint in api_client.dart to http://<dev-machine-ip>:8080/v1/observations
+
+Server-side YOLO inference:
+    1. Export ONNX: python -m src.export --weights runs/cracks/weights/best.pt --agent cracks --export-onnx
+    2. Copy backend/models/*.onnx from the training/ output
+    3. Set TARIQMAP_MODELS_DIR env var if models are not in backend/models/
 """
 from __future__ import annotations
 
@@ -25,8 +31,18 @@ from typing import Any
 
 from fastapi import FastAPI, HTTPException, Request, status
 from fastapi.middleware.cors import CORSMiddleware
+from pydantic import BaseModel
 
 from schemas import ObservationUpload, HealthResponse, StatsResponse
+
+# Server-side inference — optional (degrades gracefully if onnxruntime not installed)
+try:
+    from inference import detect_image, list_available_agents
+    _INFERENCE_AVAILABLE = True
+except ImportError:
+    _INFERENCE_AVAILABLE = False
+    def list_available_agents() -> list[str]:  # type: ignore[misc]
+        return []
 
 app = FastAPI(
     title="TariqMap API",
@@ -117,6 +133,70 @@ def get_observation(obs_id: str) -> dict:
     if obs is None:
         raise HTTPException(status_code=404, detail=f"Observation not found: {obs_id}")
     return obs
+
+
+# ---------------------------------------------------------------------------
+# Server-side YOLO detection
+# ---------------------------------------------------------------------------
+
+class DetectRequest(BaseModel):
+    """Request body for POST /v1/detect."""
+    image_b64: str
+    """Base64-encoded JPEG or PNG image bytes."""
+    agents: list[str] | None = None
+    """Subset of agents to run ('cracks', 'pavement', 'surface').
+    Defaults to all agents with available ONNX models."""
+
+
+@app.post("/v1/detect", tags=["inference"])
+async def detect(body: DetectRequest) -> dict:
+    """Run server-side YOLO inference on an uploaded image.
+
+    Returns agent_results with per-class detections, total_detections count,
+    and latency_ms.  Requires ONNX models in backend/models/ — see module
+    docstring for setup instructions.
+
+    Responds with 503 if no ONNX models are available (onnxruntime not installed
+    or models not copied to backend/models/).
+    """
+    if not _INFERENCE_AVAILABLE:
+        raise HTTPException(
+            status_code=503,
+            detail="Server-side inference unavailable: install onnxruntime + pillow and export ONNX models.",
+        )
+
+    available = list_available_agents()
+    if not available:
+        raise HTTPException(
+            status_code=503,
+            detail=(
+                "No ONNX models found in backend/models/. "
+                "Export with: python -m src.export --weights <best.pt> --agent <agent> --export-onnx"
+            ),
+        )
+
+    try:
+        result = detect_image(body.image_b64, agents=body.agents)
+    except Exception as exc:
+        logger.exception("Inference error: %s", exc)
+        raise HTTPException(status_code=500, detail=f"Inference error: {exc}") from exc
+
+    logger.info(
+        "Detect: total=%d latency=%.1fms agents=%s",
+        result["total_detections"],
+        result["latency_ms"],
+        [r["agent"] for r in result["agent_results"]],
+    )
+    return result
+
+
+@app.get("/v1/detect/agents", tags=["inference"])
+def list_detect_agents() -> dict:
+    """List which agents have ONNX models available for server-side inference."""
+    return {
+        "available": list_available_agents(),
+        "inference_enabled": _INFERENCE_AVAILABLE,
+    }
 
 
 @app.get("/v1/stats", response_model=StatsResponse, tags=["statistics"])

@@ -1,10 +1,8 @@
 import 'dart:io';
-import 'dart:math' as math;
 import 'package:flutter/foundation.dart';
 import 'package:image/image.dart' as img;
 import 'package:tflite_flutter/tflite_flutter.dart';
 import '../inference/nms.dart';
-import '../inference/preprocessing.dart';
 import '../models/observation.dart';
 import 'detection_service.dart';
 
@@ -24,25 +22,52 @@ const _classNames = <int, String>{
 };
 
 // ---------------------------------------------------------------------------
+// Per-class confidence thresholds
+//
+// Kept in sync with training/config/augmentation.yaml → class_confidence_thresholds.
+// Each class gets its own recall/precision balance:
+//   - D40 (potholes) is safety-critical → higher threshold to avoid false alarms.
+//   - D20/D50/D60 are visually subtle → lower threshold for better recall.
+// ---------------------------------------------------------------------------
+
+const _classThresholds = <String, double>{
+  'D00': 0.35,  // Longitudinal crack
+  'D10': 0.35,  // Transverse crack
+  'D20': 0.28,  // Alligator cracking    — harder to distinguish, recall priority
+  'D40': 0.42,  // Pothole               — safety-critical, avoid false positives
+  'D50': 0.28,  // Faded pedestrian      — low-contrast markings
+  'D60': 0.28,  // Faded lane marking    — low-contrast markings
+  'D90': 0.32,  // Rutting               — moderate threshold
+};
+
+/// Returns the confidence threshold for [classCode].
+/// Falls back to 0.35 for unknown codes.
+double _thresholdFor(String classCode) =>
+    _classThresholds[classCode] ?? 0.35;
+
+// ---------------------------------------------------------------------------
 // TFLite agent runner
 // ---------------------------------------------------------------------------
 
-/// On-device inference runner backed by a YOLOv8n TFLite model.
+/// On-device inference runner backed by a YOLOv8n/s/m TFLite model.
 ///
-/// Expected model signature (Ultralytics YOLOv8n export):
+/// Expected model signature (Ultralytics YOLOv8 export):
 ///   Input:  [1, inputSize, inputSize, 3]  float32  — RGB normalised [0..1]
 ///   Output: [1, 4+numClasses, 8400]       float32  — (cx, cy, w, h, cls…)
 ///
 /// Fails gracefully: if the interpreter cannot be loaded [failed] is true and
 /// [detect] returns an empty result with an error string.
+///
+/// Per-class confidence thresholds are applied during decoding so that
+/// different damage classes can have individually tuned recall/precision.
+/// Class-aware NMS is applied to avoid suppressing detections across classes.
 class TFLiteAgentRunner implements DetectionAgentRunner {
   TFLiteAgentRunner({
     required this.agentName,
     required this.agentClasses,
     required String modelPath,
-    this.confidenceThreshold = 0.35,
     this.iouThreshold = 0.45,
-    this.inputSize = 640,
+    this.inputSize    = 640,
   }) {
     _tryLoad(modelPath);
   }
@@ -50,16 +75,20 @@ class TFLiteAgentRunner implements DetectionAgentRunner {
   @override
   final String agentName;
   final List<String> agentClasses;
-  final double confidenceThreshold;
+
+  /// Per-class IoU threshold for NMS.
   final double iouThreshold;
+
+  /// Model input width and height (must match the exported TFLite).
   final int inputSize;
 
   Interpreter? _interpreter;
   bool _failed = false;
 
+  @override
   bool get isReady => _interpreter != null;
   bool get failed  => _failed;
-  
+
   @override
   bool get isMock => false;
 
@@ -74,9 +103,10 @@ class TFLiteAgentRunner implements DetectionAgentRunner {
     }
   }
 
+  @override
   void dispose() => _interpreter?.close();
 
-  // ── Inference ────────────────────────────────────────────────────────────
+  // ── Inference ──────────────────────────────────────────────────────────────
 
   @override
   Future<AgentResult> detect(File imageFile) async {
@@ -101,7 +131,11 @@ class TFLiteAgentRunner implements DetectionAgentRunner {
     final rawBytes = await imageFile.readAsBytes();
     final decoded   = img.decodeImage(rawBytes);
     if (decoded == null) {
-      return AgentResult(agent: agentName, detections: const [], error: 'Cannot decode image');
+      return AgentResult(
+        agent: agentName,
+        detections: const [],
+        error: 'Cannot decode image: ${imageFile.path}',
+      );
     }
     final resized = img.copyResize(decoded, width: inputSize, height: inputSize);
 
@@ -125,11 +159,12 @@ class TFLiteAgentRunner implements DetectionAgentRunner {
     // 4. Run interpreter.
     interpreter.run(input, output);
 
-    // 5. Decode detections from raw output.
+    // 5. Decode detections with per-class confidence thresholds.
     final rawDetections = <Detection>[];
     for (var anchor = 0; anchor < numAnchors; anchor++) {
       double bestScore = 0;
-      int bestClass = -1;
+      int    bestClass = -1;
+
       for (var c = 0; c < numClasses; c++) {
         final score = output[0][4 + c][anchor];
         if (score > bestScore) {
@@ -137,11 +172,19 @@ class TFLiteAgentRunner implements DetectionAgentRunner {
           bestClass = c;
         }
       }
-      if (bestScore < confidenceThreshold) continue;
-      final className = _classNames[bestClass];
-      if (className == null || !agentClasses.contains(className)) continue;
 
-      // YOLOv8 outputs cx, cy, w, h — already normalised to [0..1].
+      if (bestClass == -1) continue;
+
+      final className = _classNames[bestClass];
+      if (className == null) continue;
+
+      // Filter by this class's specific threshold (not a single global cutoff)
+      if (bestScore < _thresholdFor(className)) continue;
+
+      // Only include classes this agent is responsible for
+      if (!agentClasses.contains(className)) continue;
+
+      // YOLOv8 outputs cx, cy, w, h — normalised to [0..1].
       final cx = output[0][0][anchor].clamp(0.0, 1.0);
       final cy = output[0][1][anchor].clamp(0.0, 1.0);
       final bw = output[0][2][anchor].clamp(0.0, 1.0);
@@ -154,20 +197,18 @@ class TFLiteAgentRunner implements DetectionAgentRunner {
         box: BoundingBox(
           x: (cx - bw / 2).clamp(0.0, 1.0),
           y: (cy - bh / 2).clamp(0.0, 1.0),
-          width: bw,
+          width:  bw,
           height: bh,
         ),
       ));
     }
 
-    // 6. Non-maximum suppression.
+    // 6. Class-aware NMS: suppresses duplicates within each class independently,
+    //    preventing a pothole box from suppressing a nearby crack box.
     return AgentResult(
       agent: agentName,
-      detections: applyNms(rawDetections, iouThreshold: iouThreshold),
+      detections: applyClassAwareNms(rawDetections, iouThreshold: iouThreshold),
       isMock: false,
     );
   }
-
-  // ── NMS ──────────────────────────────────────────────────────────────────
-
 }

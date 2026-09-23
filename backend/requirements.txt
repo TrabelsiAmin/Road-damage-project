@@ -1,3 +1,7 @@
 fastapi>=0.115.0
 uvicorn[standard]>=0.32.0
 pydantic>=2.9.0
+# Server-side YOLO inference (optional — only needed if using /v1/detect)
+onnxruntime>=1.18.0
+numpy>=1.26
+pillow>=10.0

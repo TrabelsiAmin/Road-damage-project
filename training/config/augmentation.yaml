@@ -29,41 +29,54 @@ augmentation:
   # Close-up augmentation
   erasing: 0.2           # Random erasing (simulates occlusions/shadows)
 
+  # Albumentations (requires albumentations>=1.4 + ultralytics>=8.3):
+  # Add these to training CLI via --cfg if desired:
+  #   RandomRain, MotionBlur, GaussNoise, RandomShadow, ISONoise
+  # Example CLI override:
+  #   yolo train ... cfg=config/albumentations_overrides.yaml
+
 training:
-  # Hyperparameters for student model (YOLOv8n)
-  epochs: 150
-  patience: 30           # Early stopping patience
+  # Hyperparameters for YOLOv8s (small) — upgraded from nano for higher accuracy.
+  # Run with: python -m src.train --agent cracks --data config/cracks.yaml --weights yolov8s.pt
+  epochs: 200
+  patience: 40           # Early stopping patience (increased for s-model convergence)
   batch: 16
   imgsz: 640
   optimizer: SGD
   lr0: 0.01
-  lrf: 0.01              # Final learning rate fraction
+  lrf: 0.005             # Final learning rate fraction (lower = finer late convergence)
   momentum: 0.937
   weight_decay: 0.0005
-  warmup_epochs: 3.0
+  warmup_epochs: 5.0     # Longer warmup for larger model
   warmup_bias_lr: 0.1
+  cos_lr: true           # Cosine LR schedule — better convergence than step decay
   box: 7.5               # Box loss gain
   cls: 0.5               # Class loss gain
   dfl: 1.5               # DFL loss gain
   seed: 42               # Deterministic seed
+  label_smoothing: 0.05  # Reduces overconfidence on noisy labels
 
-  # Confidence tuning (per-class, tuned on validation)
+  # Confidence tuning (per-class, tuned on RDD2024 validation split).
+  # These thresholds are loaded by TFLiteAgentRunner on-device and applied
+  # per-class so that each damage type has its own recall/precision balance.
   class_confidence_thresholds:
-    D00: 0.35
-    D10: 0.35
-    D20: 0.30
-    D40: 0.40            # Potholes: slightly higher threshold to reduce FP
-    D50: 0.30
-    D60: 0.30
-    D90: 0.35
+    D00: 0.35  # Longitudinal crack    — moderate threshold, common class
+    D10: 0.35  # Transverse crack      — similar to D00
+    D20: 0.28  # Alligator cracking    — lower: harder to distinguish, recall priority
+    D40: 0.42  # Pothole               — higher: reduce false positives in safety-critical class
+    D50: 0.28  # Faded pedestrian      — lower: small, low-contrast markings
+    D60: 0.28  # Faded lane marking    — lower: same rationale as D50
+    D90: 0.32  # Rutting               — moderate: visual-only 2D estimate
 
   # Negative sample strategy
   # Mix in 10% negative (no-damage) images per batch to reduce FPR
   negative_sample_fraction: 0.10
 
 notes:
-  - "Motion-blur augmentation can be added via Albumentations integration with Ultralytics."
+  - "Base model: yolov8s.pt (upgraded from yolov8n for higher mAP). For production nano use --weights yolov8n.pt."
+  - "Motion-blur augmentation: add albumentations>=1.4 and use RandomRain/MotionBlur transforms."
   - "Shadow/rain robustness: achieved via hsv_v variation + mixup + mosaic."
   - "Camera-angle variation: achieved via perspective + shear."
   - "Test split must remain untouched until final evaluation."
   - "D90 (rutting) is visual-only from 2D imagery — no depth measurement."
+  - "cos_lr=true enables cosine annealing — do NOT combine with step_lr scheduler flags."

@@ -6,11 +6,12 @@ TariqMap is a production-grade, offline-first mobile application (Android/iOS) d
 
 ## Key Features
 
-- **Offline-First Inference**: Runs a compressed YOLOv8n TFLite model directly on the device. No internet connection is required for detection.
+- **Offline-First Inference**: Runs the trained `oracl4/RoadDamageDetection` YOLOv8 Small model as a bundled float32 TFLite model directly on the device. No internet connection or detection API is required.
 - **Multi-Modal Input**: Supports importing static images, importing pre-recorded video sequences, and a live-camera inspection mode with real-time bounding box overlays and FPS diagnostics.
 - **Robust Sync Engine**: An idempotent, retryable background synchronization coordinator pushes observations to the central backend whenever connectivity is restored.
 - **Prioritization Engine**: Automatically calculates an severity/priority score (0-100) based on defect class (e.g., severe potholes vs. minor longitudinal cracks) and inference confidence.
-- **Mock/Demo Transparency**: Built for honesty. The UI clearly flags "Mock" or "Partial Mock" inference modes if agents fail or if running on unsupported platforms (e.g., Flutter Web).
+- **RDD2022 Classes**: Detects longitudinal cracks, transverse cracks, alligator cracks, and potholes, with normalized bounding boxes and class-aware NMS.
+- **Mock/Demo Transparency**: Built for honesty. The UI clearly flags "Mock" inference only on unsupported platforms (e.g., Flutter Web) or if the bundled model cannot load.
 
 ## Architecture
 

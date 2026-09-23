@@ -1,7 +1,5 @@
-import 'dart:convert';
 import 'dart:io';
 import 'package:flutter/foundation.dart';
-import 'package:http/http.dart' as http;
 import '../models/observation.dart';
 import 'model_manager.dart';
 
@@ -77,9 +75,7 @@ class _AgentDef {
 }
 
 const _agentDefs = <_AgentDef>[
-  _AgentDef('cracks',   ['D00', 'D10']),
-  _AgentDef('pavement', ['D20', 'D40']),
-  _AgentDef('surface',  ['D50', 'D60', 'D90']),
+  _AgentDef('road_damage', ['D00', 'D10', 'D20', 'D40']),
 ];
 
 // ---------------------------------------------------------------------------
@@ -89,11 +85,9 @@ const _agentDefs = <_AgentDef>[
 class DetectionService {
   DetectionService._({
     required List<DetectionAgentRunner> runners,
-    required String remoteBaseUrl,
-  }) : _runners = runners, _remoteBaseUrl = remoteBaseUrl;
+  }) : _runners = runners;
 
   final List<DetectionAgentRunner> _runners;
-  final String _remoteBaseUrl;
 
   /// True when ALL runners are mocks (no real TFLite models loaded).
   bool get usingMock => _runners.every((r) => r.isMock);
@@ -112,17 +106,8 @@ class DetectionService {
   /// On Android/iOS: attempts to load bundled TFLite models; falls back to mock
   /// per-agent if the file is unavailable.
   static Future<DetectionService> create() async {
-    final configuredUrl = const String.fromEnvironment('TARIQMAP_API_BASE_URL');
-    final remoteBaseUrl = configuredUrl.isNotEmpty
-        ? configuredUrl
-        : (kIsWeb || Platform.isIOS || Platform.isMacOS
-            ? 'http://127.0.0.1:8080/v1'
-            : 'http://10.0.2.2:8080/v1');
     if (kIsWeb) {
-      return DetectionService._(
-        runners: _buildMockRunners(),
-        remoteBaseUrl: remoteBaseUrl,
-      );
+      return DetectionService._(runners: _buildMockRunners());
     }
 
     final runners = <DetectionAgentRunner>[];
@@ -143,7 +128,7 @@ class DetectionService {
       runners.add(_mockForAgent(def.name, def.classes));
     }
 
-    return DetectionService._(runners: runners, remoteBaseUrl: remoteBaseUrl);
+    return DetectionService._(runners: runners);
   }
 
   // ── Detection ──────────────────────────────────────────────────────────────
@@ -152,12 +137,6 @@ class DetectionService {
   /// returned as an empty AgentResult with an error string — other agents
   /// continue unaffected.
   Future<List<AgentResult>> detectAll(File image) async {
-    try {
-      final remote = await _detectWithStreetSense(image);
-      if (remote.isNotEmpty) return remote;
-    } catch (error) {
-      debugPrint('[DetectionService] StreetSense unavailable: $error; using local fallback');
-    }
     return Future.wait(_runners.map((runner) async {
       try {
         return await runner.detect(image);
@@ -171,46 +150,6 @@ class DetectionService {
         );
       }
     }));
-  }
-
-  Future<List<AgentResult>> _detectWithStreetSense(File image) async {
-    final response = await http
-        .post(
-          Uri.parse('$_remoteBaseUrl/detect'),
-          headers: const {'Content-Type': 'application/json'},
-          body: jsonEncode({'image_b64': base64Encode(await image.readAsBytes())}),
-        )
-        .timeout(const Duration(seconds: 35));
-    if (response.statusCode != 200) {
-      throw Exception('StreetSense server returned ${response.statusCode}: ${response.body}');
-    }
-    final body = jsonDecode(response.body) as Map<String, dynamic>;
-    final rows = body['agent_results'] as List<dynamic>? ?? const [];
-    return rows.map((raw) {
-      final row = raw as Map<String, dynamic>;
-      final detections = (row['detections'] as List<dynamic>? ?? const []).map((rawDetection) {
-        final item = rawDetection as Map<String, dynamic>;
-        final box = item['box'] as Map<String, dynamic>;
-        return Detection(
-          agent: item['agent'] as String,
-          classCode: item['classCode'] as String,
-          confidence: (item['confidence'] as num).toDouble(),
-          box: BoundingBox(
-            x: (box['x'] as num).toDouble(),
-            y: (box['y'] as num).toDouble(),
-            width: (box['width'] as num).toDouble(),
-            height: (box['height'] as num).toDouble(),
-          ),
-        );
-      }).toList();
-      return AgentResult(
-        agent: row['agent'] as String,
-        detections: detections,
-        error: row['error'] as String?,
-        isMock: false,
-        latencyMs: row['latencyMs'] as int?,
-      );
-    }).toList();
   }
 
   void dispose() {

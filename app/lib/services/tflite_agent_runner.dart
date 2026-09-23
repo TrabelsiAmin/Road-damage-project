@@ -8,7 +8,7 @@ import 'detection_service.dart';
 
 // ---------------------------------------------------------------------------
 // Class index → RDD damage code mapping
-// All three agents share a single 7-class label space.
+// RoadDamageDetection uses the four CRDDC2022 classes below.
 // ---------------------------------------------------------------------------
 
 const _classNames = <int, String>{
@@ -16,9 +16,6 @@ const _classNames = <int, String>{
   1: 'D10', // Transverse crack
   2: 'D20', // Alligator cracking
   3: 'D40', // Pothole
-  4: 'D50', // Faded pedestrian crossing
-  5: 'D60', // Faded lane marking
-  6: 'D90', // Rutting
 };
 
 // ---------------------------------------------------------------------------
@@ -33,11 +30,8 @@ const _classNames = <int, String>{
 const _classThresholds = <String, double>{
   'D00': 0.35,  // Longitudinal crack
   'D10': 0.35,  // Transverse crack
-  'D20': 0.28,  // Alligator cracking    — harder to distinguish, recall priority
-  'D40': 0.42,  // Pothole               — safety-critical, avoid false positives
-  'D50': 0.28,  // Faded pedestrian      — low-contrast markings
-  'D60': 0.28,  // Faded lane marking    — low-contrast markings
-  'D90': 0.32,  // Rutting               — moderate threshold
+  'D20': 0.30,
+  'D40': 0.40,
 };
 
 /// Returns the confidence threshold for [classCode].
@@ -149,9 +143,16 @@ class TFLiteAgentRunner implements DetectionAgentRunner {
         ]))
     ];
 
-    // 3. Allocate output buffer [1, 4+numClasses, numAnchors].
-    const numAnchors = 8400;
-    final numClasses = _classNames.length; // 7
+    // 3. Allocate output buffer from the exported tensor shape.
+    final outputShape = interpreter.getOutputTensor(0).shape;
+    if (outputShape.length != 3 || outputShape[0] != 1) {
+      throw StateError('Unexpected model output shape: $outputShape');
+    }
+    final numClasses = _classNames.length;
+    final numAnchors = outputShape[2];
+    if (outputShape[1] != 4 + numClasses) {
+      throw StateError('Expected ${4 + numClasses} output channels, got $outputShape');
+    }
     final output = [
       List.generate(4 + numClasses, (_) => List.filled(numAnchors, 0.0))
     ];

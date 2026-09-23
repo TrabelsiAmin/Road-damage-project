@@ -42,7 +42,9 @@ class ModelBundleLoader {
     final raw = await rootBundle.loadString('assets/models/model-bundles.json');
     final parsed = jsonDecode(raw) as Map<String, dynamic>;
     final manifest = ModelBundleManifest.fromJson(parsed);
-    if (manifest.agents.length != 3) throw StateError('A TariqMap bundle must contain three agents.');
+    if (manifest.agents.length != 1 || manifest.agents.first.name != 'road_damage') {
+      throw StateError('A TariqMap RDD bundle must contain the road_damage agent.');
+    }
     return manifest;
   }
 }

@@ -7,13 +7,11 @@ class TariqMapConstants {
   TariqMapConstants._();
 
   // ── Canonical D-code list (ordered: cracks → pavement → surface) ─────────
-  static const allCodes = <String>['D00', 'D10', 'D20', 'D40', 'D50', 'D60', 'D90'];
+  static const allCodes = <String>['D00', 'D10', 'D20', 'D40'];
 
   // ── Agent → class mapping ────────────────────────────────────────────────
   static const agentClasses = <String, List<String>>{
-    'cracks':   ['D00', 'D10'],
-    'pavement': ['D20', 'D40'],
-    'surface':  ['D50', 'D60', 'D90'],
+    'road_damage': ['D00', 'D10', 'D20', 'D40'],
   };
 
   // ── Human-readable labels ────────────────────────────────────────────────
@@ -22,9 +20,6 @@ class TariqMapConstants {
     'D10': 'Transverse Crack',
     'D20': 'Alligator Crack',
     'D40': 'Pothole',
-    'D50': 'Faded Crossing',
-    'D60': 'Faded Lane',
-    'D90': 'Rutting',
   };
 
   /// French labels (ready for i18n expansion)
@@ -33,9 +28,6 @@ class TariqMapConstants {
     'D10': 'Fissure transversale',
     'D20': 'Faïençage',
     'D40': 'Nid-de-poule',
-    'D50': 'Marquage piéton effacé',
-    'D60': 'Marquage de voie effacé',
-    'D90': 'Orniérage visuel',
   };
 
   // ── Priority weight per class (used in Observation.priorityScore) ─────────
@@ -58,7 +50,7 @@ class TariqMapConstants {
 
   // ── Model bundle ─────────────────────────────────────────────────────────
   static const modelBundleAsset = 'assets/models/model-bundles.json';
-  static const modelBundleVersion = '2026.09.0-demo';
+  static const modelBundleVersion = '2026.09.23-rdd2022';
 
   // ── Inference defaults ───────────────────────────────────────────────────
   static const defaultConfidenceThreshold = 0.35;

@@ -1,28 +1,24 @@
 import 'dart:io';
 import 'package:crypto/crypto.dart';
 import 'package:flutter/foundation.dart';
-import 'package:http/http.dart' as http;
+import 'package:flutter/services.dart';
 import 'package:path_provider/path_provider.dart';
 
-/// URLs for each agent's TFLite model on GitHub Releases.
-/// Replace with your actual release asset URLs after uploading the models.
-const _modelUrls = {
-  'cracks':   'https://github.com/YOUR_ORG/TariqMap/releases/latest/download/cracks.tflite',
-  'pavement': 'https://github.com/YOUR_ORG/TariqMap/releases/latest/download/pavement.tflite',
-  'surface':  'https://github.com/YOUR_ORG/TariqMap/releases/latest/download/surface.tflite',
+/// The four-class checkpoint from oracl4/RoadDamageDetection, exported for
+/// phone-side inference.
+const _bundledModels = {
+  'road_damage': 'assets/models/road_damage.tflite',
 };
 
 /// Known SHA-256 checksums for each model file.
 /// Update these after uploading your real model weights.
-const _modelSha256 = {
-  'cracks':   'REPLACE_AFTER_UPLOAD',
-  'pavement': 'REPLACE_AFTER_UPLOAD',
-  'surface':  'REPLACE_AFTER_UPLOAD',
+const _modelSha256 = <String, String>{
+  'road_damage': '830f99bd8c31c5d24138c16db7862dfb62293b96cc1dec241c36140bff8a813f',
 };
 
-/// Manages downloading, caching, and verification of TFLite model files.
+/// Manages copying and verification of bundled TFLite model files.
 ///
-/// On Android/iOS: downloads models to app documents directory on first use.
+/// On Android/iOS: copies the bundled model to app documents on first use.
 /// On web/desktop: always returns null (mock fallback is used).
 class ModelManager {
   ModelManager._();
@@ -57,12 +53,16 @@ class ModelManager {
         await file.delete();
       }
 
-      final url = _modelUrls[agentName];
-      if (url == null) return null;
+      final asset = _bundledModels[agentName];
+      if (asset == null) return null;
 
-      debugPrint('[ModelManager] Downloading $agentName model from $url');
-      final downloaded = await _downloadWithProgress(url, file, onProgress: onProgress);
-      if (!downloaded) return null;
+      debugPrint('[ModelManager] Copying bundled $agentName model');
+      final data = await rootBundle.load(asset);
+      await file.writeAsBytes(
+        data.buffer.asUint8List(data.offsetInBytes, data.lengthInBytes),
+        flush: true,
+      );
+      onProgress?.call(1.0);
 
       if (!await _checksumValid(file, agentName)) {
         debugPrint('[ModelManager] Checksum mismatch for $agentName — deleting.');
@@ -99,32 +99,4 @@ class ModelManager {
     return actual == expected;
   }
 
-  Future<bool> _downloadWithProgress(
-    String url,
-    File destination, {
-    void Function(double progress)? onProgress,
-  }) async {
-    try {
-      final client = http.Client();
-      final request = http.Request('GET', Uri.parse(url));
-      final response = await client.send(request);
-      if (response.statusCode != 200) {
-        debugPrint('[ModelManager] HTTP ${response.statusCode} for $url');
-        return false;
-      }
-      final total = response.contentLength ?? 0;
-      var received = 0;
-      final sink = destination.openWrite();
-      await response.stream.forEach((chunk) {
-        sink.add(chunk);
-        received += chunk.length;
-        if (total > 0) onProgress?.call(received / total);
-      });
-      await sink.close();
-      return true;
-    } catch (e) {
-      debugPrint('[ModelManager] Download error: $e');
-      return false;
-    }
-  }
 }

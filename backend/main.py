@@ -34,6 +34,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 
 from schemas import ObservationUpload, HealthResponse, StatsResponse
+from roboflow import detect_roboflow, list_roboflow_agents, roboflow_configured
 
 # Server-side inference — optional (degrades gracefully if onnxruntime not installed)
 try:
@@ -159,6 +160,24 @@ async def detect(body: DetectRequest) -> dict:
     Responds with 503 if no ONNX models are available (onnxruntime not installed
     or models not copied to backend/models/).
     """
+    # StreetSense is the primary detector when its Roboflow key is configured.
+    # The existing ONNX implementation remains available as a local fallback.
+    if roboflow_configured():
+        try:
+            import base64
+
+            image_bytes = base64.b64decode(body.image_b64, validate=True)
+            result = detect_roboflow(image_bytes)
+            logger.info(
+                "StreetSense detect: total=%d latency=%.1fms",
+                result["total_detections"],
+                result["latency_ms"],
+            )
+            return result
+        except Exception as exc:
+            logger.exception("StreetSense inference error: %s", exc)
+            raise HTTPException(status_code=502, detail=f"StreetSense inference error: {exc}") from exc
+
     if not _INFERENCE_AVAILABLE:
         raise HTTPException(
             status_code=503,
@@ -193,10 +212,8 @@ async def detect(body: DetectRequest) -> dict:
 @app.get("/v1/detect/agents", tags=["inference"])
 def list_detect_agents() -> dict:
     """List which agents have ONNX models available for server-side inference."""
-    return {
-        "available": list_available_agents(),
-        "inference_enabled": _INFERENCE_AVAILABLE,
-    }
+    available = list_roboflow_agents() or list_available_agents()
+    return {"available": available, "inference_enabled": bool(available)}
 
 
 @app.get("/v1/stats", response_model=StatsResponse, tags=["statistics"])

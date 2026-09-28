@@ -18,7 +18,7 @@ TariqMap is a production-grade, offline-first mobile application (Android/iOS) d
 The project is structured into three main layers:
 1. **Training Pipeline (`/training`)**: Scripts for auditing datasets (Global Potholes Dataset), augmenting data, training YOLOv8n, and exporting to TFLite and PyTorch Mobile formats.
 2. **Mobile Application (`/app`)**: The Flutter mobile application responsible for UI, SQLite persistence, camera handling, and TFLite execution.
-3. **Backend (`/backend`)**: A lightweight FastAPI mock ingestion server representing the remote data lake.
+3. **Backend (`/backend`)**: A FastAPI ingestion API that persists observations, locations, agent runs, and detections in the TariqMap Supabase database.
 
 ## Getting Started
 

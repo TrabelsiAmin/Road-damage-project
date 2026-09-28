@@ -1,11 +1,12 @@
 """TariqMap backend server.
 
-Implements the observation upload contract for local development and hackathon demo.
-This is NOT a production server — no authentication, no real storage, no GIS.
+Implements the observation upload contract and persists normalized records in
+the TariqMap Supabase project. Supabase Auth is not yet wired into the mobile
+client, so this backend uses its server-side secret for ingestion.
 
 Usage:
     pip install fastapi uvicorn
-    cd backend && uvicorn main:app --reload --port 8080
+    cd backend && uvicorn main:app --reload --port 8000
 
 Endpoints:
     POST /v1/observations          — Accept uploaded observation (idempotent by id)
@@ -16,7 +17,7 @@ Endpoints:
     POST /v1/detect                — Server-side YOLO inference (requires ONNX models in backend/models/)
 
 Mobile app integration:
-    Set the sync endpoint in api_client.dart to http://<dev-machine-ip>:8080/v1/observations
+    Set the sync endpoint in api_client.dart to http://<dev-machine-ip>:8000/v1/observations
 
 Server-side YOLO inference:
     1. Export ONNX: python -m src.export --weights runs/cracks/weights/best.pt --agent cracks --export-onnx
@@ -27,13 +28,13 @@ from __future__ import annotations
 
 import logging
 from datetime import datetime, timezone
-from typing import Any
 
 from fastapi import FastAPI, HTTPException, Request, status
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 
 from schemas import ObservationUpload, HealthResponse, StatsResponse
+from supabase_store import SupabaseNotConfigured, SupabaseStore
 
 # Server-side inference — optional (degrades gracefully if onnxruntime not installed)
 try:
@@ -61,8 +62,7 @@ app.add_middleware(
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger("tariqmap")
 
-# In-memory store (not persisted between restarts)
-_observations: dict[str, dict[str, Any]] = {}
+store = SupabaseStore()
 
 
 # ---------------------------------------------------------------------------
@@ -71,10 +71,12 @@ _observations: dict[str, dict[str, Any]] = {}
 
 @app.get("/v1/health", response_model=HealthResponse, tags=["infrastructure"])
 def health() -> HealthResponse:
+    if not store.configured:
+        raise HTTPException(status_code=503, detail="Supabase is not configured")
     return HealthResponse(
         status="ok",
         server_time=datetime.now(timezone.utc).isoformat(),
-        observation_count=len(_observations),
+        observation_count=store.health_count(),
     )
 
 
@@ -87,28 +89,15 @@ async def create_observation(
     body: ObservationUpload,
     request: Request,
 ) -> dict:
-    obs_id = body.id
-
-    # Idempotency: if already received with same id, return 200 instead of 201
-    if obs_id in _observations:
-        logger.info("Idempotent repeat upload: %s", obs_id)
-        return {"status": "already_received", "id": obs_id}
-
-    stored = body.model_dump()
-    stored["received_at"] = datetime.now(timezone.utc).isoformat()
-    stored["client_ip"]   = request.client.host if request.client else "unknown"
-    _observations[obs_id] = stored
-
-    logger.info(
-        "New observation: id=%s actor=%s detections=%d lat=%s lon=%s",
-        obs_id,
-        body.actor,
-        sum(len(r.detections) for r in body.agent_results),
-        body.latitude,
-        body.longitude,
-    )
-
-    return {"status": "created", "id": obs_id}
+    try:
+        result = store.insert_observation(body, request.headers.get("Idempotency-Key", body.id))
+    except SupabaseNotConfigured as exc:
+        raise HTTPException(status_code=503, detail=str(exc)) from exc
+    except RuntimeError as exc:
+        logger.exception("Supabase observation write failed")
+        raise HTTPException(status_code=502, detail=str(exc)) from exc
+    logger.info("Supabase observation sync: id=%s status=%s", body.id, result["status"])
+    return result
 
 
 @app.get(
@@ -121,15 +110,22 @@ def list_observations(
     sync_status: str | None = None,
     limit: int = 100,
 ) -> list[dict]:
-    results = list(_observations.values())
-    if actor:
-        results = [r for r in results if r.get("actor") == actor]
-    return results[:limit]
+    try:
+        return store.list_observations(actor, limit)
+    except SupabaseNotConfigured as exc:
+        raise HTTPException(status_code=503, detail=str(exc)) from exc
+    except RuntimeError as exc:
+        raise HTTPException(status_code=502, detail=str(exc)) from exc
 
 
 @app.get("/v1/observations/{obs_id}", tags=["observations"])
 def get_observation(obs_id: str) -> dict:
-    obs = _observations.get(obs_id)
+    try:
+        obs = store.get_observation(obs_id)
+    except SupabaseNotConfigured as exc:
+        raise HTTPException(status_code=503, detail=str(exc)) from exc
+    except RuntimeError as exc:
+        raise HTTPException(status_code=502, detail=str(exc)) from exc
     if obs is None:
         raise HTTPException(status_code=404, detail=f"Observation not found: {obs_id}")
     return obs
@@ -201,39 +197,12 @@ def list_detect_agents() -> dict:
 
 @app.get("/v1/stats", response_model=StatsResponse, tags=["statistics"])
 def stats() -> StatsResponse:
-    all_obs = list(_observations.values())
-    if not all_obs:
-        return StatsResponse(total=0, by_actor={}, by_priority={}, by_class={})
-
-    by_actor: dict[str, int] = {}
-    by_priority: dict[str, int] = {"CRITICAL": 0, "HIGH": 0, "MEDIUM": 0, "LOW": 0}
-    by_class: dict[str, int] = {}
-
-    for obs in all_obs:
-        actor = obs.get("actor", "Unknown")
-        by_actor[actor] = by_actor.get(actor, 0) + 1
-
-        score = obs.get("priority_score", 0)
-        if score >= 70:
-            by_priority["CRITICAL"] += 1
-        elif score >= 40:
-            by_priority["HIGH"] += 1
-        elif score >= 20:
-            by_priority["MEDIUM"] += 1
-        else:
-            by_priority["LOW"] += 1
-
-        for result in obs.get("agent_results", []):
-            for det in result.get("detections", []):
-                code = det.get("classCode", "UNKNOWN")
-                by_class[code] = by_class.get(code, 0) + 1
-
-    return StatsResponse(
-        total=len(all_obs),
-        by_actor=by_actor,
-        by_priority=by_priority,
-        by_class=by_class,
-    )
+    try:
+        return StatsResponse(**store.stats())
+    except SupabaseNotConfigured as exc:
+        raise HTTPException(status_code=503, detail=str(exc)) from exc
+    except RuntimeError as exc:
+        raise HTTPException(status_code=502, detail=str(exc)) from exc
 
 
 # ---------------------------------------------------------------------------

@@ -34,3 +34,7 @@ venv/
 # Data
 *.sqlite3
 *.db
+
+# Secrets and local environment configuration
+*.env
+!.env.example

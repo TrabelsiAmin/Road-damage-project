@@ -208,12 +208,11 @@ class TFLiteAgentRunner implements DetectionAgentRunner {
       if (bestScore < _thresholdFor(className)) continue;
       if (!agentClasses.contains(className)) continue;
 
-      // YOLOv8 TFLite models output raw pixel coordinates, not normalized.
-      // We must divide by inputSize to normalize them to [0..1].
-      final cx = (outputFlat[0 * numAnchors + anchor] / inputSize).clamp(0.0, 1.0);
-      final cy = (outputFlat[1 * numAnchors + anchor] / inputSize).clamp(0.0, 1.0);
-      final bw = (outputFlat[2 * numAnchors + anchor] / inputSize).clamp(0.0, 1.0);
-      final bh = (outputFlat[3 * numAnchors + anchor] / inputSize).clamp(0.0, 1.0);
+      // YOLOv8 outputs cx, cy, w, h — normalised to [0..1].
+      final cx = outputFlat[0 * numAnchors + anchor].clamp(0.0, 1.0);
+      final cy = outputFlat[1 * numAnchors + anchor].clamp(0.0, 1.0);
+      final bw = outputFlat[2 * numAnchors + anchor].clamp(0.0, 1.0);
+      final bh = outputFlat[3 * numAnchors + anchor].clamp(0.0, 1.0);
 
       rawDetections.add(Detection(
         agent: agentName,

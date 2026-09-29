@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'core/app_colors.dart';
+import 'data/remote/supabase_service.dart';
 import 'screens/welcome_screen.dart';
 
 void main() async {
@@ -11,8 +12,12 @@ void main() async {
     DeviceOrientation.portraitUp,
     DeviceOrientation.portraitDown,
   ]);
+  // Initialize Supabase — required for direct mobile → Supabase Storage uploads.
+  // The anon key in SupabaseCfg is safe for client bundles; it is governed by RLS.
+  await SupabaseService.initialize();
   runApp(const TariqMapApp());
 }
+
 
 class TariqMapApp extends StatelessWidget {
   const TariqMapApp({super.key});

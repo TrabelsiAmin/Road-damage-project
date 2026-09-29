@@ -1,7 +1,9 @@
 import 'dart:io';
+import 'dart:typed_data';
 import 'package:flutter/foundation.dart';
 import '../models/observation.dart';
 import 'model_manager.dart';
+import 'tflite_agent_runner.dart';
 
 // ---------------------------------------------------------------------------
 // Abstract runner interface
@@ -133,13 +135,36 @@ class DetectionService {
 
   // ── Detection ──────────────────────────────────────────────────────────────
 
-  /// Runs all three agents in parallel. If one agent throws, its result is
-  /// returned as an empty AgentResult with an error string — other agents
-  /// continue unaffected.
+  /// Runs all agents in parallel on a [File]. If one agent throws, its result
+  /// is returned as an empty AgentResult with an error string.
   Future<List<AgentResult>> detectAll(File image) async {
     return Future.wait(_runners.map((runner) async {
       try {
         return await runner.detect(image);
+      } catch (error) {
+        debugPrint('[DetectionService] Agent ${runner.agentName} failed: $error');
+        return AgentResult(
+          agent: runner.agentName,
+          detections: const [],
+          error: error.toString(),
+          isMock: runner.isMock,
+        );
+      }
+    }));
+  }
+
+  /// Runs all agents in parallel on raw image bytes.
+  ///
+  /// Use this for live camera frames to avoid temp-file disk I/O.
+  /// The bytes must be a valid JPEG or PNG image.
+  Future<List<AgentResult>> detectAllFromBytes(Uint8List bytes) async {
+    return Future.wait(_runners.map((runner) async {
+      try {
+        if (runner is TFLiteAgentRunner) {
+          return await runner.detectFromBytes(bytes);
+        }
+        // Mock runners: still use a temp file path fallback
+        return await runner.detect(File(''));
       } catch (error) {
         debugPrint('[DetectionService] Agent ${runner.agentName} failed: $error');
         return AgentResult(
@@ -190,18 +215,22 @@ DetectionAgentRunner _mockForAgent(String name, List<String> classes) =>
     );
 
 // ---------------------------------------------------------------------------
-// TFLite runner factory (lazily imported to keep web build clean)
+// TFLite runner factory
 // ---------------------------------------------------------------------------
 
 Future<DetectionAgentRunner> _createTFLiteRunner(
     String name, String path, List<String> classes) async {
-  // Throws UnsupportedError on web — guarded by kIsWeb above.
+  // Guarded by kIsWeb check above — never called on web.
   return _tfliteRunnerFactory(name, path, classes);
 }
 
 Future<DetectionAgentRunner> _tfliteRunnerFactory(
     String name, String path, List<String> classes) async {
-  // On native this is replaced by the conditional import in tflite_agent_runner.dart.
-  // The function is never called on web (kIsWeb guard above), so this stub is safe.
-  throw UnsupportedError('TFLite not available on this platform');
+  // Directly instantiate TFLiteAgentRunner. The kIsWeb guard in
+  // DetectionService.create() ensures this is never reached on web.
+  return TFLiteAgentRunner(
+    agentName: name,
+    agentClasses: classes,
+    modelPath: path,
+  );
 }

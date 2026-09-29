@@ -43,6 +43,12 @@ dependencies:
   share_plus: ^10.1.4
   # Permission flows
   permission_handler: ^11.3.1
+  # Supabase SDK — direct mobile → Supabase Storage + Realtime uploads
+  supabase_flutter: ^2.8.4
+  # Network connectivity awareness (Wi-Fi vs mobile data)
+  connectivity_plus: ^6.1.4
+  # MIME type detection for file uploads
+  mime: ^2.0.0
 
 dev_dependencies:
   flutter_test:

@@ -1,4 +1,5 @@
 import 'dart:io';
+import 'dart:typed_data';
 import 'package:flutter/foundation.dart';
 import 'package:image/image.dart' as img;
 import 'package:tflite_flutter/tflite_flutter.dart';
@@ -88,9 +89,11 @@ class TFLiteAgentRunner implements DetectionAgentRunner {
 
   void _tryLoad(String modelPath) {
     try {
-      final options = InterpreterOptions()..threads = 2;
+      // Use up to 4 threads — capped so we don't starve the UI thread.
+      final numThreads = (Platform.numberOfProcessors - 1).clamp(2, 4);
+      final options = InterpreterOptions()..threads = numThreads;
       _interpreter = Interpreter.fromFile(File(modelPath), options: options);
-      debugPrint('[TFLite:$agentName] Loaded: $modelPath');
+      debugPrint('[TFLite:$agentName] Loaded: $modelPath (threads=$numThreads)');
     } catch (e) {
       debugPrint('[TFLite:$agentName] Load failed: $e');
       _failed = true;
@@ -112,38 +115,60 @@ class TFLiteAgentRunner implements DetectionAgentRunner {
       );
     }
     try {
-      return await _runInference(imageFile);
+      final bytes = await imageFile.readAsBytes();
+      return await _runInferenceOnBytes(bytes);
     } catch (e) {
       return AgentResult(agent: agentName, detections: const [], error: e.toString());
     }
   }
 
-  Future<AgentResult> _runInference(File imageFile) async {
+  /// Accepts raw JPEG/PNG bytes directly — avoids temp-file I/O for live frames.
+  Future<AgentResult> detectFromBytes(Uint8List bytes) async {
+    if (_failed || _interpreter == null) {
+      return AgentResult(
+        agent: agentName,
+        detections: const [],
+        error: 'Model not loaded',
+      );
+    }
+    try {
+      return await _runInferenceOnBytes(bytes);
+    } catch (e) {
+      return AgentResult(agent: agentName, detections: const [], error: e.toString());
+    }
+  }
+
+  Future<AgentResult> _runInferenceOnBytes(Uint8List rawBytes) async {
     final interpreter = _interpreter!;
 
     // 1. Decode and resize to model input dimensions.
-    final rawBytes = await imageFile.readAsBytes();
-    final decoded   = img.decodeImage(rawBytes);
+    final decoded = img.decodeImage(rawBytes);
     if (decoded == null) {
       return AgentResult(
         agent: agentName,
         detections: const [],
-        error: 'Cannot decode image: ${imageFile.path}',
+        error: 'Cannot decode image bytes',
       );
     }
     final resized = img.copyResize(decoded, width: inputSize, height: inputSize);
 
-    // 2. Build [1, H, W, 3] float32 input tensor (RGB, [0..1]).
-    final input = [
-      List.generate(inputSize, (y) =>
-        List.generate(inputSize, (x) => [
-          resized.getPixel(x, y).rNormalized,
-          resized.getPixel(x, y).gNormalized,
-          resized.getPixel(x, y).bNormalized,
-        ]))
-    ];
+    // 2. Build [1, H, W, 3] float32 input tensor using a typed flat buffer.
+    //    Avoids allocating 1.2M Dart objects per frame.
+    final pixels = inputSize * inputSize;
+    final flat = Float32List(pixels * 3);
+    var idx = 0;
+    for (var y = 0; y < inputSize; y++) {
+      for (var x = 0; x < inputSize; x++) {
+        final p = resized.getPixel(x, y);
+        flat[idx++] = p.rNormalized.toDouble();
+        flat[idx++] = p.gNormalized.toDouble();
+        flat[idx++] = p.bNormalized.toDouble();
+      }
+    }
+    // Reshape as [1, H, W, 3] by wrapping in a List (TFLite Flutter accepts this)
+    final input = flat.buffer.asFloat32List();
 
-    // 3. Allocate output buffer from the exported tensor shape.
+    // 3. Allocate output buffer.
     final outputShape = interpreter.getOutputTensor(0).shape;
     if (outputShape.length != 3 || outputShape[0] != 1) {
       throw StateError('Unexpected model output shape: $outputShape');
@@ -153,12 +178,13 @@ class TFLiteAgentRunner implements DetectionAgentRunner {
     if (outputShape[1] != 4 + numClasses) {
       throw StateError('Expected ${4 + numClasses} output channels, got $outputShape');
     }
-    final output = [
-      List.generate(4 + numClasses, (_) => List.filled(numAnchors, 0.0))
-    ];
+    final outputFlat = Float32List((4 + numClasses) * numAnchors);
 
-    // 4. Run interpreter.
-    interpreter.run(input, output);
+    // 4. Run interpreter with reshaped inputs.
+    interpreter.runForMultipleInputs(
+      [input.reshape([1, inputSize, inputSize, 3])],
+      {0: outputFlat.reshape([1, 4 + numClasses, numAnchors])},
+    );
 
     // 5. Decode detections with per-class confidence thresholds.
     final rawDetections = <Detection>[];
@@ -167,7 +193,7 @@ class TFLiteAgentRunner implements DetectionAgentRunner {
       int    bestClass = -1;
 
       for (var c = 0; c < numClasses; c++) {
-        final score = output[0][4 + c][anchor];
+        final score = outputFlat[(4 + c) * numAnchors + anchor];
         if (score > bestScore) {
           bestScore = score;
           bestClass = c;
@@ -179,17 +205,15 @@ class TFLiteAgentRunner implements DetectionAgentRunner {
       final className = _classNames[bestClass];
       if (className == null) continue;
 
-      // Filter by this class's specific threshold (not a single global cutoff)
       if (bestScore < _thresholdFor(className)) continue;
-
-      // Only include classes this agent is responsible for
       if (!agentClasses.contains(className)) continue;
 
-      // YOLOv8 outputs cx, cy, w, h — normalised to [0..1].
-      final cx = output[0][0][anchor].clamp(0.0, 1.0);
-      final cy = output[0][1][anchor].clamp(0.0, 1.0);
-      final bw = output[0][2][anchor].clamp(0.0, 1.0);
-      final bh = output[0][3][anchor].clamp(0.0, 1.0);
+      // YOLOv8 TFLite models output raw pixel coordinates, not normalized.
+      // We must divide by inputSize to normalize them to [0..1].
+      final cx = (outputFlat[0 * numAnchors + anchor] / inputSize).clamp(0.0, 1.0);
+      final cy = (outputFlat[1 * numAnchors + anchor] / inputSize).clamp(0.0, 1.0);
+      final bw = (outputFlat[2 * numAnchors + anchor] / inputSize).clamp(0.0, 1.0);
+      final bh = (outputFlat[3 * numAnchors + anchor] / inputSize).clamp(0.0, 1.0);
 
       rawDetections.add(Detection(
         agent: agentName,
@@ -204,8 +228,7 @@ class TFLiteAgentRunner implements DetectionAgentRunner {
       ));
     }
 
-    // 6. Class-aware NMS: suppresses duplicates within each class independently,
-    //    preventing a pothole box from suppressing a nearby crack box.
+    // 6. Class-aware NMS.
     return AgentResult(
       agent: agentName,
       detections: applyClassAwareNms(rawDetections, iouThreshold: iouThreshold),

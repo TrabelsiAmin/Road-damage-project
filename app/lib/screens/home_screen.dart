@@ -13,6 +13,7 @@ import '../services/observation_repository.dart';
 import '../data/remote/api_client.dart';
 import '../services/territorial_service.dart';
 import 'camera_detection_screen.dart';
+import 'live_stream_screen.dart';
 import 'model_status_screen.dart';
 import 'offline_queue_screen.dart';
 import 'result_screen.dart';
@@ -147,6 +148,27 @@ class _HomeScreenState extends State<HomeScreen> {
     }
   }
 
+  // ── Open live stream ────────────────────────────────────────────────────────
+
+  Future<void> _openLiveStream() async {
+    if (kIsWeb) {
+      setState(() => _message = 'Live streaming is not supported in the browser.');
+      return;
+    }
+    await Navigator.of(context).push(
+      MaterialPageRoute<void>(
+        builder: (_) => LiveStreamScreen(
+          detectionService: _detection,
+          repository:       _repository,
+          actor:            _actor,
+        ),
+        fullscreenDialog: true,
+      ),
+    );
+    final loaded = await _repository.list();
+    if (mounted) setState(() => _observations = loaded);
+  }
+
   // ── Open video import ───────────────────────────────────────────────────────
 
   Future<void> _openVideoImport() async {
@@ -231,18 +253,38 @@ class _HomeScreenState extends State<HomeScreen> {
                   const SizedBox(height: 16),
 
                   // ── Action buttons ───────────────────────────────────────────
+                  // Primary: Live Stream (Supabase-connected recording)
+                  SizedBox(
+                    width: double.infinity,
+                    child: FilledButton.icon(
+                      style: FilledButton.styleFrom(
+                        padding: const EdgeInsets.symmetric(vertical: 18),
+                        backgroundColor: const Color(0xFFDC143C),
+                        shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(14)),
+                      ),
+                      onPressed: _busy ? null : _openLiveStream,
+                      icon: const Icon(Icons.fiber_manual_record, size: 20, color: Colors.white),
+                      label: const Text('Live Stream  (Upload to Cloud)',
+                          style: TextStyle(
+                              fontSize: 15,
+                              fontWeight: FontWeight.bold,
+                              color: Colors.white)),
+                    ),
+                  ),
+                  const SizedBox(height: 8),
                   Row(children: [
                     Expanded(
                       flex: 3,
                       child: FilledButton.icon(
                         style: FilledButton.styleFrom(
-                          padding: const EdgeInsets.symmetric(vertical: 16),
+                          padding: const EdgeInsets.symmetric(vertical: 14),
                           backgroundColor: AppColors.teal,
                         ),
                         onPressed: _busy ? null : _openCamera,
-                        icon: const Icon(Icons.videocam_rounded, size: 22),
-                        label: const Text('Live Camera',
-                            style: TextStyle(fontSize: 15, fontWeight: FontWeight.bold)),
+                        icon: const Icon(Icons.videocam_rounded, size: 20),
+                        label: const Text('Quick Scan',
+                            style: TextStyle(fontSize: 13, fontWeight: FontWeight.bold)),
                       ),
                     ),
                     const SizedBox(width: 10),
@@ -250,7 +292,7 @@ class _HomeScreenState extends State<HomeScreen> {
                       flex: 2,
                       child: OutlinedButton.icon(
                         style: OutlinedButton.styleFrom(
-                          padding: const EdgeInsets.symmetric(vertical: 16),
+                          padding: const EdgeInsets.symmetric(vertical: 14),
                         ),
                         onPressed: _busy ? null : _importFromGallery,
                         icon: const Icon(Icons.photo_library_outlined),
@@ -258,7 +300,7 @@ class _HomeScreenState extends State<HomeScreen> {
                       ),
                     ),
                   ]),
-                  const SizedBox(height: 10),
+                  const SizedBox(height: 8),
                   SizedBox(
                     width: double.infinity,
                     child: OutlinedButton.icon(
@@ -368,19 +410,38 @@ class _HeaderCard extends StatelessWidget {
     child: Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        const Text('Road Inspection',
-            style: TextStyle(color: Colors.white,
-                fontSize: 20, fontWeight: FontWeight.w800, letterSpacing: -0.3)),
+        Row(children: [
+          const Text('Road Inspection',
+              style: TextStyle(color: Colors.white,
+                  fontSize: 20, fontWeight: FontWeight.w800, letterSpacing: -0.3)),
+          const Spacer(),
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+            decoration: BoxDecoration(
+              color: Colors.greenAccent.withAlpha(40),
+              borderRadius: BorderRadius.circular(8),
+              border: Border.all(color: Colors.greenAccent.withAlpha(80)),
+            ),
+            child: const Row(mainAxisSize: MainAxisSize.min, children: [
+              Icon(Icons.cloud_done_rounded, color: Colors.greenAccent, size: 12),
+              SizedBox(width: 4),
+              Text('Cloud Sync ON',
+                  style: TextStyle(color: Colors.greenAccent,
+                      fontSize: 10, fontWeight: FontWeight.bold)),
+            ]),
+          ),
+        ]),
         const SizedBox(height: 4),
         Text('Actor: $actor',
             style: const TextStyle(color: Colors.white54, fontSize: 13)),
         const SizedBox(height: 4),
-        const Text('Detect and log road damage — fully offline.',
+        const Text('On-device AI · Live streaming → Supabase Storage',
             style: TextStyle(color: Colors.white38, fontSize: 12)),
       ],
     ),
   );
 }
+
 
 class _PendingBadge extends StatelessWidget {
   const _PendingBadge({required this.count, required this.onTap});

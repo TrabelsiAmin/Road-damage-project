@@ -10,6 +10,8 @@ import '../models/observation.dart';
 import '../services/detection_service.dart';
 import '../services/live_stream_session.dart';
 import '../services/observation_repository.dart';
+import '../utils/yuv_converter.dart';
+import 'package:image/image.dart' as img;
 
 /// Live Road Streaming Screen.
 ///
@@ -156,16 +158,32 @@ class _LiveStreamScreenState extends State<LiveStreamScreen>
   }
 
   Future<List<Detection>> _runInference(CameraImage frame) async {
-    if (frame.format.group != ImageFormatGroup.jpeg) return [];
-    final bytes = frame.planes.first.bytes;
+    Uint8List? jpegBytes;
+    
+    if (frame.format.group == ImageFormatGroup.jpeg) {
+      jpegBytes = frame.planes.first.bytes;
+    } else if (frame.format.group == ImageFormatGroup.yuv420) {
+      final imgObj = convertYUV420ToImage(frame);
+      jpegBytes = img.encodeJpg(imgObj, quality: 80);
+    } else if (frame.format.group == ImageFormatGroup.bgra8888) {
+      final imgObj = img.Image.fromBytes(
+        width: frame.width,
+        height: frame.height,
+        bytes: frame.planes.first.bytes.buffer,
+        order: img.ChannelOrder.bgra,
+      );
+      jpegBytes = img.encodeJpg(imgObj, quality: 80);
+    }
 
-    final results = await widget.detectionService.detectAllFromBytes(bytes);
+    if (jpegBytes == null) return [];
+
+    final results = await widget.detectionService.detectAllFromBytes(jpegBytes);
     final detections = results.expand((r) => r.detections).toList();
 
     // If recording, send frame to session manager
     if (_session != null && _sessionState == SessionState.recording) {
       final sessionDetections = await _session!.addFrame(
-        bytes, position: _currentPosition);
+        jpegBytes, position: _currentPosition);
       if (sessionDetections.isNotEmpty) {
         setState(() {
           _sessionAnomalies = _session!.totalAnomalies;

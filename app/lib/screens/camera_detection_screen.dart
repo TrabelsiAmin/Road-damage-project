@@ -11,6 +11,8 @@ import '../models/observation.dart';
 import '../services/detection_service.dart';
 import '../services/observation_repository.dart';
 import '../data/remote/supabase_service.dart';
+import '../utils/yuv_converter.dart';
+import 'package:image/image.dart' as img;
 import 'result_screen.dart';
 
 /// Full-screen live camera view with real-time bounding-box overlay.
@@ -136,6 +138,21 @@ class _CameraDetectionScreenState extends State<CameraDetectionScreen>
     if (frame.format.group == ImageFormatGroup.jpeg) {
       final bytes = frame.planes.first.bytes;
       return widget.detectionService.detectAllFromBytes(bytes);
+    } else if (frame.format.group == ImageFormatGroup.yuv420) {
+      // Decode YUV420 to jpeg bytes in memory, then pass.
+      final imgObj = convertYUV420ToImage(frame);
+      final jpegBytes = img.encodeJpg(imgObj, quality: 80);
+      return widget.detectionService.detectAllFromBytes(jpegBytes);
+    } else if (frame.format.group == ImageFormatGroup.bgra8888) {
+      // iOS default
+      final imgObj = img.Image.fromBytes(
+        width: frame.width,
+        height: frame.height,
+        bytes: frame.planes.first.bytes.buffer,
+        order: img.ChannelOrder.bgra,
+      );
+      final jpegBytes = img.encodeJpg(imgObj, quality: 80);
+      return widget.detectionService.detectAllFromBytes(jpegBytes);
     }
     return [];
   }

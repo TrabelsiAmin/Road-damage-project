@@ -178,12 +178,19 @@ class TFLiteAgentRunner implements DetectionAgentRunner {
     if (outputShape[1] != 4 + numClasses) {
       throw StateError('Expected ${4 + numClasses} output channels, got $outputShape');
     }
-    final outputFlat = Float32List((4 + numClasses) * numAnchors);
+    // Use nested lists because tflite_flutter's reshape creates disconnected copies
+    final output = List.generate(
+      1,
+      (_) => List.generate(
+        4 + numClasses,
+        (_) => List.filled(numAnchors, 0.0),
+      ),
+    );
 
     // 4. Run interpreter with reshaped inputs.
     interpreter.runForMultipleInputs(
       [input.reshape([1, inputSize, inputSize, 3])],
-      {0: outputFlat.reshape([1, 4 + numClasses, numAnchors])},
+      {0: output},
     );
 
     // 5. Decode detections with per-class confidence thresholds.
@@ -193,7 +200,7 @@ class TFLiteAgentRunner implements DetectionAgentRunner {
       int    bestClass = -1;
 
       for (var c = 0; c < numClasses; c++) {
-        final score = outputFlat[(4 + c) * numAnchors + anchor];
+        final score = output[0][4 + c][anchor];
         if (score > bestScore) {
           bestScore = score;
           bestClass = c;
@@ -209,10 +216,10 @@ class TFLiteAgentRunner implements DetectionAgentRunner {
       if (!agentClasses.contains(className)) continue;
 
       // YOLOv8 outputs cx, cy, w, h — normalised to [0..1].
-      final cx = outputFlat[0 * numAnchors + anchor].clamp(0.0, 1.0);
-      final cy = outputFlat[1 * numAnchors + anchor].clamp(0.0, 1.0);
-      final bw = outputFlat[2 * numAnchors + anchor].clamp(0.0, 1.0);
-      final bh = outputFlat[3 * numAnchors + anchor].clamp(0.0, 1.0);
+      final cx = (output[0][0][anchor] as num).toDouble().clamp(0.0, 1.0);
+      final cy = (output[0][1][anchor] as num).toDouble().clamp(0.0, 1.0);
+      final bw = (output[0][2][anchor] as num).toDouble().clamp(0.0, 1.0);
+      final bh = (output[0][3][anchor] as num).toDouble().clamp(0.0, 1.0);
 
       rawDetections.add(Detection(
         agent: agentName,

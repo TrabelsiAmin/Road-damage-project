@@ -12,6 +12,7 @@ import '../services/live_stream_session.dart';
 import '../services/observation_repository.dart';
 import '../utils/yuv_converter.dart';
 import 'package:image/image.dart' as img;
+import 'dart:typed_data';
 
 /// Live Road Streaming Screen.
 ///

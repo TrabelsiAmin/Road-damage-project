@@ -1,0 +1,8 @@
+streamlit
+torch
+transformers
+accelerate
+bitsandbytes
+sentence-transformers
+faiss-cpu
+numpy

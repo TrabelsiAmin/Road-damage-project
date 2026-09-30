@@ -1,0 +1,21 @@
+@"
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+env/
+.env
+.streamlit/secrets.toml
+
+# Données et index générés
+data/
+vector_db/
+index.faiss
+chunks.pkl
+
+# Fichiers volumineux
+*.pt
+*.pth
+*.onnx
+*.safetensors
+"@ | Set-Content .gitignore

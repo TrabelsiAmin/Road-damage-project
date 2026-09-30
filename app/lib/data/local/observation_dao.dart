@@ -67,15 +67,20 @@ class ObservationDao {
     String? error,
   }) async {
     final db = await _db.database;
+    final values = <String, Object?>{
+      'sync_status': status.name,
+    };
+    if (status == SyncStatus.synced) {
+      values['sync_error'] = null;
+    } else if (error != null) {
+      values['sync_error'] = error;
+    }
+    if (status == SyncStatus.failed || status == SyncStatus.uploading) {
+      values['upload_attempts'] = _incrementAttempts(db, observationId);
+    }
     await db.update(
       'observations',
-      {
-        'sync_status':      status.name,
-        'sync_error':       error,
-        'upload_attempts':  status == SyncStatus.failed || status == SyncStatus.uploading
-            ? _incrementAttempts(db, observationId)
-            : null,
-      }..removeWhere((_, v) => v == null),
+      values,
       where: 'id = ?',
       whereArgs: [observationId],
     );
@@ -155,6 +160,9 @@ class ObservationDao {
     'created_at':          obs.createdAt.toUtc().toIso8601String(),
     'latitude':            obs.latitude,
     'longitude':           obs.longitude,
+    'gps_available':       obs.gpsAvailable ? 1 : 0,
+    'source_video_path':   obs.sourceVideoPath,
+    'frame_timestamp_ms':  obs.frameTimestampMs,
     'accuracy_meters':     obs.accuracyMeters,
     'actor':               obs.actor,
     'sync_status':         obs.syncStatus.name,
@@ -226,6 +234,9 @@ class ObservationDao {
       createdAt:           DateTime.parse(row['created_at'] as String),
       latitude:            (row['latitude']  as num).toDouble(),
       longitude:           (row['longitude'] as num).toDouble(),
+      gpsAvailable:        (row['gps_available'] as int?) != 0,
+      sourceVideoPath:     row['source_video_path'] as String?,
+      frameTimestampMs:    row['frame_timestamp_ms'] as int?,
       accuracyMeters:      row['accuracy_meters'] != null
           ? (row['accuracy_meters'] as num).toDouble()
           : null,
@@ -256,4 +267,3 @@ class ObservationDao {
     return 0; // actual increment done via SQL expression below
   }
 }
-

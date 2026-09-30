@@ -30,13 +30,25 @@ dependencies:
   # Video import and frame sampling
   video_player: ^2.9.2
   file_picker: ^8.1.4
-  video_thumbnail: ^0.5.6
+  # Real frame extraction from video (replaces the proxy/workaround)
+  video_thumbnail: ^0.5.3
+  # FFmpeg — stitch annotated frames back into an annotated output video
+  # Using the maintained community fork (original ffmpeg_kit_flutter was discontinued)
+  ffmpeg_kit_flutter_new: ^4.6.2
+  # Save annotated video to device gallery
+  saver_gallery: ^3.0.6
   # Typography
   google_fonts: ^6.2.1
-  # Share annotated images
+  # Share annotated images / videos
   share_plus: ^10.1.4
   # Permission flows
   permission_handler: ^11.3.1
+  # Supabase SDK — direct mobile → Supabase Storage + Realtime uploads
+  supabase_flutter: ^2.8.4
+  # Network connectivity awareness (Wi-Fi vs mobile data)
+  connectivity_plus: ^6.1.4
+  # MIME type detection for file uploads
+  mime: ^2.0.0
 
 dev_dependencies:
   flutter_test:

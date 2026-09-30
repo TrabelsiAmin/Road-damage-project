@@ -3,31 +3,16 @@
 /// All D-codes, labels, agent assignments, and severity weights are defined
 /// here once and imported everywhere else.  Changing a label requires only
 /// editing this file.
-///
-/// Work-package mapping (must stay disjoint at deployment):
-///   WP2 Agent Fissures  → cracks   → D00, D10
-///   WP3 Agent Chaussée  → pavement → D20, D40   (training/inference PRIORITY)
-///   WP4 Agent Marquage  → surface  → D50, D60, D90
 class TariqMapConstants {
   TariqMapConstants._();
 
   // ── Canonical D-code list (ordered: cracks → pavement → surface) ─────────
-  static const allCodes = <String>['D00', 'D10', 'D20', 'D40', 'D50', 'D60', 'D90'];
+  static const allCodes = <String>['D00', 'D10', 'D20', 'D40'];
 
   // ── Agent → class mapping ────────────────────────────────────────────────
-  /// Three independent runners. Do not collapse into one YOLO at deploy time.
   static const agentClasses = <String, List<String>>{
-    'cracks':   ['D00', 'D10'], // WP2
-    'pavement': ['D20', 'D40'], // WP3 — PRIORITY (alligator + pothole, 2D only)
-    'surface':  ['D50', 'D60', 'D90'], // WP4
+    'road_damage': ['D00', 'D10', 'D20', 'D40'],
   };
-
-  /// WP3 is the training and on-device inference priority.
-  static const priorityAgent = 'pavement';
-  static const priorityClasses = <String>['D20', 'D40'];
-
-  /// Visual 2D only. Never infer physical depth / rut depth from a still.
-  static const depthEstimationEnabled = false;
 
   // ── Human-readable labels ────────────────────────────────────────────────
   static const labels = <String, String>{
@@ -35,9 +20,6 @@ class TariqMapConstants {
     'D10': 'Transverse Crack',
     'D20': 'Alligator Crack',
     'D40': 'Pothole',
-    'D50': 'Faded Crossing',
-    'D60': 'Faded Lane',
-    'D90': 'Rutting',
   };
 
   /// French labels (ready for i18n expansion)
@@ -46,9 +28,6 @@ class TariqMapConstants {
     'D10': 'Fissure transversale',
     'D20': 'Faïençage',
     'D40': 'Nid-de-poule',
-    'D50': 'Marquage piéton effacé',
-    'D60': 'Marquage de voie effacé',
-    'D90': 'Orniérage visuel',
   };
 
   // ── Priority weight per class (used in Observation.priorityScore) ─────────
@@ -62,37 +41,21 @@ class TariqMapConstants {
     'D60': 0.50,  // Faded lane
   };
 
-  // ── Actor names (peers — no institutional hierarchy in the platform) ─────
+  // ── Actor names ──────────────────────────────────────────────────────────
   static const actors = <String>[
     'Municipality',
     'Ministry of Equipment',
     'Tunisia Autoroutes',
   ];
 
-  /// RAG, when introduced, is decision-support only. The actor decides.
-  static const ragIsDecisionSupportOnly = true;
-
-  // ── Incident lifecycle (WP5). Specification-aligned; persistence is PLANNED.
-  /// DETECTED → ANALYZED → ASSIGNED → IN_PROGRESS → RESOLVED → ARCHIVED
-  static const incidentStatuses = <String>[
-    'DETECTED',
-    'ANALYZED',
-    'ASSIGNED',
-    'IN_PROGRESS',
-    'RESOLVED',
-    'ARCHIVED',
-  ];
-
   // ── Model bundle ─────────────────────────────────────────────────────────
   static const modelBundleAsset = 'assets/models/model-bundles.json';
-  static const modelBundleVersion = '2026.09.0-demo';
+  static const modelBundleVersion = '2026.09.23-rdd2022';
 
   // ── Inference defaults ───────────────────────────────────────────────────
   static const defaultConfidenceThreshold = 0.35;
   static const defaultIouThreshold = 0.45;
   static const defaultLiveFps = 5;  // frames per second for live inference
-  static const defaultMaxDetections = 50;
-  static const defaultMinBoxArea = 1e-6; // normalised w*h; drop specks after inverse letterbox
 
   // ── Sync ────────────────────────────────────────────────────────────────
   static const maxUploadRetries = 5;

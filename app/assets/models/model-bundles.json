@@ -1,30 +1,9 @@
 {
   "schemaVersion": 1,
-  "bundleVersion": "2026.09.0-pending",
-  "status": "REQUIRES_MODEL",
-  "input": {
-    "width": 640,
-    "height": 640,
-    "channels": 3,
-    "colorOrder": "RGB",
-    "layout": "NHWC",
-    "normalization": "0..1",
-    "letterbox": true,
-    "padValue": 114
-  },
-  "postprocess": {
-    "confidenceThreshold": 0.35,
-    "iouThreshold": 0.45,
-    "coordinateSpace": "normalized_original_image",
-    "decoder": "yolov8_cxcywh_then_inverse_letterbox"
-  },
+  "bundleVersion": "2026.09.23-rdd2022",
+  "input": {"width": 640, "height": 640, "channels": 3, "colorOrder": "RGB", "normalization": "0..1"},
+  "postprocess": {"confidenceThreshold": 0.35, "iouThreshold": 0.45, "coordinateSpace": "normalized"},
   "agents": [
-    {"name": "cracks", "classes": ["D00", "D10"], "format": "tflite", "file": "cracks.tflite", "sha256": "REPLACE_AFTER_EXPORT"},
-    {"name": "pavement", "classes": ["D20", "D40"], "format": "tflite", "file": "pavement.tflite", "sha256": "REPLACE_AFTER_EXPORT"},
-    {"name": "surface", "classes": ["D50", "D60", "D90"], "format": "tflite", "file": "surface.tflite", "sha256": "REPLACE_AFTER_EXPORT"}
-  ],
-  "notes": [
-    "No validated TFLite weights are bundled. Flutter loads mock runners until export + verify_tflite.py pass.",
-    "Do not drop a randomly generated .tflite into assets/models/."
+    {"name": "road_damage", "classes": ["D00", "D10", "D20", "D40"], "format": "tflite", "file": "road_damage.tflite", "sha256": "830f99bd8c31c5d24138c16db7862dfb62293b96cc1dec241c36140bff8a813f"}
   ]
 }

@@ -1,140 +1,116 @@
 import 'dart:io';
-import 'dart:typed_data';
-import 'package:path/path.dart' as p;
+import 'package:flutter/foundation.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:video_thumbnail/video_thumbnail.dart';
-import 'video_sampling.dart';
 
-class ExtractedFrame {
-  const ExtractedFrame({
-    required this.index,
-    required this.timestampMs,
-    required this.file,
-  });
+// ---------------------------------------------------------------------------
+// VideoFrameExtractor
+// ---------------------------------------------------------------------------
 
-  final int index;
-  final int timestampMs;
-  final File file;
-}
-
-class FrameExtractionException implements Exception {
-  FrameExtractionException(this.message);
-  final String message;
-  @override
-  String toString() => message;
-}
-
-class FrameExtractionResult {
-  const FrameExtractionResult({
-    required this.frames,
-    required this.errors,
-    required this.sessionDir,
-    required this.sampledTimestamps,
-  });
-
-  final List<ExtractedFrame> frames;
-  final List<String> errors;
-  final Directory sessionDir;
-  final List<int> sampledTimestamps;
-}
-
-/// Extracts JPEG frames from a local video file.
+/// Extracts JPEG frames from a local video file at given timestamps.
 ///
-/// Uses the platform thumbnail APIs (MediaMetadataRetriever / AVAssetImageGenerator)
-/// via `video_thumbnail`. That is the reliable Flutter-compatible extract path.
+/// Uses the [video_thumbnail] package which calls platform-native decoders
+/// (MediaMetadataRetriever on Android, AVFoundation on iOS).  This is far
+/// more reliable than trying to decode a raw MP4 with the image package.
 ///
-/// Annotated MP4 encoding is handled separately by FfmpegVideoMuxer when
-/// the FFmpeg CLI is installed. This extractor does not mux.
+/// Usage:
+/// ```dart
+/// final extractor = VideoFrameExtractor();
+/// final tempDir = await extractor.ensureTempDir();
+/// final frameFile = await extractor.extractFrame(video, timestampSec: 5, tempDir: tempDir);
+/// if (frameFile != null) {
+///   final results = await detectionService.detectAll(frameFile);
+/// }
+/// await extractor.cleanupTempDir(tempDir);
+/// ```
 class VideoFrameExtractor {
-  VideoFrameExtractor({this.jpegQuality = 80, this.maxFrames = 40});
+  bool _cancelled = false;
 
-  final int jpegQuality;
-  final int maxFrames;
-
-  Future<FrameExtractionResult> extract({
-    required File video,
-    required int intervalMs,
-    required int durationMs,
-    void Function(int done, int total)? onProgress,
-  }) async {
-    if (!await video.exists()) {
-      throw FrameExtractionException('Video file not found: ${video.path}');
-    }
-    if (!VideoSampling.isSupportedPath(video.path)) {
-      throw FrameExtractionException(
-        'Unsupported video format: ${p.extension(video.path)}. '
-        'Supported: ${VideoSampling.supportedExtensions.join(', ')}',
-      );
-    }
-    if (durationMs <= 0) {
-      throw FrameExtractionException('Video has zero duration or failed to decode.');
-    }
-
-    final timestamps = VideoSampling.timestampsMs(
-      durationMs: durationMs,
-      intervalMs: intervalMs,
-      maxFrames: maxFrames,
-    );
-    if (timestamps.isEmpty) {
-      throw FrameExtractionException('No sample timestamps (empty video).');
-    }
-
-    final sessionDir = await _sessionDir();
-    final frames = <ExtractedFrame>[];
-    final errors = <String>[];
-
-    for (var i = 0; i < timestamps.length; i++) {
-      final t = timestamps[i];
-      onProgress?.call(i, timestamps.length);
-      try {
-        final bytes = await VideoThumbnail.thumbnailData(
-          video: video.path,
-          imageFormat: ImageFormat.JPEG,
-          timeMs: t,
-          quality: jpegQuality,
-        );
-        if (bytes == null || bytes.isEmpty) {
-          errors.add('Empty frame at ${t}ms (codec or seek failure)');
-          continue;
-        }
-        final file = File(p.join(sessionDir.path, 'frame_${i.toString().padLeft(4, '0')}_${t}ms.jpg'));
-        await file.writeAsBytes(Uint8List.fromList(bytes), flush: true);
-        frames.add(ExtractedFrame(index: i, timestampMs: t, file: file));
-      } catch (e) {
-        errors.add('Frame at ${t}ms failed: $e');
-      }
-    }
-
-    if (frames.isEmpty) {
-      await cleanup(sessionDir);
-      throw FrameExtractionException(
-        'No frames could be extracted. The codec may be unsupported '
-        'or the file may be corrupted. Details: ${errors.join('; ')}',
-      );
-    }
-
-    return FrameExtractionResult(
-      frames: frames,
-      errors: errors,
-      sessionDir: sessionDir,
-      sampledTimestamps: timestamps,
-    );
-  }
-
-  Future<Directory> _sessionDir() async {
-    final tmp = await getTemporaryDirectory();
-    final dir = Directory(p.join(
-      tmp.path,
-      'tariqmap_video_frames',
-      DateTime.now().millisecondsSinceEpoch.toString(),
-    ));
-    await dir.create(recursive: true);
+  /// Returns a dedicated temp directory for this extraction session.
+  /// The caller is responsible for calling [cleanupTempDir] when done.
+  Future<Directory> ensureTempDir() async {
+    final base = await getTemporaryDirectory();
+    final dir = Directory('${base.path}/tariqmap_frames');
+    if (!dir.existsSync()) dir.createSync(recursive: true);
     return dir;
   }
 
-  static Future<void> cleanup(Directory dir) async {
+  /// Deletes all files inside [tempDir] without removing the directory itself.
+  Future<void> cleanupTempDir(Directory tempDir) async {
     try {
-      if (await dir.exists()) await dir.delete(recursive: true);
-    } catch (_) {}
+      if (!tempDir.existsSync()) return;
+      for (final entity in tempDir.listSync()) {
+        if (entity is File) {
+          try {
+            entity.deleteSync();
+          } catch (_) {}
+        }
+      }
+    } catch (e) {
+      debugPrint('[VideoFrameExtractor] cleanupTempDir error: $e');
+    }
+  }
+
+  /// Signal that any pending [extractFrame] calls should return null early.
+  void cancel() => _cancelled = true;
+
+  /// Resets the cancelled state (call before starting a new extraction run).
+  void reset() => _cancelled = false;
+
+  /// Extracts a JPEG frame at [timestampSec] from [videoFile].
+  ///
+  /// Returns the extracted [File] on success, or null if extraction fails or
+  /// [cancel] was called.  The returned file lives in [tempDir] with the name
+  /// `frame_<timestampSec>.jpg`.
+  ///
+  /// [quality] — JPEG quality 0-100, default 85 (good for model input).
+  Future<File?> extractFrame(
+    File videoFile, {
+    required int timestampSec,
+    required Directory tempDir,
+    int quality = 85,
+  }) async {
+    if (_cancelled) return null;
+
+    final destPath = '${tempDir.path}/frame_$timestampSec.jpg';
+
+    try {
+      final thumbnailPath = await VideoThumbnail.thumbnailFile(
+        video: videoFile.path,
+        thumbnailPath: tempDir.path,
+        imageFormat: ImageFormat.JPEG,
+        timeMs: timestampSec * 1000,
+        quality: quality,
+        // maxWidth / maxHeight not set — use native resolution then let
+        // TFLiteAgentRunner resize to 640×640 as it always does.
+      );
+
+      if (_cancelled) return null;
+
+      if (thumbnailPath == null) {
+        debugPrint('[VideoFrameExtractor] No thumbnail at ${timestampSec}s');
+        return null;
+      }
+
+      // video_thumbnail writes to a temp file with its own name; rename to
+      // our canonical name so we can track and clean up by timestamp.
+      final src = File(thumbnailPath);
+      final dest = File(destPath);
+      if (src.path != dest.path && src.existsSync()) {
+        src.copySync(dest.path);
+        src.deleteSync();
+      }
+
+      if (dest.existsSync() && dest.lengthSync() > 0) {
+        debugPrint('[VideoFrameExtractor] Frame extracted: ${timestampSec}s → ${dest.path}');
+        return dest;
+      }
+
+      debugPrint('[VideoFrameExtractor] Empty frame at ${timestampSec}s');
+      return null;
+    } catch (e) {
+      debugPrint('[VideoFrameExtractor] extractFrame error at ${timestampSec}s: $e');
+      return null;
+    }
   }
 }

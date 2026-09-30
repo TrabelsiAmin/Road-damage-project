@@ -96,7 +96,7 @@ class _BoxPainter extends CustomPainter {
 
   @override
   bool shouldRepaint(_BoxPainter old) =>
-      old.detections != detections || old.highlightedIndex != highlightedIndex;
+      old.detections != detections || old.highlightedIndex != highlightedIndex || old.imageSize != imageSize;
 }
 
 // ---------------------------------------------------------------------------
@@ -125,30 +125,42 @@ class _AnnotatedImageWidgetState extends State<AnnotatedImageWidget> {
   ImageInfo? _info;
   ImageStream? _stream;
   late ImageStreamListener _listener;
-
-  @override
-  void initState() {
-    super.initState();
-    // Intentionally empty: _resolveImage needs MediaQuery (via
-    // createLocalImageConfiguration) which is only available from
-    // didChangeDependencies onward, not during initState.
-  }
+  bool _hasError = false;
 
   @override
   void didChangeDependencies() {
     super.didChangeDependencies();
+    _loadImage();
+  }
+
+  @override
+  void didUpdateWidget(AnnotatedImageWidget oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.imagePath != widget.imagePath) {
+      _loadImage();
+    }
+  }
+
+  void _loadImage() {
     final provider = kIsWeb
         ? NetworkImage(widget.imagePath) as ImageProvider
         : FileImage(File(widget.imagePath));
-    _resolveImage(provider);
-  }
 
-  void _resolveImage(ImageProvider provider) {
     _stream?.removeListener(_listener);
     _stream = provider.resolve(createLocalImageConfiguration(context));
-    _listener = ImageStreamListener((info, _) {
-      if (mounted) setState(() => _info = info);
-    });
+    
+    _listener = ImageStreamListener(
+      (info, _) {
+        if (mounted) setState(() {
+          _info = info;
+          _hasError = false;
+        });
+      },
+      onError: (exception, stackTrace) {
+        debugPrint('[AnnotatedImage] Failed to load image: $exception');
+        if (mounted) setState(() => _hasError = true);
+      },
+    );
     _stream!.addListener(_listener);
   }
 
@@ -160,29 +172,51 @@ class _AnnotatedImageWidgetState extends State<AnnotatedImageWidget> {
 
   @override
   Widget build(BuildContext context) {
-    final imageWidget = kIsWeb
-        ? Image.network(widget.imagePath, fit: BoxFit.contain)
-        : Image.file(File(widget.imagePath), fit: BoxFit.contain);
+    if (_hasError) {
+      return const Center(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(Icons.broken_image_rounded, color: Colors.white54, size: 48),
+            SizedBox(height: 8),
+            Text('Failed to load image', style: TextStyle(color: Colors.white54)),
+          ],
+        ),
+      );
+    }
 
-    final naturalSize = _info == null
-        ? null
-        : Size(_info!.image.width.toDouble(), _info!.image.height.toDouble());
+    if (_info == null) {
+      return const Center(child: CircularProgressIndicator(strokeWidth: 2, color: AppColors.teal));
+    }
 
-    return Stack(
-      fit: StackFit.passthrough,
-      children: [
-        imageWidget,
-        if (naturalSize != null)
-          Positioned.fill(
-            child: CustomPaint(
-              painter: _BoxPainter(widget.detections, naturalSize, widget.highlightedIndex),
-            ),
+    final naturalSize = Size(_info!.image.width.toDouble(), _info!.image.height.toDouble());
+    final rawImage = kIsWeb
+        ? Image.network(widget.imagePath, width: naturalSize.width, height: naturalSize.height, fit: BoxFit.fill)
+        : Image.file(File(widget.imagePath), width: naturalSize.width, height: naturalSize.height, fit: BoxFit.fill);
+
+    // Using FittedBox ensures that the Stack (which is exactly the size of the 
+    // original image) is scaled down as a single unit. This guarantees that the 
+    // bounding boxes perfectly align with the pixels of the image, regardless of 
+    // whether the parent uses BoxFit.contain or BoxFit.cover!
+    return SizedBox.expand(
+      child: FittedBox(
+        fit: BoxFit.cover,
+        clipBehavior: Clip.hardEdge,
+        child: SizedBox(
+          width: naturalSize.width,
+          height: naturalSize.height,
+          child: Stack(
+            children: [
+              rawImage,
+              Positioned.fill(
+                child: CustomPaint(
+                  painter: _BoxPainter(widget.detections, naturalSize, widget.highlightedIndex),
+                ),
+              ),
+            ],
           ),
-        if (naturalSize == null)
-          const Positioned.fill(
-            child: Center(child: CircularProgressIndicator(strokeWidth: 2)),
-          ),
-      ],
+        ),
+      ),
     );
   }
 }

@@ -122,6 +122,22 @@ class TFLiteAgentRunner implements DetectionAgentRunner {
     }
   }
 
+  /// Accepts raw JPEG/PNG bytes directly.
+  Future<AgentResult> detectFromBytes(Uint8List bytes) async {
+    if (_failed || _interpreter == null) {
+      return AgentResult(
+        agent: agentName,
+        detections: const [],
+        error: 'Model not loaded',
+      );
+    }
+    try {
+      return await _runInferenceOnBytes(bytes);
+    } catch (e) {
+      return AgentResult(agent: agentName, detections: const [], error: e.toString());
+    }
+  }
+
   /// Fast path for live camera: accepts a pre-built Float32List tensor
   /// [1, inputSize, inputSize, 3] that was already prepared off-thread.
   /// Skips JPEG encode/decode → saves ~100-200 ms per frame.
@@ -194,46 +210,9 @@ class TFLiteAgentRunner implements DetectionAgentRunner {
       {0: output},
     );
 
-    // 5. Decode detections with per-class confidence thresholds.
-    final rawDetections = <Detection>[];
-    for (var anchor = 0; anchor < numAnchors; anchor++) {
-      double bestScore = 0;
-      int    bestClass = -1;
-
-      for (var c = 0; c < numClasses; c++) {
-        final score = output[0][4 + c][anchor];
-        if (score > bestScore) {
-          bestScore = score;
-          bestClass = c;
-        }
-      }
-
-      if (bestClass == -1) continue;
-
-      final className = _classNames[bestClass];
-      if (className == null) continue;
-
-      if (bestScore < _thresholdFor(className)) continue;
-      if (!agentClasses.contains(className)) continue;
-
-      // YOLOv8 outputs cx, cy, w, h — normalised to [0..1].
-      final cx = (output[0][0][anchor] as num).toDouble().clamp(0.0, 1.0);
-      final cy = (output[0][1][anchor] as num).toDouble().clamp(0.0, 1.0);
-      final bw = (output[0][2][anchor] as num).toDouble().clamp(0.0, 1.0);
-      final bh = (output[0][3][anchor] as num).toDouble().clamp(0.0, 1.0);
-
-      rawDetections.add(Detection(
-        agent: agentName,
-        classCode: className,
-        confidence: bestScore,
-        box: BoundingBox(
-          x: (cx - bw / 2).clamp(0.0, 1.0),
-          y: (cy - bh / 2).clamp(0.0, 1.0),
-          width:  bw,
-          height: bh,
-        ),
-      ));
-    }
+    // 5. Shared decode logic
+    return _decodeOutput(output, numClasses, numAnchors);
+  }
 
   /// Runs the interpreter on a pre-built Float32List — NO image decode needed.
   AgentResult _runInferenceOnTensor(Float32List inputTensor) {

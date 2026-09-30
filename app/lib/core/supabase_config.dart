@@ -15,12 +15,11 @@ class SupabaseCfg {
   /// Supabase project URL.
   static const String url = 'https://lendqcjihusqkmxansbl.supabase.co';
 
-  /// Supabase anon / public key (safe for client bundles).
-  /// Obtain from: Supabase Dashboard → Settings → API → anon public.
+  /// Supabase publishable key (safe for client bundles).
+  /// Obtain from: Supabase Dashboard → Settings → API → publishable key.
   /// This is NOT the service-role secret.
-  /// IMPORTANT: Replace the placeholder below with your real anon key.
   static const String anonKey =
-      'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImxlbmRxY2ppaHVzcWtteGFuc2JsIiwicm9sZSI6ImFub24iLCJpYXQiOjE3OTAyODA3ODYsImV4cCI6MjEwNTg1Njc4Nn0.F1FS2HZNf7qEbTx14WBSAOHeCWTGsA5OMZghgw_YNNs';
+      'sb_publishable_gacNSvQ0uhH4PhCTXu9JaQ_99EndYdf';
 
 
   // ── Storage buckets ────────────────────────────────────────────────────────

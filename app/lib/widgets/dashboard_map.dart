@@ -109,16 +109,20 @@ class _DashboardMapState extends State<DashboardMap> {
       final loc = locMap[obsId];
       if (loc == null) continue;
 
-      final dets = detMap[obsId] ?? [];
-      if (dets.isEmpty) continue;
-
-      dets.sort((a, b) {
-        final left = _asDouble(a['confidence']) ?? 0;
-        final right = _asDouble(b['confidence']) ?? 0;
-        return right.compareTo(left);
-      });
-      final dominantClass = dets.first['class_code']?.toString() ?? '';
-      if (dominantClass.isEmpty) continue;
+      final dets = List<Map<dynamic, dynamic>>.from(detMap[obsId] ?? []);
+      String dominantClass = '';
+      if (dets.isNotEmpty) {
+        dets.sort((a, b) {
+          final left = _asDouble(a['confidence']) ?? 0;
+          final right = _asDouble(b['confidence']) ?? 0;
+          return right.compareTo(left);
+        });
+        dominantClass = dets.first['class_code']?.toString() ?? '';
+      }
+      if (dominantClass.isEmpty) {
+        dominantClass =
+            (raw['priority_label']?.toString() ?? 'INSPECTION').toUpperCase();
+      }
 
       final gridKey =
           '${loc.lat.toStringAsFixed(4)}_${loc.lng.toStringAsFixed(4)}';
@@ -156,7 +160,7 @@ class _DashboardMapState extends State<DashboardMap> {
   Widget _buildMarkerWidget(_Cluster cluster) {
     final color = _colorFor(cluster.dominantClass);
     final icon = _iconFor(cluster.dominantClass);
-    final label = TariqMapConstants.labelFor(cluster.dominantClass);
+    final label = _labelFor(cluster.dominantClass);
 
     return Tooltip(
       message: cluster.count > 1 ? '$label · ${cluster.count}' : label,
@@ -189,16 +193,38 @@ class _DashboardMapState extends State<DashboardMap> {
     );
   }
 
+  String _labelFor(String code) {
+    if (TariqMapConstants.labels.containsKey(code)) {
+      return TariqMapConstants.labelFor(code);
+    }
+    switch (code) {
+      case 'HIGH':
+      case 'CRITICAL':
+        return 'High priority';
+      case 'MEDIUM':
+        return 'Medium priority';
+      case 'LOW':
+        return 'Low priority';
+      default:
+        return 'Inspection';
+    }
+  }
+
   Color _colorFor(String code) {
     switch (code) {
       case 'D40':
+      case 'HIGH':
+      case 'CRITICAL':
         return AppColors.d40Color;
       case 'D20':
         return AppColors.d20Color;
       case 'D10':
+      case 'MEDIUM':
         return AppColors.d10Color;
       case 'D00':
         return AppColors.d00Color;
+      case 'LOW':
+        return AppColors.teal;
       default:
         final name = code.toLowerCase();
         if (name.contains('pothole')) return AppColors.d40Color;

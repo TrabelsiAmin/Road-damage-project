@@ -2,22 +2,36 @@ import 'dart:convert';
 import 'dart:io';
 import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
+import 'package:shared_preferences/shared_preferences.dart';
 import '../../models/observation.dart';
 import '../../services/observation_repository.dart';
 
 class ApiClient implements ObservationSyncClient {
-  ApiClient({this.baseUrl = 'http://10.0.2.2:8000/v1'}) {
-    // Note: 10.0.2.2 is the Android emulator alias for localhost
-    if (kIsWeb || Platform.isIOS) {
-      baseUrl = 'http://127.0.0.1:8000/v1';
+  ApiClient({String? baseUrl}) {
+    if (baseUrl != null) {
+      _baseUrl = baseUrl;
+    } else if (kIsWeb || Platform.isIOS) {
+      _baseUrl = 'http://127.0.0.1:8000/v1';
+    } else {
+      _baseUrl = 'http://10.0.2.2:8000/v1';
     }
   }
 
-  String baseUrl;
+  late String _baseUrl;
+
+  Future<String> _getResolvedBaseUrl() async {
+    final prefs = await SharedPreferences.getInstance();
+    final configured = prefs.getString('api_base_url');
+    if (configured != null && configured.trim().isNotEmpty) {
+      return configured.trim();
+    }
+    return _baseUrl;
+  }
 
   @override
   Future<void> upload(Observation obs, {required String idempotencyKey}) async {
-    final uri = Uri.parse('$baseUrl/observations');
+    final resolvedUrl = await _getResolvedBaseUrl();
+    final uri = Uri.parse('$resolvedUrl/observations');
     
     // We send a JSON payload according to backend schema ObservationUpload
     // Note: If image upload is required, we would use MultipartRequest.

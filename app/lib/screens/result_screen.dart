@@ -157,14 +157,14 @@ class _ResultScreenState extends State<ResultScreen>
           ),
 
           // ── Details panel ───────────────────────────────────────────────────
-          SlideTransition(
-            position: Tween<Offset>(
-              begin: const Offset(0, 0.15), end: Offset.zero)
-                .animate(_panelSlide),
-            child: FadeTransition(
-              opacity: _panelSlide,
-              child: Expanded(
-                flex: 45,
+          Expanded(
+            flex: 45,
+            child: SlideTransition(
+              position: Tween<Offset>(
+                begin: const Offset(0, 0.15), end: Offset.zero)
+                  .animate(_panelSlide),
+              child: FadeTransition(
+                opacity: _panelSlide,
                 child: Container(
                   decoration: const BoxDecoration(
                     color: AppColors.offWhite,

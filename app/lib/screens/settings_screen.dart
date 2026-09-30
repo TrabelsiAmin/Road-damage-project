@@ -18,11 +18,19 @@ class _SettingsScreenState extends State<SettingsScreen> {
   int    _retentionDays       = 90;
   bool   _loading             = true;
   bool   _saving              = false;
+  late TextEditingController _apiUrlController;
 
   @override
   void initState() {
     super.initState();
+    _apiUrlController = TextEditingController();
     _load();
+  }
+
+  @override
+  void dispose() {
+    _apiUrlController.dispose();
+    super.dispose();
   }
 
   Future<void> _load() async {
@@ -34,6 +42,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
         _liveFps       = prefs.getInt('live_fps')       ?? TariqMapConstants.defaultLiveFps;
         _wifiOnly      = prefs.getBool('wifi_only')     ?? true;
         _retentionDays = prefs.getInt('retention_days') ?? 90;
+        _apiUrlController.text = prefs.getString('api_base_url') ?? '';
         _loading       = false;
       });
     }
@@ -46,6 +55,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
     await prefs.setInt('live_fps', _liveFps);
     await prefs.setBool('wifi_only', _wifiOnly);
     await prefs.setInt('retention_days', _retentionDays);
+    await prefs.setString('api_base_url', _apiUrlController.text.trim());
     if (mounted) {
       setState(() => _saving = false);
       ScaffoldMessenger.of(context).showSnackBar(
@@ -145,6 +155,13 @@ class _SettingsScreenState extends State<SettingsScreen> {
                       description: 'Prevents mobile data usage for cloud sync.',
                       value: _wifiOnly,
                       onChanged: (v) => setState(() => _wifiOnly = v),
+                    ),
+                    const _SectionDivider(),
+                    _TextFieldRow(
+                      label: 'API Base URL',
+                      description: 'Leave blank to use default. Example: http://192.168.1.15:8000/v1',
+                      controller: _apiUrlController,
+                      hint: 'http://192.168.1.15:8000/v1',
                     ),
                     const _SectionDivider(),
                     _SliderRow(
@@ -373,3 +390,52 @@ class _InfoRow extends StatelessWidget {
     ]),
   );
 }
+
+// ── Text field row ────────────────────────────────────────────────────────────
+
+class _TextFieldRow extends StatelessWidget {
+  const _TextFieldRow({
+    required this.label,
+    required this.description,
+    required this.controller,
+    required this.hint,
+  });
+
+  final String label;
+  final String description;
+  final TextEditingController controller;
+  final String hint;
+
+  @override
+  Widget build(BuildContext context) => Padding(
+    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+    child: Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(label,
+          style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w600)),
+        const SizedBox(height: 6),
+        TextField(
+          controller: controller,
+          decoration: InputDecoration(
+            hintText: hint,
+            hintStyle: const TextStyle(color: Colors.black26, fontSize: 13),
+            filled: true,
+            fillColor: Colors.black.withAlpha(5),
+            contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+            isDense: true,
+            border: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(8),
+              borderSide: BorderSide.none,
+            ),
+          ),
+          style: const TextStyle(fontSize: 13),
+        ),
+        const SizedBox(height: 6),
+        Text(description,
+          style: const TextStyle(color: Colors.black38, fontSize: 11)),
+      ],
+    ),
+  );
+}
+

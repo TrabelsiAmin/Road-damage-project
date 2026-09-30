@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'package:camera/camera.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:google_fonts/google_fonts.dart';
@@ -159,32 +160,52 @@ class _LiveStreamScreenState extends State<LiveStreamScreen>
   }
 
   Future<List<Detection>> _runInference(CameraImage frame) async {
-    Uint8List? jpegBytes;
-    
-    if (frame.format.group == ImageFormatGroup.jpeg) {
-      jpegBytes = frame.planes.first.bytes;
-    } else if (frame.format.group == ImageFormatGroup.yuv420) {
-      final imgObj = convertYUV420ToImage(frame);
-      jpegBytes = img.encodeJpg(imgObj, quality: 80);
+    // 1. Detect using fast path
+    List<AgentResult> results;
+    Uint8List? jpegBytesForSession;
+
+    if (frame.format.group == ImageFormatGroup.yuv420 ||
+        frame.format.group == ImageFormatGroup.jpeg) {
+
+      if (frame.format.group == ImageFormatGroup.yuv420) {
+        // Fast tensor path for inference
+        final tensor = await convertYUVToTensorInBackground(frame, 640);
+        results = await widget.detectionService.detectAllFromTensor(tensor);
+        
+        // If recording, we need the JPEG bytes too (done in parallel would be better,
+        // but for now we do it sequentially if needed)
+        if (_session != null && _sessionState == SessionState.recording) {
+          jpegBytesForSession = await convertYUVToJpegInBackground(frame);
+        }
+      } else {
+        // JPEG format natively (web/some phones)
+        final bytes = frame.planes.first.bytes;
+        results = await widget.detectionService.detectAllFromBytes(bytes);
+        jpegBytesForSession = bytes;
+      }
     } else if (frame.format.group == ImageFormatGroup.bgra8888) {
-      final imgObj = img.Image.fromBytes(
-        width: frame.width,
-        height: frame.height,
-        bytes: frame.planes.first.bytes.buffer,
-        order: img.ChannelOrder.bgra,
-      );
-      jpegBytes = img.encodeJpg(imgObj, quality: 80);
+      // iOS BGRA
+      final tensor = await _bgraToTensor(frame, 640);
+      results = await widget.detectionService.detectAllFromTensor(tensor);
+      if (_session != null && _sessionState == SessionState.recording) {
+        final imgObj = img.Image.fromBytes(
+          width: frame.width,
+          height: frame.height,
+          bytes: frame.planes.first.bytes.buffer,
+          order: img.ChannelOrder.bgra,
+        );
+        jpegBytesForSession = img.encodeJpg(imgObj, quality: 80);
+      }
+    } else {
+      return [];
     }
 
-    if (jpegBytes == null) return [];
-
-    final results = await widget.detectionService.detectAllFromBytes(jpegBytes);
     final detections = results.expand((r) => r.detections).toList();
 
     // If recording, send frame to session manager
-    if (_session != null && _sessionState == SessionState.recording) {
+    if (_session != null && _sessionState == SessionState.recording && jpegBytesForSession != null) {
       final sessionDetections = await _session!.addFrame(
-        jpegBytes, position: _currentPosition);
+        jpegBytesForSession, position: _currentPosition);
       if (sessionDetections.isNotEmpty) {
         setState(() {
           _sessionAnomalies = _session!.totalAnomalies;
@@ -201,6 +222,15 @@ class _LiveStreamScreenState extends State<LiveStreamScreen>
         (m, r) => r.latencyMs != null && r.latencyMs! > m ? r.latencyMs! : m);
     _lastLatency = maxLatency;
     return detections;
+  }
+
+  Future<Float32List> _bgraToTensor(CameraImage frame, int targetSize) async {
+    return compute(_bgraToTensorIsolate, {
+      'bytes':      frame.planes.first.bytes,
+      'width':      frame.width,
+      'height':     frame.height,
+      'targetSize': targetSize,
+    });
   }
 
   // ── Session controls ─────────────────────────────────────────────────────
@@ -966,4 +996,40 @@ class _KeyFrameTile extends StatelessWidget {
       ]),
     );
   }
+}
+
+// ── Background Isolates ────────────────────────────────────────────────────────
+
+Float32List _bgraToTensorIsolate(Map<String, dynamic> params) {
+  final bytes      = params['bytes'] as Uint8List;
+  final width      = params['width'] as int;
+  final height     = params['height'] as int;
+  final targetSize = params['targetSize'] as int;
+
+  final out = Float32List(targetSize * targetSize * 3);
+  int idx = 0;
+
+  final xScale = width / targetSize;
+  final yScale = height / targetSize;
+
+  for (var dy = 0; dy < targetSize; dy++) {
+    final srcY = (dy * yScale).toInt().clamp(0, height - 1);
+    final rowOffset = srcY * width * 4;
+
+    for (var dx = 0; dx < targetSize; dx++) {
+      final srcX = (dx * xScale).toInt().clamp(0, width - 1);
+      final pixelOffset = rowOffset + srcX * 4;
+
+      // BGRA
+      final b = bytes[pixelOffset];
+      final g = bytes[pixelOffset + 1];
+      final r = bytes[pixelOffset + 2];
+
+      out[idx++] = r / 255.0;
+      out[idx++] = g / 255.0;
+      out[idx++] = b / 255.0;
+    }
+  }
+
+  return out;
 }

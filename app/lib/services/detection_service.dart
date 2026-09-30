@@ -153,18 +153,41 @@ class DetectionService {
     }));
   }
 
-  /// Runs all agents in parallel on raw image bytes.
-  ///
-  /// Use this for live camera frames to avoid temp-file disk I/O.
-  /// The bytes must be a valid JPEG or PNG image.
+  /// Runs all agents in parallel on raw image bytes (JPEG/PNG).
   Future<List<AgentResult>> detectAllFromBytes(Uint8List bytes) async {
     return Future.wait(_runners.map((runner) async {
       try {
         if (runner is TFLiteAgentRunner) {
           return await runner.detectFromBytes(bytes);
         }
-        // Mock runners: still use a temp file path fallback
         return await runner.detect(File(''));
+      } catch (error) {
+        debugPrint('[DetectionService] Agent ${runner.agentName} failed: $error');
+        return AgentResult(
+          agent: runner.agentName,
+          detections: const [],
+          error: error.toString(),
+          isMock: runner.isMock,
+        );
+      }
+    }));
+  }
+
+  /// ⚡ Fastest path for live camera: skip JPEG encode/decode entirely.
+  ///
+  /// [inputTensor] must be Float32List [inputSize*inputSize*3] normalised [0..1],
+  /// produced off-thread by [convertYUVToTensorInBackground].
+  Future<List<AgentResult>> detectAllFromTensor(Float32List inputTensor) async {
+    return Future.wait(_runners.map((runner) async {
+      try {
+        if (runner is TFLiteAgentRunner) {
+          return await runner.detectFromTensor(inputTensor);
+        }
+        return AgentResult(
+          agent: runner.agentName,
+          detections: const [],
+          isMock: runner.isMock,
+        );
       } catch (error) {
         debugPrint('[DetectionService] Agent ${runner.agentName} failed: $error');
         return AgentResult(

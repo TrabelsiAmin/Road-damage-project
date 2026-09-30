@@ -98,7 +98,7 @@ class _DashboardMapState extends State<DashboardMap> {
     } catch (e) {
       if (mounted) {
         setState(() {
-          _error = 'Failed to load map data';
+          _error = 'Failed to load map data: $e';
           _loading = false;
         });
       }

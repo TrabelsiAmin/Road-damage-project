@@ -20,7 +20,7 @@ class SupabaseCfg {
   /// This is NOT the service-role secret.
   /// IMPORTANT: Replace the placeholder below with your real anon key.
   static const String anonKey =
-      "sb_secret_gDI-QKrVOnOXIOcww19Xwg_7ARgROX2";
+      'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImxlbmRxY2ppaHVzcWtteGFuc2JsIiwicm9sZSI6ImFub24iLCJpYXQiOjE3OTAyODA3ODYsImV4cCI6MjEwNTg1Njc4Nn0.F1FS2HZNf7qEbTx14WBSAOHeCWTGsA5OMZghgw_YNNs';
 
 
   // ── Storage buckets ────────────────────────────────────────────────────────

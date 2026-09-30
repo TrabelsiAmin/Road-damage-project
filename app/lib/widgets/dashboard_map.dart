@@ -90,6 +90,8 @@ class _DashboardMapState extends State<DashboardMap> {
           // Find the dominant class for this observation
           dets.sort((a, b) => (b['confidence'] as num).compareTo(a['confidence'] as num));
           dominantClass = dets.first['class_code'] as String;
+        } else if (obs['priority_label'] != null && (obs['priority_label'] as String).isNotEmpty) {
+          dominantClass = obs['priority_label'] as String;
         }
 
         if (clusters.containsKey(gridKey)) {

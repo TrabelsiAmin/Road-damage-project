@@ -20,6 +20,7 @@ import 'offline_queue_screen.dart';
 import 'result_screen.dart';
 import 'settings_screen.dart';
 import 'video_import_screen.dart';
+import '../widgets/dashboard_map.dart';
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key, required this.initialActor});
@@ -237,6 +238,15 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
                               onDismiss: () => setState(() => _message = null)),
                         ],
 
+                        const SizedBox(height: 24),
+
+                        // ── Map Dashboard ──────────────────────────────────
+                        const _SectionLabel('ANOMALY MAP'),
+                        const SizedBox(height: 10),
+                        const SizedBox(
+                          height: 260,
+                          child: DashboardMap(),
+                        ),
                         const SizedBox(height: 24),
 
                         // ── Stats row ──────────────────────────────────────

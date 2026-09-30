@@ -1,0 +1,206 @@
+import 'package:flutter/material.dart';
+import 'package:flutter_map/flutter_map.dart';
+import 'package:latlong2/latlong.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
+import '../core/app_colors.dart';
+import '../core/constants.dart';
+
+class DashboardMap extends StatefulWidget {
+  const DashboardMap({super.key});
+
+  @override
+  State<DashboardMap> createState() => _DashboardMapState();
+}
+
+class _DashboardMapState extends State<DashboardMap> {
+  bool _loading = true;
+  final List<Marker> _markers = [];
+  String? _error;
+
+  @override
+  void initState() {
+    super.initState();
+    _fetchAnomalies();
+  }
+
+  Future<void> _fetchAnomalies() async {
+    try {
+      final client = Supabase.instance.client;
+      
+      // Fetch observations with their locations and highest confidence detections
+      // We do separate queries if joins fail, but let's try direct first.
+      // A safer approach for a hackathon without guaranteed FKs is querying separately.
+      
+      final obsData = await client.from('observations').select('id, priority_score, priority_label');
+      final locData = await client.from('locations').select('observation_id, latitude, longitude');
+      final detData = await client.from('detections').select('observation_id, class_code, confidence');
+
+      final locMap = <String, Map<String, dynamic>>{};
+      for (final l in locData) {
+        if (l['latitude'] != 0.0 && l['longitude'] != 0.0) {
+          locMap[l['observation_id'] as String] = l;
+        }
+      }
+
+      final detMap = <String, List<Map<String, dynamic>>>{};
+      for (final d in detData) {
+        final obsId = d['observation_id'] as String;
+        detMap.putIfAbsent(obsId, () => []).add(d);
+      }
+
+      // Group by proximity (rounding to 4 decimal places, approx 11 meters)
+      final Map<String, _Cluster> clusters = {};
+
+      for (final obs in obsData) {
+        final obsId = obs['id'] as String;
+        final loc = locMap[obsId];
+        if (loc == null) continue;
+
+        final lat = (loc['latitude'] as num).toDouble();
+        final lng = (loc['longitude'] as num).toDouble();
+        
+        final gridKey = '${lat.toStringAsFixed(4)}_${lng.toStringAsFixed(4)}';
+        
+        final dets = detMap[obsId] ?? [];
+        if (dets.isEmpty) continue; // Only show anomalies
+
+        // Find the dominant class for this observation
+        dets.sort((a, b) => (b['confidence'] as num).compareTo(a['confidence'] as num));
+        final dominantClass = dets.first['class_code'] as String;
+
+        if (clusters.containsKey(gridKey)) {
+          clusters[gridKey]!.count++;
+        } else {
+          clusters[gridKey] = _Cluster(
+            lat: lat,
+            lng: lng,
+            dominantClass: dominantClass,
+            count: 1,
+          );
+        }
+      }
+
+      final markers = clusters.values.map((c) {
+        return Marker(
+          point: LatLng(c.lat, c.lng),
+          width: 40,
+          height: 40,
+          child: _buildMarkerWidget(c),
+        );
+      }).toList();
+
+      if (mounted) {
+        setState(() {
+          _markers.addAll(markers);
+          _loading = false;
+        });
+      }
+    } catch (e) {
+      if (mounted) {
+        setState(() {
+          _error = 'Failed to load map data';
+          _loading = false;
+        });
+      }
+    }
+  }
+
+  Widget _buildMarkerWidget(_Cluster cluster) {
+    Color color;
+    IconData icon;
+    
+    // Assign colors based on anomaly type
+    if (cluster.dominantClass.contains('crack')) {
+      color = AppColors.high;
+      icon = Icons.timeline;
+    } else if (cluster.dominantClass.contains('pothole')) {
+      color = AppColors.critical;
+      icon = Icons.radio_button_unchecked;
+    } else {
+      color = AppColors.teal;
+      icon = Icons.warning_amber_rounded;
+    }
+
+    return GestureDetector(
+      onTap: () {
+        // Could show a bottom sheet with details
+      },
+      child: Container(
+        decoration: BoxDecoration(
+          color: color,
+          shape: BoxShape.circle,
+          border: Border.all(color: Colors.white, width: 2),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withAlpha(50),
+              blurRadius: 4,
+              offset: const Offset(0, 2),
+            ),
+          ],
+        ),
+        child: Center(
+          child: cluster.count > 1
+              ? Text(
+                  '${cluster.count}',
+                  style: const TextStyle(
+                    color: Colors.white,
+                    fontWeight: FontWeight.bold,
+                    fontSize: 12,
+                  ),
+                )
+              : Icon(icon, color: Colors.white, size: 16),
+        ),
+      ),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    if (_error != null) {
+      return Center(child: Text(_error!, style: const TextStyle(color: Colors.red)));
+    }
+
+    if (_loading) {
+      return const Center(child: CircularProgressIndicator(color: AppColors.teal));
+    }
+
+    // Default center to Tunisia if no markers, else center on first marker
+    final center = _markers.isNotEmpty 
+        ? _markers.first.point 
+        : const LatLng(36.8065, 10.1815); 
+
+    return ClipRRect(
+      borderRadius: BorderRadius.circular(16),
+      child: FlutterMap(
+        options: MapOptions(
+          initialCenter: center,
+          initialZoom: 12.0,
+          interactionOptions: const InteractionOptions(
+            flags: InteractiveFlag.all & ~InteractiveFlag.rotate,
+          ),
+        ),
+        children: [
+          TileLayer(
+            urlTemplate: 'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
+            userAgentPackageName: 'com.tariqmap.app',
+          ),
+          MarkerLayer(markers: _markers),
+        ],
+      ),
+    );
+  }
+}
+
+class _Cluster {
+  final double lat;
+  final double lng;
+  final String dominantClass;
+  int count;
+
+  _Cluster({
+    required this.lat,
+    required this.lng,
+    required this.dominantClass,
+    required this.count,
+  });
+}

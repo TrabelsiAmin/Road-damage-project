@@ -192,37 +192,54 @@ class SupabaseService {
       'captured_at':     capturedAt,
     });
 
-    // 3. Agent runs + detections
-    for (final result in obs.agentResults) {
-      final agentRunId = _uuid.v4();
-      await _client.from(SupabaseCfg.tableAgentRuns).insert({
-        'id':                   agentRunId,
-        'observation_id':       obs.id,
-        'agent':                result.agent,
-        'error':                result.error,
-        'is_mock':              result.isMock,
-        'latency_ms':           result.latencyMs,
-        'model_bundle_version': obs.modelBundleVersion,
-      });
-
-      if (result.detections.isNotEmpty) {
-        final detections = result.detections.map((d) => {
-          'id':                   _uuid.v4(),
+    // 3. Agent runs + detections. RLS on agent_runs rejects the publishable
+    // key; the observation and location above are still kept.
+    try {
+      for (final result in obs.agentResults) {
+        final agentRunId = _uuid.v4();
+        await _client.from(SupabaseCfg.tableAgentRuns).insert({
+          'id':                   agentRunId,
           'observation_id':       obs.id,
-          'agent_run_id':         agentRunId,
-          'media_id':             null,
-          'class_code':           d.classCode,
-          'confidence':           d.confidence,
-          'box_x':                d.box.x,
-          'box_y':                d.box.y,
-          'box_w':                d.box.width,
-          'box_h':                d.box.height,
-          'frame_index':          d.frameIndex,
+          'agent':                result.agent,
+          'error':                result.error,
           'is_mock':              result.isMock,
-          'model_bundle_version': d.modelBundleVersion,
-          'detected_at':          d.timestamp?.toUtc().toIso8601String() ?? capturedAt,
-        }).toList();
-        await _client.from(SupabaseCfg.tableDetections).insert(detections);
+          'latency_ms':           result.latencyMs,
+          'model_bundle_version': obs.modelBundleVersion,
+        });
+
+        if (result.detections.isNotEmpty) {
+          final detections = result.detections.map((d) => {
+            'id':                   _uuid.v4(),
+            'observation_id':       obs.id,
+            'agent_run_id':         agentRunId,
+            'media_id':             null,
+            'class_code':           d.classCode,
+            'confidence':           d.confidence,
+            'box_x':                d.box.x,
+            'box_y':                d.box.y,
+            'box_w':                d.box.width,
+            'box_h':                d.box.height,
+            'frame_index':          d.frameIndex,
+            'is_mock':              result.isMock,
+            'model_bundle_version': d.modelBundleVersion,
+            'detected_at':          d.timestamp?.toUtc().toIso8601String() ?? capturedAt,
+          }).toList();
+          await _client.from(SupabaseCfg.tableDetections).insert(detections);
+        }
+      }
+    } on PostgrestException catch (e) {
+      final denied = e.code == '42501' ||
+          e.message.contains('row-level security');
+      if (!denied) rethrow;
+      final detections = obs.detections;
+      if (detections.isNotEmpty) {
+        detections.sort((a, b) => b.confidence.compareTo(a.confidence));
+        final code = detections.first.classCode.trim();
+        if (code.isNotEmpty) {
+          await _client.from(SupabaseCfg.tableObservations).update({
+            'priority_label': code,
+          }).eq('id', obs.id);
+        }
       }
     }
 

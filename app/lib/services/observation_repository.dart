@@ -127,8 +127,12 @@ class SyncCoordinator {
     _running = true;
     try {
       final pending = await _repo.list(status: SyncStatus.pending);
-      for (final obs in pending) {
-        if (obs.uploadAttempts >= maxRetries) {
+      final failed = await _repo.list(status: SyncStatus.failed);
+      for (final obs in [...pending, ...failed]) {
+        // Failed rows are retried from Sync All. The attempt cap still applies
+        // to rows that are still pending.
+        if (obs.syncStatus == SyncStatus.pending &&
+            obs.uploadAttempts >= maxRetries) {
           await _repo.updateSyncStatus(obs.id, SyncStatus.needsReview,
               error: 'Max retries ($maxRetries) exceeded');
           continue;

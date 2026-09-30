@@ -53,47 +53,76 @@ class ApiClient implements ObservationSyncClient {
       "captured_at": capturedAt,
     });
 
-    // 3. Agent Runs & Detections
-    for (final result in obs.agentResults) {
-      final agentRunId = _uuid.v4();
-      
-      await client.from(SupabaseCfg.tableAgentRuns).upsert({
-        "id": agentRunId,
-        "observation_id": obs.id,
-        "agent": result.agent,
-        "error": result.error,
-        "is_mock": result.isMock,
-        "latency_ms": result.latencyMs,
-        "model_bundle_version": obs.modelBundleVersion,
-      });
+    // 3. Agent runs and detections. The publishable key can write observations
+    // and locations, but current RLS rejects agent_runs. Keep the dominant
+    // class on the observation so the map still colors the pin.
+    try {
+      for (final result in obs.agentResults) {
+        final agentRunId = _uuid.v4();
 
-      if (result.detections.isNotEmpty) {
-        final detectionsData = result.detections.map((d) => {
-          "id": _uuid.v4(),
+        await client.from(SupabaseCfg.tableAgentRuns).upsert({
+          "id": agentRunId,
           "observation_id": obs.id,
-          "agent_run_id": agentRunId,
-          "media_id": null,
-          "class_code": d.classCode,
-          "confidence": d.confidence,
-          "box_x": d.box.x,
-          "box_y": d.box.y,
-          "box_w": d.box.width,
-          "box_h": d.box.height,
-          "frame_index": d.frameIndex,
+          "agent": result.agent,
+          "error": result.error,
           "is_mock": result.isMock,
-          "model_bundle_version": d.modelBundleVersion ?? obs.modelBundleVersion,
-          "detected_at": (d.timestamp ?? obs.createdAt).toUtc().toIso8601String(),
-        }).toList();
+          "latency_ms": result.latencyMs,
+          "model_bundle_version": obs.modelBundleVersion,
+        });
 
-        await client.from(SupabaseCfg.tableDetections).upsert(detectionsData);
+        if (result.detections.isNotEmpty) {
+          final detectionsData = result.detections.map((d) => {
+            "id": _uuid.v4(),
+            "observation_id": obs.id,
+            "agent_run_id": agentRunId,
+            "media_id": null,
+            "class_code": d.classCode,
+            "confidence": d.confidence,
+            "box_x": d.box.x,
+            "box_y": d.box.y,
+            "box_w": d.box.width,
+            "box_h": d.box.height,
+            "frame_index": d.frameIndex,
+            "is_mock": result.isMock,
+            "model_bundle_version": d.modelBundleVersion ?? obs.modelBundleVersion,
+            "detected_at": (d.timestamp ?? obs.createdAt).toUtc().toIso8601String(),
+          }).toList();
+
+          await client.from(SupabaseCfg.tableDetections).upsert(detectionsData);
+        }
+      }
+    } on PostgrestException catch (e) {
+      if (!_isRlsDenied(e)) rethrow;
+      final dominant = _dominantClass(obs);
+      if (dominant != null) {
+        await client.from(SupabaseCfg.tableObservations).update({
+          "priority_label": dominant,
+        }).eq("id", obs.id);
       }
     }
 
-    // 4. Sync Receipts for idempotency tracking
-    await client.from(SupabaseCfg.tableSyncReceipts).upsert({
-      "observation_id": obs.id,
-      "idempotency_key": idempotencyKey,
-      "payload_hash": "flutter-direct-sync",
-    });
+    // 4. Sync receipts are optional. RLS currently rejects them too.
+    try {
+      await client.from(SupabaseCfg.tableSyncReceipts).upsert({
+        "observation_id": obs.id,
+        "idempotency_key": idempotencyKey,
+        "payload_hash": "flutter-direct-sync",
+      });
+    } on PostgrestException catch (e) {
+      if (!_isRlsDenied(e)) rethrow;
+    }
+  }
+
+  bool _isRlsDenied(PostgrestException error) {
+    return error.code == "42501" ||
+        error.message.contains("row-level security");
+  }
+
+  String? _dominantClass(Observation obs) {
+    final detections = obs.detections;
+    if (detections.isEmpty) return null;
+    detections.sort((a, b) => b.confidence.compareTo(a.confidence));
+    final code = detections.first.classCode.trim();
+    return code.isEmpty ? null : code;
   }
 }

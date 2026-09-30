@@ -67,15 +67,20 @@ class ObservationDao {
     String? error,
   }) async {
     final db = await _db.database;
+    final values = <String, Object?>{
+      'sync_status': status.name,
+    };
+    if (status == SyncStatus.synced) {
+      values['sync_error'] = null;
+    } else if (error != null) {
+      values['sync_error'] = error;
+    }
+    if (status == SyncStatus.failed || status == SyncStatus.uploading) {
+      values['upload_attempts'] = _incrementAttempts(db, observationId);
+    }
     await db.update(
       'observations',
-      {
-        'sync_status':      status.name,
-        'sync_error':       error,
-        'upload_attempts':  status == SyncStatus.failed || status == SyncStatus.uploading
-            ? _incrementAttempts(db, observationId)
-            : null,
-      }..removeWhere((_, v) => v == null),
+      values,
       where: 'id = ?',
       whereArgs: [observationId],
     );

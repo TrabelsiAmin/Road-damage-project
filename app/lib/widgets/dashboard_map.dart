@@ -3,7 +3,7 @@ import 'package:flutter_map/flutter_map.dart';
 import 'package:latlong2/latlong.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../core/app_colors.dart';
-import '../core/constants.dart';
+import '../services/territorial_service.dart';
 
 class DashboardMap extends StatefulWidget {
   const DashboardMap({super.key});
@@ -16,11 +16,33 @@ class _DashboardMapState extends State<DashboardMap> {
   bool _loading = true;
   final List<Marker> _markers = [];
   String? _error;
+  
+  final MapController _mapController = MapController();
+  LatLng? _userLocation;
 
   @override
   void initState() {
     super.initState();
     _fetchAnomalies();
+    _fetchUserLocation();
+  }
+
+  Future<void> _fetchUserLocation() async {
+    try {
+      final locSvc = LocationService();
+      final pos = await locSvc.currentPosition();
+      if (mounted) {
+        setState(() {
+          _userLocation = LatLng(pos.latitude, pos.longitude);
+        });
+        // Try to move if map is already built
+        try {
+          _mapController.move(_userLocation!, 15.0);
+        } catch (_) {}
+      }
+    } catch (_) {
+      // Ignore if location is denied or disabled
+    }
   }
 
   Future<void> _fetchAnomalies() async {
@@ -165,16 +187,21 @@ class _DashboardMapState extends State<DashboardMap> {
     }
 
     // Default center to Tunisia if no markers, else center on first marker
-    final center = _markers.isNotEmpty 
-        ? _markers.first.point 
-        : const LatLng(36.8065, 10.1815); 
+    final center = _userLocation ?? 
+        (_markers.isNotEmpty ? _markers.first.point : const LatLng(36.8065, 10.1815)); 
 
     return ClipRRect(
       borderRadius: BorderRadius.circular(16),
       child: FlutterMap(
+        mapController: _mapController,
         options: MapOptions(
           initialCenter: center,
-          initialZoom: 12.0,
+          initialZoom: _userLocation != null ? 15.0 : 12.0,
+          onMapReady: () {
+            if (_userLocation != null) {
+              _mapController.move(_userLocation!, 15.0);
+            }
+          },
           interactionOptions: const InteractionOptions(
             flags: InteractiveFlag.all & ~InteractiveFlag.rotate,
           ),
@@ -185,6 +212,39 @@ class _DashboardMapState extends State<DashboardMap> {
             userAgentPackageName: 'com.tariqmap.app',
           ),
           MarkerLayer(markers: _markers),
+          if (_userLocation != null)
+            MarkerLayer(
+              markers: [
+                Marker(
+                  point: _userLocation!,
+                  width: 32,
+                  height: 32,
+                  child: Stack(
+                    alignment: Alignment.center,
+                    children: [
+                      Container(
+                        width: 32, height: 32,
+                        decoration: BoxDecoration(
+                          shape: BoxShape.circle,
+                          color: Colors.blue.withAlpha(50),
+                        ),
+                      ),
+                      Container(
+                        width: 14, height: 14,
+                        decoration: BoxDecoration(
+                          shape: BoxShape.circle,
+                          color: Colors.blue,
+                          border: Border.all(color: Colors.white, width: 2.5),
+                          boxShadow: const [
+                            BoxShadow(color: Colors.black26, blurRadius: 4, offset: Offset(0, 2))
+                          ],
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
         ],
       ),
     );

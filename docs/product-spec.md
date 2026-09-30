@@ -12,7 +12,7 @@ TariqMap turns a road image into an accountable territorial action without requi
 | Ministry of Equipment | Where are network-level patterns and hotspots? | National map, comparative analytics, exports, coordination |
 | Tunisia Autoroutes | Which highway problems require rapid intervention? | Live-ready alert queue, precise location, route/segment status |
 
-The actor is an institution. The operator is a person using an institutional workspace. The three institutional actors are peers in the platform; the Ministry’s wider geographic scope does not imply UI hierarchy.
+The actor is an institution. The operator is a person using an institutional workspace. The three institutional actors are peers in the platform; the Ministry’s wider geographic scope does not imply UI hierarchy. RAG, when introduced, is decision support only — the actor decides.
 
 ## Core user journeys
 
@@ -22,7 +22,11 @@ The operator chooses an actor context, starts an inspection, grants location per
 
 ### Incident journey
 
-A reviewable observation becomes an incident only after the operator confirms the suggested severity and owner. The incident has a stable identifier, audit history, status, priority, responsible actor, road and segment, evidence image, and optional intervention assignment. Status transitions are explicit: `new → acknowledged → assigned → in_progress → resolved → verified`.
+A reviewable observation becomes an incident only after the operator confirms the suggested severity and owner. The incident has a stable identifier, audit history, status, priority, responsible actor, road and segment, evidence image, and optional intervention assignment.
+
+Validated status chain (WP5): `DETECTED → ANALYZED → ASSIGNED → IN_PROGRESS → RESOLVED → ARCHIVED`.
+
+Constants live in `app/lib/models/incident.dart` and `backend/lifecycle.py`. Persistence, dashboards, SIG matching, and RAG recommendations are **PLANNED** — Week 1 was specification-only.
 
 ### Synchronization journey
 
@@ -45,4 +49,4 @@ Each box must display its originating agent and confidence. The app must show wh
 
 ## Definition of done
 
-The hackathon build is credible when it can demonstrate a real image, a real model bundle or a clearly labeled fallback, GPS metadata, independent agent status, an explainable priority, offline persistence, a retryable sync queue, a territorial ownership response, and a reviewer-facing incident detail screen.
+The hackathon build is credible when it can demonstrate a real image, a real model bundle **or** a clearly labeled fallback, GPS metadata **or** a kept observation when GPS is missing, independent agent status, an explainable priority, offline persistence, and a retryable sync queue. Territorial ownership, incident lifecycle UI, and RAG are specified, not production.

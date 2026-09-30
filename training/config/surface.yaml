@@ -1,3 +1,6 @@
+# WP4 — Agent Marquage & Surface. D50 faded crossing, D60 faded lane,
+# D90 visual rutting (2D only, no depth). Skip training if those classes
+# are absent from the RDD extract (see analyze_labeled_dataset).
 path: data/processed/surface
 train: images/train
 val: images/val

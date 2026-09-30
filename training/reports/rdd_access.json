@@ -1,0 +1,55 @@
+{
+  "probed_at_utc": "2026-09-20T12:19:34.905231+00:00",
+  "local": {
+    "path": "data/raw/rdd2022",
+    "exists": true,
+    "xml_count": 38385,
+    "image_count": 47420,
+    "usable": true,
+    "official_sources": {
+      "rdd2022_figshare": "https://figshare.com/articles/dataset/RDD2022_-_The_multi-national_Road_Damage_Dataset_released_through_CRDDC_2022/21431547",
+      "rdd2022_figshare_api": "https://api.figshare.com/v2/articles/21431547",
+      "rdd2022_paper": "https://arxiv.org/abs/2209.08538",
+      "github": "https://github.com/sekilab/RoadDamageDetector"
+    },
+    "note": "Labeled RDD VOC XML found. Outer Figshare zip is 7 nested country zips."
+  },
+  "remote": {
+    "article_id": 21431547,
+    "api_url": "https://api.figshare.com/v2/articles/21431547",
+    "html_url": "https://figshare.com/articles/dataset/RDD2022_-_The_multi-national_Road_Damage_Dataset_released_through_CRDDC_2022/21431547",
+    "http_status": 200,
+    "error": null,
+    "title": "RDD2022 - The multi-national Road Damage Dataset released through CRDDC'2022",
+    "zip": {
+      "id": 38030910,
+      "name": "RDD2022_released_through_CRDDC2022.zip",
+      "size_bytes": 13264172619,
+      "download_url": "https://ndownloader.figshare.com/files/38030910"
+    }
+  },
+  "download": {
+    "ok": true,
+    "expected_size_bytes": 13264172619,
+    "bytes_after": 13264172619,
+    "wget_returncode": 0,
+    "elapsed": "5m17s",
+    "average_rate": "39.9 MB/s"
+  },
+  "extract": {
+    "ok": true,
+    "xml_count": 38385,
+    "image_count": 47420,
+    "nested_country_zips": [
+      "China_Drone.zip",
+      "China_MotorBike.zip",
+      "Czech.zip",
+      "India.zip",
+      "Japan.zip",
+      "Norway.zip",
+      "United_States.zip"
+    ]
+  },
+  "zip_downloaded": true,
+  "note": "RDD2022 Figshare article 21431547 downloaded and extracted on 2026-09-20. Zip size matched 13264172619 bytes. Official label_map lists D00/D10/D20/D40 only; XML also contains D43 (793) and D44 (5057) which map to TariqMap D60/D50. D90 is absent. RDD D50-other (3581) is excluded."
+}

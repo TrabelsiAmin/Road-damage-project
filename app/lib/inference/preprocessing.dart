@@ -1,6 +1,7 @@
 import 'dart:io';
 import 'package:flutter/foundation.dart';
 import 'package:image/image.dart' as img;
+import 'letterbox_math.dart';
 
 // ---------------------------------------------------------------------------
 // EXIF orientation — fix rotation before drawing bounding boxes
@@ -72,48 +73,24 @@ List<List<List<List<double>>>> imageToFloat32Tensor(img.Image image) {
 class PreprocessingResult {
   const PreprocessingResult({
     required this.tensor,
-    required this.originalWidth,
-    required this.originalHeight,
-    required this.scale,
-    required this.padX,
-    required this.padY,
-    required this.inputSize,
+    required this.letterbox,
   });
 
   final List<List<List<List<double>>>> tensor;
-  final int    originalWidth;
-  final int    originalHeight;
-  final double scale;
-  final int    padX;
-  final int    padY;
-  final int    inputSize;
+  final LetterboxMeta letterbox;
+
+  int get originalWidth => letterbox.originalWidth;
+  int get originalHeight => letterbox.originalHeight;
+  double get scale => letterbox.scale;
+  int get padX => letterbox.padX;
+  int get padY => letterbox.padY;
+  int get inputSize => letterbox.inputSize;
 
   /// Converts normalised model-output coordinates (relative to the letterboxed
   /// input) back to coordinates normalised to the original image dimensions.
-  ///
-  /// [nx], [ny], [nw], [nh] are in [0..1] relative to [inputSize]×[inputSize].
-  /// Returns a 4-tuple (x, y, w, h) normalised to the original image.
   (double, double, double, double) toOriginalNorm(
-      double nx, double ny, double nw, double nh) {
-    // Pixel coords in letterboxed input
-    final px = nx * inputSize;
-    final py = ny * inputSize;
-    final pw = nw * inputSize;
-    final ph = nh * inputSize;
-
-    // Remove padding
-    final ox = (px - padX) / (originalWidth  * scale);
-    final oy = (py - padY) / (originalHeight * scale);
-    final ow = pw / (originalWidth  * scale);
-    final oh = ph / (originalHeight * scale);
-
-    return (
-      ox.clamp(0.0, 1.0),
-      oy.clamp(0.0, 1.0),
-      ow.clamp(0.0, 1.0),
-      oh.clamp(0.0, 1.0),
-    );
-  }
+          double nx, double ny, double nw, double nh) =>
+      letterbox.toOriginalNorm(nx, ny, nw, nh);
 }
 
 /// Full preprocessing pipeline: decode file → orient → letterbox → tensor.
@@ -139,25 +116,17 @@ class _PreprocessArgs {
 
 PreprocessingResult _preprocessInIsolate(_PreprocessArgs args) {
   final oriented = decodeAndOrient(args.bytes);
-  final origW = oriented.width;
-  final origH = oriented.height;
-
-  final scale = args.inputSize / (origW > origH ? origW : origH);
-  final newW = (origW * scale).round();
-  final newH = (origH * scale).round();
-  final padX = (args.inputSize - newW) ~/ 2;
-  final padY = (args.inputSize - newH) ~/ 2;
+  final letterbox = LetterboxMeta.compute(
+    origW: oriented.width,
+    origH: oriented.height,
+    inputSize: args.inputSize,
+  );
 
   final padded = letterboxResize(oriented, args.inputSize);
   final tensor = imageToFloat32Tensor(padded);
 
   return PreprocessingResult(
     tensor: tensor,
-    originalWidth:  origW,
-    originalHeight: origH,
-    scale: scale,
-    padX: padX,
-    padY: padY,
-    inputSize: args.inputSize,
+    letterbox: letterbox,
   );
 }

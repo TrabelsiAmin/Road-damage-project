@@ -2,47 +2,60 @@
   "D00": {
     "description": "Longitudinal crack",
     "agent": "cracks",
-    "aliases": ["longitudinal_crack", "longitudinal crack", "linear_crack", "0"],
-    "rdd2024_class_id": 0
+    "aliases": ["longitudinal_crack", "longitudinal crack", "linear_crack", "0", "d00"],
+    "rdd2022_names": ["D00"],
+    "justification": "RDD D00 is defined as longitudinal crack. Direct 1:1 mapping."
   },
   "D10": {
     "description": "Transverse crack",
     "agent": "cracks",
-    "aliases": ["transverse_crack", "transverse crack", "1"],
-    "rdd2024_class_id": 1
+    "aliases": ["transverse_crack", "transverse crack", "1", "d10"],
+    "rdd2022_names": ["D10"],
+    "justification": "RDD D10 is defined as transverse crack. Direct 1:1 mapping."
   },
   "D20": {
     "description": "Alligator/crocodile cracking",
     "agent": "pavement",
-    "aliases": ["alligator_crack", "alligator crack", "crocodile_crack", "fatigue_crack", "2"],
-    "rdd2024_class_id": 2
+    "aliases": ["alligator_crack", "alligator crack", "crocodile_crack", "fatigue_crack", "2", "d20"],
+    "rdd2022_names": ["D20"],
+    "justification": "RDD D20 is alligator (crocodile) cracking. Direct 1:1 mapping."
   },
   "D40": {
     "description": "Pothole",
     "agent": "pavement",
-    "aliases": ["pothole", "potholes", "pot_hole", "hole", "3"],
-    "rdd2024_class_id": 3
+    "aliases": ["pothole", "potholes", "pot_hole", "hole", "3", "d40"],
+    "rdd2022_names": ["D40"],
+    "justification": "RDD D40 is pothole. Direct 1:1 mapping."
   },
   "D50": {
     "description": "Faded pedestrian crossing marking",
     "agent": "surface",
-    "aliases": ["crosswalk_blur", "faded_crossing", "pedestrian_crossing", "4"],
-    "rdd2024_class_id": 4
+    "aliases": ["crosswalk_blur", "faded_crossing", "pedestrian_crossing", "4", "d44"],
+    "rdd2022_names": ["D44"],
+    "justification": "RDD D44 is 'crosswalk blur'. Mapped to TariqMap D50 (faded pedestrian crossing) only when D44 annotations exist. Not invented from unlabeled pothole photos."
   },
   "D60": {
     "description": "Faded lane marking",
     "agent": "surface",
-    "aliases": ["white_line_blur", "faded_lane", "lane_marking", "5"],
-    "rdd2024_class_id": 5
+    "aliases": ["white_line_blur", "faded_lane", "lane_marking", "5", "d43"],
+    "rdd2022_names": ["D43"],
+    "justification": "RDD D43 is 'white line blur'. Mapped to TariqMap D60 (faded lane marking) only when D43 annotations exist."
   },
   "D90": {
     "description": "Visual rutting / ornieriage (no depth measurement from 2D image)",
     "agent": "surface",
     "aliases": ["rutting", "rut", "deformation", "6"],
-    "rdd2024_class_id": 6,
-    "limitation": "2D image cannot measure rut depth — severity is visual only"
+    "rdd2022_names": [],
+    "justification": "ABSENT from RDD2022/RDD2024. Do not map any RDD class to D90. Do not train a D90 head until a labeled rutting source exists.",
+    "limitation": "2D image cannot measure rut depth — severity is visual only. Class is taxonomy-only until labeled data exists."
   },
-  "_exclusion_policy": "Any source class not listed above MUST be written to the exclusion report. Do NOT silently merge unknown classes.",
-  "_schema_version": "1.0",
-  "_last_updated": "2026-09-19"
+  "_exclusion_policy": "Any source class not listed above MUST be written to the exclusion report. Do NOT silently merge unknown classes. RDD 'D50' (other damage, some country subsets) is NOT TariqMap D50 — exclude it.",
+  "_unmapped_rdd_classes": {
+    "D50_rdd_other": "Some RDD country subsets use D50 as a catch-all 'other' class. That is not faded-crossing. Exclude.",
+    "D90": "Not present in RDD. Do not hallucinate boxes or remap D40 potholes to rutting."
+  },
+  "_schema_version": "1.1",
+  "_last_updated": "2026-09-19",
+  "_data_strategy": "OPTION_A",
+  "_do_not_train_on": "Global_Potholes_Dataset-image (29,120 unlabeled JPEGs — demo/reference only)"
 }

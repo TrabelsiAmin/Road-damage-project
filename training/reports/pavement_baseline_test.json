@@ -1,0 +1,10 @@
+{
+  "status": "NOT_RUN",
+  "evaluated_at_utc": "2026-09-20T12:19:35.088447+00:00",
+  "weights": "runs/pavement_baseline/weights/best.pt",
+  "data": "config/pavement.yaml",
+  "split": "test",
+  "imgsz": 640,
+  "metrics": null,
+  "reason": "Weights not found: runs/pavement_baseline/weights/best.pt. Train first."
+}

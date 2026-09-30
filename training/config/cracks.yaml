@@ -1,3 +1,5 @@
+# WP2 — Agent Fissures (cracks). D00 longitudinal, D10 transverse only.
+# No potholes (D40) and no markings. Separate runner from WP3/WP4.
 path: data/processed/cracks
 train: images/train
 val: images/val

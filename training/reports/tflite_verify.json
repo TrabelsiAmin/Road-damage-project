@@ -1,0 +1,11 @@
+{
+  "status": "MODEL_PENDING",
+  "path": "../app/assets/models/pavement.tflite",
+  "size_bytes": null,
+  "input_shape": null,
+  "output_shape": null,
+  "ok_for_flutter": false,
+  "notes": [
+    "No TFLite file. Train + export a real YOLOv8 model before bundling. Do not commit a placeholder .tflite."
+  ]
+}

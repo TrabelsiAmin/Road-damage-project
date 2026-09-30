@@ -15,12 +15,16 @@ class BoundingBoxSchema(BaseModel):
 class DetectionSchema(BaseModel):
     agent:              str
     classCode:          str
+    classId:            str | None = None
     classLabel:         str | None = None
     confidence:         float = Field(ge=0.0, le=1.0)
     box:                BoundingBoxSchema
+    bbox:               BoundingBoxSchema | None = None
+    detectionId:        str | None = None
     frameIndex:         int | None = None
     modelBundleVersion: str | None = None
     timestamp:          str | None = None
+    detectedAt:         str | None = None
 
 
 class AgentResultSchema(BaseModel):
@@ -39,6 +43,9 @@ class ObservationUpload(BaseModel):
     createdAt:          str
     latitude:           float = Field(ge=-90.0, le=90.0)
     longitude:          float = Field(ge=-180.0, le=180.0)
+    gpsAvailable:       bool = True
+    sourceVideoPath:    str | None = None
+    frameTimestampMs:   int | None = None
     accuracyMeters:     float | None = None
     actor:              str
     syncStatus:         str = "pending"

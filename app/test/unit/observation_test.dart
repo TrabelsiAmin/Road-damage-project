@@ -161,6 +161,13 @@ void main() {
       expect(TariqMapConstants.agentFor('D00'), equals('cracks'));
       expect(TariqMapConstants.agentFor('D60'), equals('surface'));
     });
+
+    test('three agents stay disjoint and WP3 is priority', () {
+      expect(TariqMapConstants.agentClasses.keys.toSet(),
+          {'cracks', 'pavement', 'surface'});
+      expect(TariqMapConstants.priorityAgent, 'pavement');
+      expect(TariqMapConstants.depthEstimationEnabled, isFalse);
+    });
   });
 
   // ---------------------------------------------------------------------------
@@ -196,6 +203,7 @@ void main() {
       final json = obs.toJson();
       expect(json['id'], equals('obs-1'));
       expect(json['latitude'], closeTo(36.8065, 1e-6));
+      expect(json['gpsAvailable'], isTrue);
       expect(json['priorityScore'], isNotNull);
       expect(json['priorityLabel'], isNotNull);
       expect(json['agentResults'], hasLength(1));

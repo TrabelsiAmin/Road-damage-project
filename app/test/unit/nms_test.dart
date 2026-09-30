@@ -98,6 +98,16 @@ void main() {
       expect(result.first.confidence, equals(0.9));
     });
 
+    test('maxDetections keeps only the top-N by confidence', () {
+      final boxes = List.generate(
+        6,
+        (i) => _det('D40', 0.9 - i * 0.05, 0.0 + i * 0.5),
+      );
+      final result = applyNms(boxes, maxDetections: 2);
+      expect(result, hasLength(2));
+      expect(result.first.confidence, closeTo(0.9, 1e-9));
+    });
+
     test('output is sorted by confidence descending', () {
       final d1 = _det('D40', 0.6, 0.0);
       final d2 = _det('D40', 0.9, 0.7);

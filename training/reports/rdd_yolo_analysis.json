@@ -1,0 +1,54 @@
+{
+  "dataset": "/tmp/rdd-data/rdd_yolo",
+  "image_count": 25642,
+  "labeled_label_files": 25642,
+  "annotation_format": "yolo_txt",
+  "xml_count": 0,
+  "yolo_txt_count": 25642,
+  "splits_present": {
+    "train": false,
+    "val": false,
+    "test": false
+  },
+  "class_distribution": {
+    "D10": 11830,
+    "D00": 26016,
+    "D20": 10616,
+    "D40": 6544,
+    "D50": 5057,
+    "D60": 793
+  },
+  "missing_classes": [
+    "D90"
+  ],
+  "d90_status": "ABSENT",
+  "d50_status": "PRESENT",
+  "d60_status": "PRESENT",
+  "bad_label_lines": 0,
+  "bbox_normalized_area": {
+    "count": 60856,
+    "min": 1.3e-05,
+    "max": 0.940847,
+    "mean": 0.046613
+  },
+  "image_sizes": {
+    "sampled": 25642,
+    "width_min": 512,
+    "width_max": 4040,
+    "height_min": 512,
+    "height_max": 2044
+  },
+  "small_objects_area_lt_32px": {
+    "by_class": {
+      "D10": 576,
+      "D00": 1367,
+      "D40": 1323,
+      "D20": 20,
+      "D50": 32,
+      "D60": 1
+    },
+    "total": 3319,
+    "percent_of_boxes": 5.45
+  },
+  "verdict": "LABELED \u2014 suitable for prepare_dataset.py / train.py"
+}

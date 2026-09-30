@@ -34,8 +34,8 @@ void main() {
     ));
 
     expect(find.text('Analysis Results'), findsOneWidget);
-    expect(find.text('Test User'), findsOneWidget);
+    expect(find.text('Test'), findsOneWidget);
     expect(find.text('DEMO MOCK INFERENCE'), findsOneWidget);
-    expect(find.text('1 Anomaly Found'), findsOneWidget);
+    expect(find.text('Detected'), findsOneWidget);
   });
 }

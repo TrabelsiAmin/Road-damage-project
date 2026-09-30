@@ -1,0 +1,114 @@
+{
+  "source": "Figshare article 21431547 file 38030826 File_List_CRDDC_RDD2022.txt",
+  "kind": "official_file_inventory_not_class_labels",
+  "xml_total": 38385,
+  "image_total": 47420,
+  "xml_train": 38385,
+  "unlabeled_test_images": 9035,
+  "per_country": {
+    "China_Drone": {
+      "train": {
+        "xml": 2401,
+        "image": 2401
+      },
+      "test": {
+        "xml": 0,
+        "image": 0
+      },
+      "other": {
+        "xml": 0,
+        "image": 0
+      }
+    },
+    "China_MotorBike": {
+      "train": {
+        "xml": 1977,
+        "image": 1977
+      },
+      "test": {
+        "xml": 0,
+        "image": 500
+      },
+      "other": {
+        "xml": 0,
+        "image": 0
+      }
+    },
+    "Czech": {
+      "train": {
+        "xml": 2829,
+        "image": 2829
+      },
+      "test": {
+        "xml": 0,
+        "image": 709
+      },
+      "other": {
+        "xml": 0,
+        "image": 0
+      }
+    },
+    "India": {
+      "train": {
+        "xml": 7706,
+        "image": 7706
+      },
+      "test": {
+        "xml": 0,
+        "image": 1959
+      },
+      "other": {
+        "xml": 0,
+        "image": 0
+      }
+    },
+    "Japan": {
+      "train": {
+        "xml": 10506,
+        "image": 10506
+      },
+      "test": {
+        "xml": 0,
+        "image": 2627
+      },
+      "other": {
+        "xml": 0,
+        "image": 0
+      }
+    },
+    "Norway": {
+      "train": {
+        "xml": 8161,
+        "image": 8161
+      },
+      "test": {
+        "xml": 0,
+        "image": 2040
+      },
+      "other": {
+        "xml": 0,
+        "image": 0
+      }
+    },
+    "United_States": {
+      "train": {
+        "xml": 4805,
+        "image": 4805
+      },
+      "test": {
+        "xml": 0,
+        "image": 1200
+      },
+      "other": {
+        "xml": 0,
+        "image": 0
+      }
+    }
+  },
+  "extra_non_country_files": {
+    "Directory_Structure_CRDDC_RDD2022.txt": 1,
+    "File_List_CRDDC_RDD2022.txt": 1
+  },
+  "note": "Counts come from File_List_CRDDC_RDD2022.txt (Figshare file 38030826). They are file-path inventory, not bounding-box class distribution. Test images have no XML in this listing. Do not treat extra JPEGs as labels.",
+  "local_copy": "training/reports/rdd2022_meta/File_List_CRDDC_RDD2022.txt (gitignored, 3250534 bytes)"
+}

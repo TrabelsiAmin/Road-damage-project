@@ -1,0 +1,31 @@
+{
+  "source": "/tmp/rdd-data/rdd2022",
+  "output": "/tmp/rdd-data/rdd_yolo",
+  "xml_files": 38385,
+  "converted_images": 25642,
+  "skipped_empty_after_mapping": 12743,
+  "skipped_missing_image": 0,
+  "indexed_images": 47420,
+  "image_placement": {
+    "hardlink": 25642
+  },
+  "class_distribution": {
+    "D10": 11830,
+    "D00": 26016,
+    "D20": 10616,
+    "D40": 6544,
+    "D50": 5057,
+    "D60": 793
+  },
+  "d90_emitted": 0,
+  "exclusion_count": 4856,
+  "mapping": {
+    "D00": "D00",
+    "D10": "D10",
+    "D20": "D20",
+    "D40": "D40",
+    "D43": "D60 (white line blur \u2192 faded lane) if present",
+    "D44": "D50 (crosswalk blur \u2192 faded crossing) if present",
+    "D90": "NOT MAPPED \u2014 absent from RDD"
+  }
+}

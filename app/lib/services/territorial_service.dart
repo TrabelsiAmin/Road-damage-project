@@ -1,10 +1,21 @@
 import 'package:geolocator/geolocator.dart';
 
 class TerritorialMatch {
-  const TerritorialMatch({required this.routeName, required this.segment, required this.owner});
+  const TerritorialMatch({
+    required this.routeName,
+    required this.segment,
+    required this.owner,
+    this.matchQuality = 'pending',
+  });
+
   final String routeName;
   final String segment;
+  /// Institution that owns the road, or `unmatched` until SIG enrichment.
+  /// Municipalité, Ministère de l'Équipement, and Tunisie Autoroutes are peers.
   final String owner;
+  final String matchQuality;
+
+  bool get isMatched => matchQuality == 'high' || matchQuality == 'medium';
 }
 
 class LocationService {
@@ -23,11 +34,31 @@ class LocationService {
   }
 }
 
-/// Temporary deterministic boundary until the SIG road network is connected.
+/// Temporary deterministic unmatched stub until the SIG road network is connected.
+///
 /// Production must replace this with a backend or offline spatial index.
+/// A missing GPS must NEVER drop the observation — return unmatched so WP5
+/// can enrich later. Do not invent an institutional owner from latitude
+/// (that implied a hierarchy the validated conception forbids).
 class TerritorialService {
-  TerritorialMatch match({required double latitude, required double longitude}) {
-    final owner = latitude > 36.5 ? 'Ministry of Equipment' : 'Municipality';
-    return TerritorialMatch(routeName: 'Unmatched road segment', segment: 'pending SIG match', owner: owner);
+  TerritorialMatch match({
+    required double latitude,
+    required double longitude,
+    bool gpsAvailable = true,
+  }) {
+    if (!gpsAvailable || (latitude == 0.0 && longitude == 0.0)) {
+      return const TerritorialMatch(
+        routeName: 'Unmatched — GPS missing',
+        segment: 'pending GPS enrichment',
+        owner: 'unmatched',
+        matchQuality: 'none',
+      );
+    }
+    return const TerritorialMatch(
+      routeName: 'Unmatched road segment',
+      segment: 'pending SIG match',
+      owner: 'unmatched',
+      matchQuality: 'pending',
+    );
   }
 }

@@ -1,7 +1,10 @@
 """Full dataset preparation pipeline for TariqMap.
 
 Converts any RDD/YOLO-format road damage dataset into three agent-specific YOLO
-datasets: cracks, pavement, surface.
+datasets: cracks (WP2), pavement (WP3 PRIORITY), surface (WP4).
+
+Deployment keeps three runners. This script may ingest a unified RDD dump
+and then split it — that is training-data prep, not a mixed production model.
 
 Rules enforced by this script
 -------------------------------
@@ -34,21 +37,22 @@ import argparse
 import hashlib
 import json
 import random
-import shutil
 import sys
 from collections import Counter, defaultdict
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
+from src.fsutil import place_file
+
 # ---------------------------------------------------------------------------
 # Constants
 # ---------------------------------------------------------------------------
 
 AGENTS: dict[str, list[str]] = {
-    "cracks":   ["D00", "D10"],
-    "pavement": ["D20", "D40"],
-    "surface":  ["D50", "D60", "D90"],
+    "cracks":   ["D00", "D10"],       # WP2
+    "pavement": ["D20", "D40"],       # WP3 PRIORITY
+    "surface":  ["D50", "D60", "D90"],  # WP4
 }
 
 ALL_CODES: list[str] = [c for codes in AGENTS.values() for c in codes]
@@ -110,10 +114,17 @@ def prepare(
     class_map_path: Path,
     split_fractions: tuple[float, float, float],
     seed: int = 42,
+    link_mode: str = "hardlink",
 ) -> dict[str, Any]:
     """Run the full preparation pipeline. Returns a summary dict."""
 
     random.seed(seed)
+
+    if "global_potholes" in str(source).lower():
+        raise SystemExit(
+            "STOP: Global_Potholes_Dataset-image has no labels (data strategy A). "
+            "Convert RDD2022/RDD2024 VOC XML with src.convert_rdd_voc first."
+        )
 
     # Load class map
     class_map: dict[str, Any] = json.loads(class_map_path.read_text())
@@ -129,17 +140,21 @@ def prepare(
 
     # Duplicate detection
     print(f"[prepare] Found {len(images)} images. Checking for duplicates…")
+    image_hashes: dict[Path, str] = {}
     hash_to_images: dict[str, list[Path]] = defaultdict(list)
     for img in images:
-        hash_to_images[_md5(img)].append(img)
+        digest = _md5(img)
+        image_hashes[img] = digest
+        hash_to_images[digest].append(img)
     duplicates = {h: paths for h, paths in hash_to_images.items() if len(paths) > 1}
+    duplicate_extras = 0
     if duplicates:
-        dup_count = sum(len(v) - 1 for v in duplicates.values())
-        print(f"[prepare] WARNING: {dup_count} duplicate images found — keeping first occurrence.")
+        duplicate_extras = sum(len(v) - 1 for v in duplicates.values())
+        print(f"[prepare] WARNING: {duplicate_extras} duplicate images found — keeping first occurrence.")
         deduped: list[Path] = []
         seen_hashes: set[str] = set()
         for img in images:
-            h = _md5(img)
+            h = image_hashes[img]
             if h not in seen_hashes:
                 seen_hashes.add(h)
                 deduped.append(img)
@@ -234,7 +249,7 @@ def prepare(
             for img_path, _lbl_path, agent_lines in split_records:
                 dest_img = agent_dir / "images" / split_name / img_path.name
                 dest_lbl = agent_dir / "labels" / split_name / (img_path.stem + ".txt")
-                shutil.copy2(img_path, dest_img)
+                place_file(img_path, dest_img, link_mode)
                 dest_lbl.write_text("\n".join(agent_lines))
 
         print(
@@ -248,7 +263,8 @@ def prepare(
         "output": str(output.resolve()),
         "class_map": str(class_map_path.resolve()),
         "total_images_found": len(images),
-        "duplicate_images_removed": len(duplicates),
+        "duplicate_hash_groups": len(duplicates),
+        "duplicate_images_removed": duplicate_extras,
         "missing_labels": len(missing_labels),
         "exclusion_entries": len(exclusion_log),
         "class_distribution": dict(class_distribution),
@@ -274,6 +290,12 @@ def main() -> None:
     parser.add_argument("--class-map", type=Path, required=True, help="source-class-map.json path")
     parser.add_argument("--split", default="70:15:15", help="Train:Val:Test split percentages")
     parser.add_argument("--seed", type=int, default=42, help="Random seed for determinism")
+    parser.add_argument(
+        "--link",
+        choices=("hardlink", "symlink", "copy"),
+        default="hardlink",
+        help="How to place images in split folders (default: hardlink, copy fallback)",
+    )
     args = parser.parse_args()
 
     parts = [float(x) for x in args.split.split(":")]
@@ -281,7 +303,14 @@ def main() -> None:
         raise SystemExit("--split must be three numbers summing to 100, e.g. 70:15:15")
     fractions = tuple(p / 100 for p in parts)
 
-    prepare(args.source, args.output, args.class_map, fractions, seed=args.seed)
+    prepare(
+        args.source,
+        args.output,
+        args.class_map,
+        fractions,
+        seed=args.seed,
+        link_mode=args.link,
+    )
 
 
 if __name__ == "__main__":

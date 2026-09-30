@@ -46,14 +46,20 @@ Response:
 }
 ```
 
-A low-quality or missing match must be represented as `unmatched`, never guessed silently.
+A low-quality or missing match must be represented as `unmatched`, never guessed silently. If GPS is absent, keep the observation for later enrichment — do not drop detections.
 
 ### Incidents
 
+Specified (PLANNED in the mock server except read-only `/v1/contract`):
+
+- Status machine: `DETECTED → ANALYZED → ASSIGNED → IN_PROGRESS → RESOLVED → ARCHIVED`
+- Actors (peers): Municipality, Ministry of Equipment, Tunisia Autoroutes
 - `POST /v1/incidents` creates a confirmed incident from an observation.
 - `GET /v1/incidents?actor=&status=&bbox=` filters a workspace.
 - `PATCH /v1/incidents/{id}` applies a validated status transition.
 - `GET /v1/incidents/{id}/timeline` returns the audit trail.
+
+RAG is decision-support only and is not implemented.
 
 ## Relational model
 

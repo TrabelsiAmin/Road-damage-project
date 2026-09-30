@@ -49,11 +49,14 @@ class Detection {
     required this.classCode,
     required this.confidence,
     required this.box,
+    this.detectionId,
     this.frameIndex,
     this.modelBundleVersion = TariqMapConstants.modelBundleVersion,
     this.timestamp,
   });
 
+  /// Stable id when provided by the runner; otherwise [stableId] is derived.
+  final String?      detectionId;
   final String       agent;
   final String       classCode;
   final double       confidence;
@@ -65,20 +68,40 @@ class Detection {
   /// Model bundle version that produced this detection.
   final String       modelBundleVersion;
 
-  /// UTC wall-clock time of detection.
+  /// UTC wall-clock time of detection ([detectedAt] alias).
   final DateTime?    timestamp;
 
   String get classLabel => TariqMapConstants.labelFor(classCode);
 
+  /// Domain UML `classId`.
+  String get classId => classCode;
+
+  /// Domain UML `bbox`.
+  BoundingBox get bbox => box;
+
+  /// Domain UML `detectedAt`.
+  DateTime? get detectedAt => timestamp;
+
+  /// Domain UML `detectionId` — uses the explicit id or a stable derivation.
+  String get stableId =>
+      detectionId ??
+      '${agent}_${classCode}_${box.x.toStringAsFixed(4)}_'
+          '${box.y.toStringAsFixed(4)}_${box.width.toStringAsFixed(4)}_'
+          '${box.height.toStringAsFixed(4)}';
+
   Map<String, dynamic> toJson() => {
+    'detectionId':        stableId,
     'agent':              agent,
+    'classId':            classId,
     'classCode':          classCode,
     'classLabel':         classLabel,
     'confidence':         confidence,
     'box':                box.toJson(),
+    'bbox':               box.toJson(),
     'frameIndex':         frameIndex,
     'modelBundleVersion': modelBundleVersion,
     'timestamp':          timestamp?.toUtc().toIso8601String(),
+    'detectedAt':         timestamp?.toUtc().toIso8601String(),
   };
 }
 
@@ -142,6 +165,9 @@ class Observation {
     required this.longitude,
     required this.agentResults,
     required this.actor,
+    this.gpsAvailable = true,
+    this.sourceVideoPath,
+    this.frameTimestampMs,
     this.accuracyMeters,
     this.annotatedImagePath,
     this.syncStatus = SyncStatus.pending,
@@ -159,9 +185,19 @@ class Observation {
   final DateTime createdAt;
   final double   latitude;
   final double   longitude;
+  /// False when GPS was unavailable. Detections MUST still be saved.
+  /// WP5 later enrichment attaches a real coordinate; do not drop the row.
+  final bool     gpsAvailable;
+  /// Source video path when this observation is a sampled frame (WP1).
+  final String?  sourceVideoPath;
+  /// Timestamp of this frame inside [sourceVideoPath], milliseconds.
+  final int?     frameTimestampMs;
   final double?  accuracyMeters;
   final List<AgentResult> agentResults;
   final String   actor;
+
+  /// WP5: keep the observation for later GPS/SIG enrichment.
+  bool get needsGpsEnrichment => !gpsAvailable;
 
   /// Path to the annotated copy of the image (bounding boxes rendered).
   /// Null until annotation rendering completes.
@@ -218,6 +254,10 @@ class Observation {
     'createdAt':          createdAt.toUtc().toIso8601String(),
     'latitude':           latitude,
     'longitude':          longitude,
+    'gpsAvailable':       gpsAvailable,
+    'needsGpsEnrichment': needsGpsEnrichment,
+    'sourceVideoPath':    sourceVideoPath,
+    'frameTimestampMs':   frameTimestampMs,
     'accuracyMeters':     accuracyMeters,
     'actor':              actor,
     'syncStatus':         syncStatus.name,

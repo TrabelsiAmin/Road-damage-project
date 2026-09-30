@@ -5,6 +5,10 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import '../core/app_colors.dart';
 import '../core/constants.dart';
 
+/// Home-screen map of recorded road anomalies.
+///
+/// The base map is always shown. A failed Supabase read keeps the map and
+/// offers a retry instead of replacing the whole panel with an error.
 class DashboardMap extends StatefulWidget {
   const DashboardMap({super.key});
 
@@ -13,6 +17,9 @@ class DashboardMap extends StatefulWidget {
 }
 
 class _DashboardMapState extends State<DashboardMap> {
+  static const _defaultCenter = LatLng(36.8065, 10.1815);
+
+  final MapController _mapController = MapController();
   bool _loading = true;
   final List<Marker> _markers = [];
   String? _error;
@@ -24,107 +31,135 @@ class _DashboardMapState extends State<DashboardMap> {
   }
 
   Future<void> _fetchAnomalies() async {
+    if (mounted) {
+      setState(() {
+        _loading = true;
+        _error = null;
+      });
+    }
     try {
       final client = Supabase.instance.client;
-      
-      // Fetch observations with their locations and highest confidence detections
-      // We do separate queries if joins fail, but let's try direct first.
-      // A safer approach for a hackathon without guaranteed FKs is querying separately.
-      
-      final obsData = await client.from('observations').select('id, priority_score, priority_label');
-      final locData = await client.from('locations').select('observation_id, latitude, longitude');
-      final detData = await client.from('detections').select('observation_id, class_code, confidence');
+      final obsData = await client
+          .from('observations')
+          .select('id, priority_score, priority_label');
+      final locData = await client
+          .from('locations')
+          .select('observation_id, latitude, longitude');
+      final detData = await client
+          .from('detections')
+          .select('observation_id, class_code, confidence');
 
-      final locMap = <String, Map<String, dynamic>>{};
-      for (final l in locData) {
-        if (l['latitude'] != 0.0 && l['longitude'] != 0.0) {
-          locMap[l['observation_id'] as String] = l;
-        }
-      }
-
-      final detMap = <String, List<Map<String, dynamic>>>{};
-      for (final d in detData) {
-        final obsId = d['observation_id'] as String;
-        detMap.putIfAbsent(obsId, () => []).add(d);
-      }
-
-      // Group by proximity (rounding to 4 decimal places, approx 11 meters)
-      final Map<String, _Cluster> clusters = {};
-
-      for (final obs in obsData) {
-        final obsId = obs['id'] as String;
-        final loc = locMap[obsId];
-        if (loc == null) continue;
-
-        final lat = (loc['latitude'] as num).toDouble();
-        final lng = (loc['longitude'] as num).toDouble();
-        
-        final gridKey = '${lat.toStringAsFixed(4)}_${lng.toStringAsFixed(4)}';
-        
-        final dets = detMap[obsId] ?? [];
-        if (dets.isEmpty) continue; // Only show anomalies
-
-        // Find the dominant class for this observation
-        dets.sort((a, b) => (b['confidence'] as num).compareTo(a['confidence'] as num));
-        final dominantClass = dets.first['class_code'] as String;
-
-        if (clusters.containsKey(gridKey)) {
-          clusters[gridKey]!.count++;
-        } else {
-          clusters[gridKey] = _Cluster(
-            lat: lat,
-            lng: lng,
-            dominantClass: dominantClass,
-            count: 1,
-          );
-        }
-      }
-
-      final markers = clusters.values.map((c) {
-        return Marker(
-          point: LatLng(c.lat, c.lng),
-          width: 40,
-          height: 40,
-          child: _buildMarkerWidget(c),
-        );
-      }).toList();
-
-      if (mounted) {
-        setState(() {
-          _markers.addAll(markers);
-          _loading = false;
+      final markers = _markersFrom(obsData, locData, detData);
+      if (!mounted) return;
+      setState(() {
+        _markers
+          ..clear()
+          ..addAll(markers);
+        _loading = false;
+      });
+      if (markers.isNotEmpty) {
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          if (!mounted) return;
+          try {
+            _mapController.move(markers.first.point, 12);
+          } catch (e) {
+            debugPrint('[DashboardMap] camera move skipped: $e');
+          }
         });
       }
     } catch (e) {
-      if (mounted) {
-        setState(() {
-          _error = 'Failed to load map data';
-          _loading = false;
-        });
-      }
+      debugPrint('[DashboardMap] load failed: $e');
+      if (!mounted) return;
+      setState(() {
+        _error = 'Could not load anomalies';
+        _loading = false;
+      });
     }
   }
 
-  Widget _buildMarkerWidget(_Cluster cluster) {
-    Color color;
-    IconData icon;
-    
-    // Assign colors based on anomaly type
-    if (cluster.dominantClass.contains('crack')) {
-      color = AppColors.high;
-      icon = Icons.timeline;
-    } else if (cluster.dominantClass.contains('pothole')) {
-      color = AppColors.critical;
-      icon = Icons.radio_button_unchecked;
-    } else {
-      color = AppColors.teal;
-      icon = Icons.warning_amber_rounded;
+  List<Marker> _markersFrom(
+    List<dynamic> obsData,
+    List<dynamic> locData,
+    List<dynamic> detData,
+  ) {
+    final locMap = <String, ({double lat, double lng})>{};
+    for (final raw in locData) {
+      if (raw is! Map) continue;
+      final id = raw['observation_id']?.toString();
+      final lat = _asDouble(raw['latitude']);
+      final lng = _asDouble(raw['longitude']);
+      if (id == null || lat == null || lng == null) continue;
+      if (lat == 0 && lng == 0) continue;
+      locMap[id] = (lat: lat, lng: lng);
     }
 
-    return GestureDetector(
-      onTap: () {
-        // Could show a bottom sheet with details
-      },
+    final detMap = <String, List<Map<dynamic, dynamic>>>{};
+    for (final raw in detData) {
+      if (raw is! Map) continue;
+      final id = raw['observation_id']?.toString();
+      if (id == null) continue;
+      detMap.putIfAbsent(id, () => []).add(raw);
+    }
+
+    final clusters = <String, _Cluster>{};
+    for (final raw in obsData) {
+      if (raw is! Map) continue;
+      final obsId = raw['id']?.toString();
+      if (obsId == null) continue;
+      final loc = locMap[obsId];
+      if (loc == null) continue;
+
+      final dets = detMap[obsId] ?? [];
+      if (dets.isEmpty) continue;
+
+      dets.sort((a, b) {
+        final left = _asDouble(a['confidence']) ?? 0;
+        final right = _asDouble(b['confidence']) ?? 0;
+        return right.compareTo(left);
+      });
+      final dominantClass = dets.first['class_code']?.toString() ?? '';
+      if (dominantClass.isEmpty) continue;
+
+      final gridKey =
+          '${loc.lat.toStringAsFixed(4)}_${loc.lng.toStringAsFixed(4)}';
+      final existing = clusters[gridKey];
+      if (existing != null) {
+        existing.count++;
+      } else {
+        clusters[gridKey] = _Cluster(
+          lat: loc.lat,
+          lng: loc.lng,
+          dominantClass: dominantClass,
+          count: 1,
+        );
+      }
+    }
+
+    return clusters.values
+        .map(
+          (c) => Marker(
+            point: LatLng(c.lat, c.lng),
+            width: 40,
+            height: 40,
+            child: _buildMarkerWidget(c),
+          ),
+        )
+        .toList();
+  }
+
+  double? _asDouble(dynamic value) {
+    if (value is num) return value.toDouble();
+    if (value is String) return double.tryParse(value);
+    return null;
+  }
+
+  Widget _buildMarkerWidget(_Cluster cluster) {
+    final color = _colorFor(cluster.dominantClass);
+    final icon = _iconFor(cluster.dominantClass);
+    final label = TariqMapConstants.labelFor(cluster.dominantClass);
+
+    return Tooltip(
+      message: cluster.count > 1 ? '$label · ${cluster.count}' : label,
       child: Container(
         decoration: BoxDecoration(
           color: color,
@@ -154,38 +189,127 @@ class _DashboardMapState extends State<DashboardMap> {
     );
   }
 
+  Color _colorFor(String code) {
+    switch (code) {
+      case 'D40':
+        return AppColors.d40Color;
+      case 'D20':
+        return AppColors.d20Color;
+      case 'D10':
+        return AppColors.d10Color;
+      case 'D00':
+        return AppColors.d00Color;
+      default:
+        final name = code.toLowerCase();
+        if (name.contains('pothole')) return AppColors.d40Color;
+        if (name.contains('crack')) return AppColors.d00Color;
+        return AppColors.teal;
+    }
+  }
+
+  IconData _iconFor(String code) {
+    if (code == 'D40' || code.toLowerCase().contains('pothole')) {
+      return Icons.radio_button_unchecked;
+    }
+    if (code == 'D00' ||
+        code == 'D10' ||
+        code == 'D20' ||
+        code.toLowerCase().contains('crack')) {
+      return Icons.timeline;
+    }
+    return Icons.warning_amber_rounded;
+  }
+
   @override
   Widget build(BuildContext context) {
-    if (_error != null) {
-      return Center(child: Text(_error!, style: const TextStyle(color: Colors.red)));
-    }
-
-    if (_loading) {
-      return const Center(child: CircularProgressIndicator(color: AppColors.teal));
-    }
-
-    // Default center to Tunisia if no markers, else center on first marker
-    final center = _markers.isNotEmpty 
-        ? _markers.first.point 
-        : const LatLng(36.8065, 10.1815); 
-
     return ClipRRect(
       borderRadius: BorderRadius.circular(16),
-      child: FlutterMap(
-        options: MapOptions(
-          initialCenter: center,
-          initialZoom: 12.0,
-          interactionOptions: const InteractionOptions(
-            flags: InteractiveFlag.all & ~InteractiveFlag.rotate,
-          ),
-        ),
+      child: Stack(
         children: [
-          TileLayer(
-            urlTemplate: 'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
-            userAgentPackageName: 'com.tariqmap.app',
+          FlutterMap(
+            mapController: _mapController,
+            options: const MapOptions(
+              initialCenter: _defaultCenter,
+              initialZoom: 12,
+              interactionOptions: InteractionOptions(
+                flags: InteractiveFlag.all & ~InteractiveFlag.rotate,
+              ),
+            ),
+            children: [
+              TileLayer(
+                urlTemplate: 'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
+                userAgentPackageName: 'com.tariqmap.app',
+              ),
+              MarkerLayer(markers: _markers),
+            ],
           ),
-          MarkerLayer(markers: _markers),
+          if (_loading)
+            const ColoredBox(
+              color: Color(0x66F0F4F8),
+              child: Center(
+                child: CircularProgressIndicator(color: AppColors.teal),
+              ),
+            ),
+          if (_error != null)
+            Positioned(
+              left: 12,
+              right: 12,
+              bottom: 12,
+              child: _MapNotice(
+                message: _error!,
+                actionLabel: 'Retry',
+                onAction: _fetchAnomalies,
+              ),
+            )
+          else if (!_loading && _markers.isEmpty)
+            const Positioned(
+              left: 12,
+              right: 12,
+              bottom: 12,
+              child: _MapNotice(message: 'No anomalies on the map yet'),
+            ),
         ],
+      ),
+    );
+  }
+}
+
+class _MapNotice extends StatelessWidget {
+  const _MapNotice({
+    required this.message,
+    this.actionLabel,
+    this.onAction,
+  });
+
+  final String message;
+  final String? actionLabel;
+  final VoidCallback? onAction;
+
+  @override
+  Widget build(BuildContext context) {
+    return Material(
+      color: Colors.white.withAlpha(235),
+      borderRadius: BorderRadius.circular(12),
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+        child: Row(
+          children: [
+            const Icon(Icons.info_outline, size: 18, color: AppColors.teal),
+            const SizedBox(width: 8),
+            Expanded(
+              child: Text(
+                message,
+                style: const TextStyle(
+                  color: AppColors.navy,
+                  fontSize: 13,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+            ),
+            if (actionLabel != null && onAction != null)
+              TextButton(onPressed: onAction, child: Text(actionLabel!)),
+          ],
+        ),
       ),
     );
   }

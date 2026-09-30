@@ -53,7 +53,7 @@ class _DashboardMapState extends State<DashboardMap> {
       // We do separate queries if joins fail, but let's try direct first.
       // A safer approach for a hackathon without guaranteed FKs is querying separately.
       
-      final obsData = await client.from('observations').select('id, priority_score, priority_label');
+      final obsData = await client.from('observations').select('id, capture_id, priority_score, priority_label');
       final locData = await client.from('locations').select('observation_id, latitude, longitude');
       final detData = await client.from('detections').select('observation_id, class_code, confidence');
 
@@ -94,12 +94,14 @@ class _DashboardMapState extends State<DashboardMap> {
 
         if (clusters.containsKey(gridKey)) {
           clusters[gridKey]!.count++;
+          clusters[gridKey]!.observations.add(obs);
         } else {
           clusters[gridKey] = _Cluster(
             lat: lat,
             lng: lng,
             dominantClass: dominantClass,
             count: 1,
+            observations: [obs],
           );
         }
       }
@@ -147,7 +149,7 @@ class _DashboardMapState extends State<DashboardMap> {
 
     return GestureDetector(
       onTap: () {
-        // Could show a bottom sheet with details
+        _showClusterDetails(cluster);
       },
       child: Container(
         decoration: BoxDecoration(
@@ -175,6 +177,15 @@ class _DashboardMapState extends State<DashboardMap> {
               : Icon(icon, color: Colors.white, size: 16),
         ),
       ),
+    );
+  }
+
+  void _showClusterDetails(_Cluster cluster) {
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (ctx) => _ClusterDetailsSheet(cluster: cluster),
     );
   }
 
@@ -317,11 +328,110 @@ class _Cluster {
   final double lng;
   final String dominantClass;
   int count;
+  final List<Map<String, dynamic>> observations;
 
   _Cluster({
     required this.lat,
     required this.lng,
     required this.dominantClass,
     required this.count,
+    required this.observations,
   });
+}
+
+class _ClusterDetailsSheet extends StatelessWidget {
+  final _Cluster cluster;
+
+  const _ClusterDetailsSheet({required this.cluster});
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      height: MediaQuery.of(context).size.height * 0.7,
+      decoration: const BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      child: Column(
+        children: [
+          Container(
+            margin: const EdgeInsets.symmetric(vertical: 12),
+            height: 4,
+            width: 40,
+            decoration: BoxDecoration(
+              color: Colors.grey.shade400,
+              borderRadius: BorderRadius.circular(2),
+            ),
+          ),
+          Padding(
+            padding: const EdgeInsets.all(16.0),
+            child: Text(
+              '${cluster.count} Anomaly Record${cluster.count > 1 ? 's' : ''}',
+              style: const TextStyle(
+                fontSize: 20,
+                fontWeight: FontWeight.bold,
+                color: AppColors.navy,
+              ),
+            ),
+          ),
+          Expanded(
+            child: ListView.separated(
+              padding: const EdgeInsets.all(16),
+              itemCount: cluster.observations.length,
+              separatorBuilder: (_, __) => const SizedBox(height: 16),
+              itemBuilder: (ctx, i) {
+                final obs = cluster.observations[i];
+                final id = obs['id'];
+                final captureId = obs['capture_id'];
+                
+                // Construct the public URL assuming imagesBucket is "observation-images"
+                final client = Supabase.instance.client;
+                final imageUrl = client.storage
+                    .from('observation-images')
+                    .getPublicUrl('$id/$captureId.jpg');
+
+                return Container(
+                  decoration: BoxDecoration(
+                    borderRadius: BorderRadius.circular(12),
+                    border: Border.all(color: Colors.grey.shade200),
+                  ),
+                  clipBehavior: Clip.antiAlias,
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      Container(
+                        height: 200,
+                        color: Colors.grey.shade100,
+                        child: Image.network(
+                          imageUrl,
+                          fit: BoxFit.cover,
+                          errorBuilder: (ctx, err, stack) => const Center(
+                            child: Icon(Icons.broken_image, size: 40, color: Colors.grey),
+                          ),
+                          loadingBuilder: (ctx, child, progress) {
+                            if (progress == null) return child;
+                            return const Center(child: CircularProgressIndicator());
+                          },
+                        ),
+                      ),
+                      Padding(
+                        padding: const EdgeInsets.all(12.0),
+                        child: Text(
+                          'Label: ${obs['priority_label'] ?? 'Unknown'}',
+                          style: const TextStyle(
+                            fontWeight: FontWeight.bold,
+                            fontSize: 16,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                );
+              },
+            ),
+          ),
+        ],
+      ),
+    );
+  }
 }

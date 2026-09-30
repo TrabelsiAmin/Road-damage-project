@@ -144,6 +144,9 @@ class Observation {
     required this.actor,
     this.accuracyMeters,
     this.annotatedImagePath,
+    this.gpsAvailable = true,
+    this.sourceVideoPath,
+    this.frameTimestampMs,
     this.syncStatus = SyncStatus.pending,
     this.syncError,
     this.uploadAttempts = 0,
@@ -166,6 +169,10 @@ class Observation {
   /// Path to the annotated copy of the image (bounding boxes rendered).
   /// Null until annotation rendering completes.
   String?  annotatedImagePath;
+  
+  final bool    gpsAvailable;
+  final String? sourceVideoPath;
+  final int?    frameTimestampMs;
 
   SyncStatus syncStatus;
   String?    syncError;

@@ -84,11 +84,13 @@ class _DashboardMapState extends State<DashboardMap> {
         final gridKey = '${lat.toStringAsFixed(4)}_${lng.toStringAsFixed(4)}';
         
         final dets = detMap[obsId] ?? [];
-        if (dets.isEmpty) continue; // Only show anomalies
-
-        // Find the dominant class for this observation
-        dets.sort((a, b) => (b['confidence'] as num).compareTo(a['confidence'] as num));
-        final dominantClass = dets.first['class_code'] as String;
+        
+        String dominantClass = 'unknown';
+        if (dets.isNotEmpty) {
+          // Find the dominant class for this observation
+          dets.sort((a, b) => (b['confidence'] as num).compareTo(a['confidence'] as num));
+          dominantClass = dets.first['class_code'] as String;
+        }
 
         if (clusters.containsKey(gridKey)) {
           clusters[gridKey]!.count++;

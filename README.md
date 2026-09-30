@@ -36,7 +36,7 @@ Le prototype repose sur les composants suivants :
 6. **Génération** : utilisation du contexte récupéré pour produire une réponse avec Qwen2.5-7B-Instruct.
 7. **Affichage** : présentation de la réponse dans l'interface Streamlit.
 
-## 🧰 Technologies utilisées
+## Technologies utilisées
 
 * Python
 * Hugging Face Transformers
@@ -47,7 +47,7 @@ Le prototype repose sur les composants suivants :
 * Streamlit
 * PyTorch
 
-## 📂 Structure du projet
+## Structure du projet
 
 ```text
 road_damage_rag/

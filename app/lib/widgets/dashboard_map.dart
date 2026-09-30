@@ -194,8 +194,10 @@ class _DashboardMapState extends State<DashboardMap> {
 
     return ClipRRect(
       borderRadius: BorderRadius.circular(16),
-      child: FlutterMap(
-        mapController: _mapController,
+      child: Stack(
+        children: [
+          FlutterMap(
+            mapController: _mapController,
         options: MapOptions(
           initialCenter: center,
           initialZoom: _userLocation != null ? 15.0 : 12.0,
@@ -249,6 +251,63 @@ class _DashboardMapState extends State<DashboardMap> {
             ),
         ],
       ),
+          Positioned(
+            bottom: 10,
+            left: 10,
+            child: _buildLegend(),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildLegend() {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+      decoration: BoxDecoration(
+        color: Colors.white.withAlpha(240),
+        borderRadius: BorderRadius.circular(12),
+        boxShadow: const [
+          BoxShadow(color: Colors.black26, blurRadius: 6, offset: Offset(0, 3))
+        ],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          _buildLegendItem(AppColors.high, Icons.timeline, 'Cracks'),
+          const SizedBox(height: 6),
+          _buildLegendItem(AppColors.critical, Icons.radio_button_unchecked, 'Potholes'),
+          const SizedBox(height: 6),
+          _buildLegendItem(AppColors.teal, Icons.warning_amber_rounded, 'Other / Unknown'),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildLegendItem(Color color, IconData icon, String label) {
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Container(
+          width: 18,
+          height: 18,
+          decoration: BoxDecoration(
+            color: color,
+            shape: BoxShape.circle,
+          ),
+          child: Icon(icon, color: Colors.white, size: 10),
+        ),
+        const SizedBox(width: 8),
+        Text(
+          label,
+          style: const TextStyle(
+            fontSize: 11,
+            fontWeight: FontWeight.w700,
+            color: AppColors.navy,
+          ),
+        ),
+      ],
     );
   }
 }

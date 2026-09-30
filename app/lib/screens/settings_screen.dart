@@ -1,11 +1,9 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../core/app_colors.dart';
 import '../core/constants.dart';
 
-/// Settings screen — all configurable inference and sync parameters.
-///
-/// Persists values via SharedPreferences so they survive app restarts.
 class SettingsScreen extends StatefulWidget {
   const SettingsScreen({super.key});
 
@@ -14,15 +12,12 @@ class SettingsScreen extends StatefulWidget {
 }
 
 class _SettingsScreenState extends State<SettingsScreen> {
-  // Inference
   double _confidenceThreshold = TariqMapConstants.defaultConfidenceThreshold;
   int    _liveFps             = TariqMapConstants.defaultLiveFps;
-
-  // Sync
-  bool _wifiOnly        = true;
-  int  _retentionDays   = 90;
-
-  bool _loading = true;
+  bool   _wifiOnly            = true;
+  int    _retentionDays       = 90;
+  bool   _loading             = true;
+  bool   _saving              = false;
 
   @override
   void initState() {
@@ -34,25 +29,37 @@ class _SettingsScreenState extends State<SettingsScreen> {
     final prefs = await SharedPreferences.getInstance();
     if (mounted) {
       setState(() {
-        _confidenceThreshold = prefs.getDouble('confidence_threshold') ??
-            TariqMapConstants.defaultConfidenceThreshold;
-        _liveFps    = prefs.getInt('live_fps')    ?? TariqMapConstants.defaultLiveFps;
-        _wifiOnly   = prefs.getBool('wifi_only')  ?? true;
+        _confidenceThreshold = prefs.getDouble('confidence_threshold')
+            ?? TariqMapConstants.defaultConfidenceThreshold;
+        _liveFps       = prefs.getInt('live_fps')       ?? TariqMapConstants.defaultLiveFps;
+        _wifiOnly      = prefs.getBool('wifi_only')     ?? true;
         _retentionDays = prefs.getInt('retention_days') ?? 90;
-        _loading    = false;
+        _loading       = false;
       });
     }
   }
 
   Future<void> _save() async {
+    setState(() => _saving = true);
     final prefs = await SharedPreferences.getInstance();
     await prefs.setDouble('confidence_threshold', _confidenceThreshold);
     await prefs.setInt('live_fps', _liveFps);
     await prefs.setBool('wifi_only', _wifiOnly);
     await prefs.setInt('retention_days', _retentionDays);
     if (mounted) {
+      setState(() => _saving = false);
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Settings saved'), duration: Duration(seconds: 1)),
+        SnackBar(
+          content: const Row(children: [
+            Icon(Icons.check_circle_outline, color: Colors.white, size: 18),
+            SizedBox(width: 10),
+            Text('Settings saved'),
+          ]),
+          backgroundColor: AppColors.syncDone,
+          behavior: SnackBarBehavior.floating,
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+          duration: const Duration(seconds: 2),
+        ),
       );
     }
   }
@@ -64,121 +71,110 @@ class _SettingsScreenState extends State<SettingsScreen> {
       appBar: AppBar(
         backgroundColor: AppColors.navy,
         foregroundColor: Colors.white,
-        title: const Text('Settings', style: TextStyle(fontWeight: FontWeight.bold)),
+        systemOverlayStyle: const SystemUiOverlayStyle(
+          statusBarColor: Colors.transparent,
+          statusBarIconBrightness: Brightness.light,
+        ),
+        elevation: 0,
+        title: const Text('Settings',
+          style: TextStyle(fontWeight: FontWeight.w800, letterSpacing: -0.3)),
         actions: [
-          TextButton(
-            style: TextButton.styleFrom(foregroundColor: AppColors.tealLight),
-            onPressed: _loading ? null : _save,
-            child: const Text('Save', style: TextStyle(fontWeight: FontWeight.bold)),
+          Padding(
+            padding: const EdgeInsets.only(right: 12),
+            child: FilledButton(
+              style: FilledButton.styleFrom(
+                backgroundColor: AppColors.teal,
+                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 0),
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+              ),
+              onPressed: _loading || _saving ? null : _save,
+              child: _saving
+                  ? const SizedBox(width: 16, height: 16,
+                      child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
+                  : const Text('Save',
+                      style: TextStyle(fontWeight: FontWeight.w700, fontSize: 13)),
+            ),
           ),
         ],
       ),
       body: _loading
-          ? const Center(child: CircularProgressIndicator())
+          ? const Center(child: CircularProgressIndicator(
+              valueColor: AlwaysStoppedAnimation<Color>(AppColors.teal)))
           : ListView(
-              padding: const EdgeInsets.all(16),
+              padding: const EdgeInsets.fromLTRB(16, 20, 16, 32),
               children: [
-                // ── Inference ───────────────────────────────────────────────
-                _Section(
+
+                // ── Detection ────────────────────────────────────────────────
+                _SectionCard(
+                  icon: Icons.psychology_rounded,
                   title: 'Detection',
-                  icon: Icons.psychology_outlined,
                   children: [
-                    _LabeledRow(
+                    _SliderRow(
                       label: 'Confidence threshold',
-                      detail: '${(_confidenceThreshold * 100).toStringAsFixed(0)}%',
-                      child: Slider(
-                        value: _confidenceThreshold,
-                        min: 0.10,
-                        max: 0.80,
-                        divisions: 14,
-                        activeColor: AppColors.teal,
-                        onChanged: (v) => setState(() => _confidenceThreshold = v),
-                        semanticFormatterCallback: (v) =>
-                            '${(v * 100).toStringAsFixed(0)}%',
-                      ),
+                      valueLabel: '${(_confidenceThreshold * 100).toStringAsFixed(0)}%',
+                      description: 'Higher = fewer but more reliable detections.',
+                      value: _confidenceThreshold,
+                      min: 0.10,
+                      max: 0.80,
+                      divisions: 14,
+                      onChanged: (v) => setState(() => _confidenceThreshold = v),
                     ),
-                    const _Divider(),
-                    _LabeledRow(
-                      label: 'Live inference FPS',
-                      detail: '$_liveFps fps',
-                      child: Slider(
-                        value: _liveFps.toDouble(),
-                        min: 1,
-                        max: 15,
-                        divisions: 14,
-                        activeColor: AppColors.teal,
-                        onChanged: (v) => setState(() => _liveFps = v.round()),
-                        semanticFormatterCallback: (v) => '${v.round()} fps',
-                      ),
-                    ),
-                    const SizedBox(height: 4),
-                    Padding(
-                      padding: const EdgeInsets.symmetric(horizontal: 16),
-                      child: Text(
-                        'Higher FPS increases battery usage. '
-                        'Recommended: 3–8 fps for real-time. '
-                        'Mock inference is always fast.',
-                        style: const TextStyle(color: Colors.black45, fontSize: 11),
-                      ),
+                    const _SectionDivider(),
+                    _SliderRow(
+                      label: 'Live inference rate',
+                      valueLabel: '$_liveFps fps',
+                      description: '3–8 fps recommended. Higher = more battery drain.',
+                      value: _liveFps.toDouble(),
+                      min: 1,
+                      max: 15,
+                      divisions: 14,
+                      onChanged: (v) => setState(() => _liveFps = v.round()),
                     ),
                   ],
                 ),
 
                 const SizedBox(height: 16),
 
-                // ── Sync ────────────────────────────────────────────────────
-                _Section(
+                // ── Sync ─────────────────────────────────────────────────────
+                _SectionCard(
+                  icon: Icons.cloud_sync_rounded,
                   title: 'Synchronisation',
-                  icon: Icons.cloud_sync_outlined,
                   children: [
-                    SwitchListTile.adaptive(
-                      title: const Text('Wi-Fi only sync',
-                          style: TextStyle(fontSize: 14, fontWeight: FontWeight.w500)),
-                      subtitle: const Text('Prevent mobile data usage for uploads',
-                          style: TextStyle(color: Colors.black45, fontSize: 12)),
+                    _ToggleRow(
+                      label: 'Wi-Fi only uploads',
+                      description: 'Prevents mobile data usage for cloud sync.',
                       value: _wifiOnly,
-                      activeTrackColor: AppColors.teal,
                       onChanged: (v) => setState(() => _wifiOnly = v),
                     ),
-                    const _Divider(),
-                    _LabeledRow(
-                      label: 'Data retention',
-                      detail: _retentionDays == 0 ? 'Forever' : '$_retentionDays days',
-                      child: Slider(
-                        value: _retentionDays.toDouble(),
-                        min: 0,
-                        max: 365,
-                        divisions: 13,
-                        activeColor: AppColors.teal,
-                        onChanged: (v) => setState(() => _retentionDays = v.round()),
-                        semanticFormatterCallback: (v) =>
-                            v == 0 ? 'Forever' : '${v.round()} days',
-                      ),
-                    ),
-                    const SizedBox(height: 4),
-                    const Padding(
-                      padding: EdgeInsets.symmetric(horizontal: 16),
-                      child: Text(
-                        'Synced observations are never deleted locally '
-                        'until the server confirms integrity.',
-                        style: TextStyle(color: Colors.black45, fontSize: 11),
-                      ),
+                    const _SectionDivider(),
+                    _SliderRow(
+                      label: 'Local data retention',
+                      valueLabel: _retentionDays == 0 ? 'Forever' : '$_retentionDays days',
+                      description: 'Synced data older than this may be cleaned up.',
+                      value: _retentionDays.toDouble(),
+                      min: 0,
+                      max: 365,
+                      divisions: 13,
+                      onChanged: (v) => setState(() => _retentionDays = v.round()),
                     ),
                   ],
                 ),
 
                 const SizedBox(height: 16),
 
-                // ── About ───────────────────────────────────────────────────
-                _Section(
+                // ── About ─────────────────────────────────────────────────────
+                _SectionCard(
+                  icon: Icons.info_outline_rounded,
                   title: 'About',
-                  icon: Icons.info_outline,
                   children: [
-                    _InfoRow(label: 'Model bundle', value: TariqMapConstants.modelBundleVersion),
-                    const _Divider(),
-                    _InfoRow(label: 'Canonical classes', value: TariqMapConstants.allCodes.join(', ')),
-                    const _Divider(),
-                    _InfoRow(label: 'D90 limitation', value: 'Visual rutting only — no depth measurement'),
+                    _InfoRow(label: 'Model bundle',
+                      value: TariqMapConstants.modelBundleVersion),
+                    const _SectionDivider(),
+                    _InfoRow(label: 'Detection classes',
+                      value: TariqMapConstants.allCodes.join(' · ')),
+                    const _SectionDivider(),
+                    _InfoRow(label: 'Rutting limitation',
+                      value: 'Visual only — no depth measurement'),
                   ],
                 ),
               ],
@@ -187,69 +183,173 @@ class _SettingsScreenState extends State<SettingsScreen> {
   }
 }
 
-// ---------------------------------------------------------------------------
-// Layout helpers
-// ---------------------------------------------------------------------------
+// ── Section card ──────────────────────────────────────────────────────────────
 
-class _Section extends StatelessWidget {
-  const _Section({required this.title, required this.icon, required this.children});
-  final String        title;
-  final IconData      icon;
-  final List<Widget>  children;
+class _SectionCard extends StatelessWidget {
+  const _SectionCard({
+    required this.icon,
+    required this.title,
+    required this.children,
+  });
+
+  final IconData       icon;
+  final String         title;
+  final List<Widget>   children;
 
   @override
   Widget build(BuildContext context) => Column(
     crossAxisAlignment: CrossAxisAlignment.start,
     children: [
       Padding(
-        padding: const EdgeInsets.only(bottom: 8, left: 4),
+        padding: const EdgeInsets.only(bottom: 10, left: 2),
         child: Row(children: [
-          Icon(icon, size: 16, color: AppColors.teal),
+          Icon(icon, size: 14, color: AppColors.teal),
           const SizedBox(width: 6),
           Text(title.toUpperCase(),
-              style: const TextStyle(color: AppColors.teal,
-                  fontSize: 11, fontWeight: FontWeight.w700, letterSpacing: 1.0)),
+            style: const TextStyle(
+              color: AppColors.teal,
+              fontSize: 11,
+              fontWeight: FontWeight.w700,
+              letterSpacing: 1.5,
+            )),
         ]),
       ),
-      Card(
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
-        elevation: 0,
-        color: Colors.white,
+      Container(
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(16),
+          border: Border.all(color: AppColors.borderLight),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withAlpha(6),
+              blurRadius: 8, offset: const Offset(0, 2)),
+          ],
+        ),
         child: Column(children: children),
       ),
     ],
   );
 }
 
-class _Divider extends StatelessWidget {
-  const _Divider();
+class _SectionDivider extends StatelessWidget {
+  const _SectionDivider();
   @override
   Widget build(BuildContext context) =>
-      const Divider(height: 1, indent: 16, endIndent: 16, color: Color(0xFFF0F0F0));
+      const Divider(height: 1, indent: 16, endIndent: 16,
+        color: AppColors.borderLight);
 }
 
-class _LabeledRow extends StatelessWidget {
-  const _LabeledRow({required this.label, required this.detail, required this.child});
-  final String label;
-  final String detail;
-  final Widget child;
+// ── Slider row ────────────────────────────────────────────────────────────────
+
+class _SliderRow extends StatelessWidget {
+  const _SliderRow({
+    required this.label,
+    required this.valueLabel,
+    required this.description,
+    required this.value,
+    required this.min,
+    required this.max,
+    required this.divisions,
+    required this.onChanged,
+  });
+
+  final String   label;
+  final String   valueLabel;
+  final String   description;
+  final double   value;
+  final double   min;
+  final double   max;
+  final int      divisions;
+  final ValueChanged<double> onChanged;
 
   @override
   Widget build(BuildContext context) => Padding(
-    padding: const EdgeInsets.fromLTRB(16, 12, 16, 4),
+    padding: const EdgeInsets.fromLTRB(16, 14, 16, 12),
     child: Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Row(children: [
-          Text(label, style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w500)),
+          Text(label,
+            style: const TextStyle(
+              fontSize: 14, fontWeight: FontWeight.w600)),
           const Spacer(),
-          Text(detail, style: const TextStyle(color: AppColors.teal, fontWeight: FontWeight.bold, fontSize: 13)),
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 3),
+            decoration: BoxDecoration(
+              color: AppColors.teal.withAlpha(18),
+              borderRadius: BorderRadius.circular(8),
+            ),
+            child: Text(valueLabel,
+              style: const TextStyle(
+                color: AppColors.teal,
+                fontSize: 12,
+                fontWeight: FontWeight.w700,
+              )),
+          ),
         ]),
-        child,
+        SliderTheme(
+          data: SliderTheme.of(context).copyWith(
+            activeTrackColor: AppColors.teal,
+            inactiveTrackColor: AppColors.teal.withAlpha(30),
+            thumbColor: AppColors.teal,
+            overlayColor: AppColors.teal.withAlpha(30),
+            trackHeight: 3,
+          ),
+          child: Slider(
+            value: value,
+            min: min, max: max,
+            divisions: divisions,
+            onChanged: onChanged,
+          ),
+        ),
+        Text(description,
+          style: const TextStyle(color: Colors.black38, fontSize: 11)),
       ],
     ),
   );
 }
+
+// ── Toggle row ────────────────────────────────────────────────────────────────
+
+class _ToggleRow extends StatelessWidget {
+  const _ToggleRow({
+    required this.label,
+    required this.description,
+    required this.value,
+    required this.onChanged,
+  });
+
+  final String   label;
+  final String   description;
+  final bool     value;
+  final ValueChanged<bool> onChanged;
+
+  @override
+  Widget build(BuildContext context) => Padding(
+    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+    child: Row(children: [
+      Expanded(
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(label,
+              style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w600)),
+            const SizedBox(height: 2),
+            Text(description,
+              style: const TextStyle(color: Colors.black38, fontSize: 11)),
+          ],
+        ),
+      ),
+      Switch.adaptive(
+        value: value,
+        activeColor: AppColors.teal,
+        onChanged: onChanged,
+      ),
+    ]),
+  );
+}
+
+// ── Info row ──────────────────────────────────────────────────────────────────
 
 class _InfoRow extends StatelessWidget {
   const _InfoRow({required this.label, required this.value});
@@ -258,15 +358,17 @@ class _InfoRow extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) => Padding(
-    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 13),
     child: Row(children: [
-      Text(label, style: const TextStyle(color: Colors.black54, fontSize: 13)),
-      const SizedBox(width: 8),
-      Expanded(
+      Text(label,
+        style: const TextStyle(color: Colors.black45, fontSize: 13)),
+      const Spacer(),
+      Flexible(
         child: Text(value,
-            style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 13),
-            textAlign: TextAlign.end,
-            overflow: TextOverflow.ellipsis),
+          textAlign: TextAlign.end,
+          style: const TextStyle(
+            fontWeight: FontWeight.w600, fontSize: 13),
+          overflow: TextOverflow.ellipsis),
       ),
     ]),
   );

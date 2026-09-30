@@ -38,10 +38,10 @@ class TariqMapApp extends StatelessWidget {
       colorScheme: ColorScheme.fromSeed(
         seedColor: AppColors.teal,
         brightness: Brightness.light,
-        primary: AppColors.teal,
+        primary:   AppColors.teal,
         secondary: AppColors.tealLight,
-        surface: AppColors.surface,
-        error: AppColors.critical,
+        surface:   AppColors.surface,
+        error:     AppColors.critical,
       ),
       scaffoldBackgroundColor: AppColors.offWhite,
     );
@@ -49,7 +49,7 @@ class TariqMapApp extends StatelessWidget {
     final inter = GoogleFonts.interTextTheme(base.textTheme);
 
     return base.copyWith(
-      textTheme: inter,
+      textTheme:        inter,
       primaryTextTheme: inter,
       appBarTheme: const AppBarTheme(
         backgroundColor: AppColors.navy,
@@ -57,19 +57,28 @@ class TariqMapApp extends StatelessWidget {
         elevation: 0,
         centerTitle: false,
         iconTheme: IconThemeData(color: Colors.white),
+        titleTextStyle: TextStyle(
+          color: Colors.white,
+          fontSize: 18,
+          fontWeight: FontWeight.w800,
+          letterSpacing: -0.3,
+        ),
       ),
       cardTheme: CardThemeData(
         margin: EdgeInsets.zero,
         elevation: 0,
-        color: AppColors.surface,
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+        color: Colors.white,
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(16),
+          side: const BorderSide(color: AppColors.borderLight, width: 1),
+        ),
       ),
       filledButtonTheme: FilledButtonThemeData(
         style: FilledButton.styleFrom(
           backgroundColor: AppColors.teal,
           foregroundColor: Colors.white,
           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-          textStyle: GoogleFonts.inter(fontWeight: FontWeight.bold),
+          textStyle: GoogleFonts.inter(fontWeight: FontWeight.w700),
         ),
       ),
       outlinedButtonTheme: OutlinedButtonThemeData(
@@ -80,16 +89,23 @@ class TariqMapApp extends StatelessWidget {
         ),
       ),
       inputDecorationTheme: InputDecorationTheme(
-        border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+        filled: true,
+        fillColor: Colors.white,
+        border: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(12),
+          borderSide: const BorderSide(color: AppColors.borderLight),
+        ),
         focusedBorder: OutlineInputBorder(
           borderRadius: BorderRadius.circular(12),
           borderSide: const BorderSide(color: AppColors.teal, width: 2),
         ),
       ),
       sliderTheme: const SliderThemeData(
-        activeTrackColor: AppColors.teal,
-        thumbColor: AppColors.teal,
+        activeTrackColor:   AppColors.teal,
+        thumbColor:         AppColors.teal,
         inactiveTrackColor: Color(0xFFCCE6EC),
+        trackHeight: 3,
+        thumbShape: RoundSliderThumbShape(enabledThumbRadius: 7),
       ),
       switchTheme: SwitchThemeData(
         thumbColor: WidgetStateProperty.resolveWith(
@@ -100,9 +116,25 @@ class TariqMapApp extends StatelessWidget {
               ? AppColors.teal.withAlpha(80) : Colors.grey.withAlpha(60),
         ),
       ),
-      snackBarTheme: const SnackBarThemeData(
+      snackBarTheme: SnackBarThemeData(
         backgroundColor: AppColors.navy,
-        contentTextStyle: TextStyle(color: Colors.white),
+        contentTextStyle: GoogleFonts.inter(color: Colors.white),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+        behavior: SnackBarBehavior.floating,
+      ),
+      chipTheme: ChipThemeData(
+        backgroundColor: AppColors.offWhite,
+        selectedColor: AppColors.teal.withAlpha(30),
+        labelStyle: GoogleFonts.inter(fontSize: 12),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+      ),
+      dividerTheme: const DividerThemeData(
+        color: AppColors.borderLight,
+        thickness: 1,
+        space: 1,
+      ),
+      listTileTheme: const ListTileThemeData(
+        contentPadding: EdgeInsets.symmetric(horizontal: 16),
       ),
     );
   }

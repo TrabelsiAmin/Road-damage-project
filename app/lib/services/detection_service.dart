@@ -158,7 +158,14 @@ class DetectionService {
     return Future.wait(_runners.map((runner) async {
       try {
         if (runner is TFLiteAgentRunner) {
-          return await runner.detectFromBytes(bytes);
+          final tempDir = await Directory.systemTemp.createTemp('detection_');
+          try {
+            final image = File('${tempDir.path}${Platform.pathSeparator}image.jpg');
+            await image.writeAsBytes(bytes, flush: true);
+            return await runner.detect(image);
+          } finally {
+            await tempDir.delete(recursive: true);
+          }
         }
         return await runner.detect(File(''));
       } catch (error) {

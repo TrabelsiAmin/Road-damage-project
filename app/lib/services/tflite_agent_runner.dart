@@ -23,9 +23,6 @@ const _classNames = <int, String>{
 // Per-class confidence thresholds
 //
 // Kept in sync with training/config/augmentation.yaml → class_confidence_thresholds.
-// Each class gets its own recall/precision balance:
-//   - D40 (potholes) is safety-critical → higher threshold to avoid false alarms.
-//   - D20/D50/D60 are visually subtle → lower threshold for better recall.
 // ---------------------------------------------------------------------------
 
 const _classThresholds = <String, double>{
@@ -50,12 +47,9 @@ double _thresholdFor(String classCode) =>
 ///   Input:  [1, inputSize, inputSize, 3]  float32  — RGB normalised [0..1]
 ///   Output: [1, 4+numClasses, 8400]       float32  — (cx, cy, w, h, cls…)
 ///
-/// Fails gracefully: if the interpreter cannot be loaded [failed] is true and
-/// [detect] returns an empty result with an error string.
-///
-/// Per-class confidence thresholds are applied during decoding so that
-/// different damage classes can have individually tuned recall/precision.
-/// Class-aware NMS is applied to avoid suppressing detections across classes.
+/// The interpreter runs inside an [IsolateInterpreter] so inference never
+/// blocks the UI thread. All runs are serialized (queued, never dropped), so
+/// a capture can never get an empty result because a live frame was running.
 class TFLiteAgentRunner implements DetectionAgentRunner {
   TFLiteAgentRunner({
     required this.agentName,
@@ -78,7 +72,15 @@ class TFLiteAgentRunner implements DetectionAgentRunner {
   final int inputSize;
 
   Interpreter? _interpreter;
+  IsolateInterpreter? _iso;
   bool _failed = false;
+
+  // Output buffer allocated once and reused (runs are serialized).
+  List<List<List<double>>>? _output;
+  int _numAnchors = 0;
+
+  // Serializes inference calls: later calls wait, none are dropped.
+  Future<void> _lock = Future<void>.value();
 
   @override
   bool get isReady => _interpreter != null;
@@ -88,20 +90,69 @@ class TFLiteAgentRunner implements DetectionAgentRunner {
   bool get isMock => false;
 
   void _tryLoad(String modelPath) {
-    try {
-      // Use up to 4 threads — capped so we don't starve the UI thread.
-      final numThreads = (Platform.numberOfProcessors - 1).clamp(2, 4);
-      final options = InterpreterOptions()..threads = numThreads;
-      _interpreter = Interpreter.fromFile(File(modelPath), options: options);
-      debugPrint('[TFLite:$agentName] Loaded: $modelPath (threads=$numThreads)');
-    } catch (e) {
-      debugPrint('[TFLite:$agentName] Load failed: $e');
-      _failed = true;
+    // Use up to 4 threads — capped so we don't starve the UI thread.
+    final numThreads = (Platform.numberOfProcessors - 1).clamp(2, 4);
+
+    // 1. Android: try the GPU delegate first, fall back to CPU if it fails.
+    if (Platform.isAndroid) {
+      try {
+        final options = InterpreterOptions()
+          ..threads = numThreads
+          ..addDelegate(GpuDelegateV2());
+        _interpreter = Interpreter.fromFile(File(modelPath), options: options);
+        debugPrint('[TFLite:$agentName] Loaded with GPU delegate: $modelPath');
+      } catch (e) {
+        debugPrint('[TFLite:$agentName] GPU delegate failed, using CPU: $e');
+        _interpreter = null;
+      }
     }
+
+    // 2. CPU path.
+    if (_interpreter == null) {
+      try {
+        final options = InterpreterOptions()..threads = numThreads;
+        _interpreter = Interpreter.fromFile(File(modelPath), options: options);
+        debugPrint('[TFLite:$agentName] Loaded on CPU: $modelPath (threads=$numThreads)');
+      } catch (e) {
+        debugPrint('[TFLite:$agentName] Load failed: $e');
+        _failed = true;
+        return;
+      }
+    }
+
+    // 3. Allocate the reusable output buffer once.
+    final outputShape = _interpreter!.getOutputTensor(0).shape;
+    final numClasses = _classNames.length;
+    if (outputShape.length != 3 ||
+        outputShape[0] != 1 ||
+        outputShape[1] != 4 + numClasses) {
+      debugPrint('[TFLite:$agentName] Unexpected output shape: $outputShape');
+      _failed = true;
+      return;
+    }
+    _numAnchors = outputShape[2];
+    _output = List.generate(
+      1,
+      (_) => List.generate(
+        4 + numClasses,
+        (_) => List<double>.filled(_numAnchors, 0.0),
+      ),
+    );
+
+    // 4. Background isolate that runs the interpreter.
+    IsolateInterpreter.create(address: _interpreter!.address).then((i) {
+      _iso = i;
+      debugPrint('[TFLite:$agentName] IsolateInterpreter ready');
+    }).catchError((Object e) {
+      debugPrint('[TFLite:$agentName] IsolateInterpreter failed: $e');
+    });
   }
 
   @override
-  void dispose() => _interpreter?.close();
+  void dispose() {
+    _iso?.close();
+    _interpreter?.close();
+  }
 
   // ── Inference ──────────────────────────────────────────────────────────────
 
@@ -139,8 +190,7 @@ class TFLiteAgentRunner implements DetectionAgentRunner {
   }
 
   /// Fast path for live camera: accepts a pre-built Float32List tensor
-  /// [1, inputSize, inputSize, 3] that was already prepared off-thread.
-  /// Skips JPEG encode/decode → saves ~100-200 ms per frame.
+  /// [inputSize*inputSize*3] that was already prepared off-thread.
   Future<AgentResult> detectFromTensor(Float32List inputTensor) async {
     if (_failed || _interpreter == null) {
       return AgentResult(
@@ -150,98 +200,59 @@ class TFLiteAgentRunner implements DetectionAgentRunner {
       );
     }
     try {
-      return _runInferenceOnTensor(inputTensor);
+      return await _runInferenceOnTensor(inputTensor);
     } catch (e) {
       return AgentResult(agent: agentName, detections: const [], error: e.toString());
     }
   }
 
   Future<AgentResult> _runInferenceOnBytes(Uint8List rawBytes) async {
-    final interpreter = _interpreter!;
-
-    // 1. Decode and resize to model input dimensions.
-    final decoded = img.decodeImage(rawBytes);
-    if (decoded == null) {
+    // Decode + resize + tensor build in a background isolate (same maths as
+    // before, just off the UI thread).
+    final tensor = await compute(_bytesToTensor, _BytesArgs(rawBytes, inputSize));
+    if (tensor == null) {
       return AgentResult(
         agent: agentName,
         detections: const [],
         error: 'Cannot decode image bytes',
       );
     }
-    final resized = img.copyResize(decoded, width: inputSize, height: inputSize);
-
-    // 2. Build [1, H, W, 3] float32 tensor — fast integer pixel loop.
-    //    Uses getPixelLinear for speed over setPixel boxing.
-    final pixels = inputSize * inputSize;
-    final flat   = Float32List(pixels * 3);
-    var idx = 0;
-    for (var y = 0; y < inputSize; y++) {
-      for (var x = 0; x < inputSize; x++) {
-        final pixel = resized.getPixel(x, y);
-        flat[idx++] = pixel.r / 255.0;
-        flat[idx++] = pixel.g / 255.0;
-        flat[idx++] = pixel.b / 255.0;
-      }
-    }
-    final input = flat;
-
-    // 3. Allocate output buffer.
-    final outputShape = interpreter.getOutputTensor(0).shape;
-    if (outputShape.length != 3 || outputShape[0] != 1) {
-      throw StateError('Unexpected model output shape: $outputShape');
-    }
-    final numClasses = _classNames.length;
-    final numAnchors = outputShape[2];
-    if (outputShape[1] != 4 + numClasses) {
-      throw StateError('Expected ${4 + numClasses} output channels, got $outputShape');
-    }
-    // Use nested lists because tflite_flutter's reshape creates disconnected copies
-    final output = List.generate(
-      1,
-      (_) => List.generate(
-        4 + numClasses,
-        (_) => List.filled(numAnchors, 0.0),
-      ),
-    );
-
-    // 4. Run interpreter with reshaped inputs.
-    interpreter.runForMultipleInputs(
-      [input.reshape([1, inputSize, inputSize, 3])],
-      {0: output},
-    );
-
-    // 5. Shared decode logic
-    return _decodeOutput(output, numClasses, numAnchors);
+    return _runInferenceOnTensor(tensor);
   }
 
   /// Runs the interpreter on a pre-built Float32List — NO image decode needed.
-  AgentResult _runInferenceOnTensor(Float32List inputTensor) {
-    final interpreter = _interpreter!;
-    final numClasses  = _classNames.length;
-    final outputShape = interpreter.getOutputTensor(0).shape;
-    final numAnchors  = outputShape[2];
+  /// Calls are queued so the shared output buffer is never used concurrently.
+  Future<AgentResult> _runInferenceOnTensor(Float32List inputTensor) {
+    final run = _lock.then((_) async {
+      final output = _output!;
+      final inputs = [inputTensor.reshape([1, inputSize, inputSize, 3])];
 
-    final output = List.generate(
-      1, (_) => List.generate(4 + numClasses, (_) => List.filled(numAnchors, 0.0)));
+      if (_iso != null) {
+        await _iso!.runForMultipleInputs(inputs, {0: output});
+      } else {
+        // Isolate not ready yet: fall back to a direct call.
+        _interpreter!.runForMultipleInputs(inputs, {0: output});
+      }
 
-    interpreter.runForMultipleInputs(
-      [inputTensor.reshape([1, inputSize, inputSize, 3])],
-      {0: output},
-    );
-
-    return _decodeOutput(output, numClasses, numAnchors);
+      return _decodeOutput(output, _classNames.length, _numAnchors);
+    });
+    // Keep the chain alive even if a run throws.
+    _lock = run.then((_) {}, onError: (Object _) {});
+    return run;
   }
 
   /// Shared output decoder used by both inference paths.
   AgentResult _decodeOutput(
-      List<dynamic> output, int numClasses, int numAnchors) {
+      List<List<List<double>>> output, int numClasses, int numAnchors) {
     final rawDetections = <Detection>[];
+    final o = output[0];
+
     for (var anchor = 0; anchor < numAnchors; anchor++) {
       double bestScore = 0;
       int    bestClass = -1;
 
       for (var c = 0; c < numClasses; c++) {
-        final score = output[0][4 + c][anchor] as double;
+        final score = o[4 + c][anchor];
         if (score > bestScore) { bestScore = score; bestClass = c; }
       }
 
@@ -251,10 +262,12 @@ class TFLiteAgentRunner implements DetectionAgentRunner {
       if (bestScore < _thresholdFor(className)) continue;
       if (!agentClasses.contains(className)) continue;
 
-      final cx = (output[0][0][anchor] as num).toDouble().clamp(0.0, 1.0);
-      final cy = (output[0][1][anchor] as num).toDouble().clamp(0.0, 1.0);
-      final bw = (output[0][2][anchor] as num).toDouble().clamp(0.0, 1.0);
-      final bh = (output[0][3][anchor] as num).toDouble().clamp(0.0, 1.0);
+      // NOTE: assumes normalised [0..1] coordinates. If your export outputs
+      // pixels (0..inputSize), divide these four values by inputSize.
+      final cx = o[0][anchor].clamp(0.0, 1.0);
+      final cy = o[1][anchor].clamp(0.0, 1.0);
+      final bw = o[2][anchor].clamp(0.0, 1.0);
+      final bh = o[3][anchor].clamp(0.0, 1.0);
 
       rawDetections.add(Detection(
         agent: agentName,
@@ -274,4 +287,32 @@ class TFLiteAgentRunner implements DetectionAgentRunner {
       isMock: false,
     );
   }
+}
+
+// ---------------------------------------------------------------------------
+// Background isolate helper: encoded image bytes -> flat float32 tensor
+// ---------------------------------------------------------------------------
+
+class _BytesArgs {
+  _BytesArgs(this.bytes, this.size);
+  final Uint8List bytes;
+  final int size;
+}
+
+Float32List? _bytesToTensor(_BytesArgs a) {
+  final decoded = img.decodeImage(a.bytes);
+  if (decoded == null) return null;
+  final resized = img.copyResize(decoded, width: a.size, height: a.size);
+
+  final out = Float32List(a.size * a.size * 3);
+  var idx = 0;
+  for (var y = 0; y < a.size; y++) {
+    for (var x = 0; x < a.size; x++) {
+      final p = resized.getPixel(x, y);
+      out[idx++] = p.r / 255.0;
+      out[idx++] = p.g / 255.0;
+      out[idx++] = p.b / 255.0;
+    }
+  }
+  return out;
 }

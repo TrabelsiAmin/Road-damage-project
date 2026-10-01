@@ -42,4 +42,4 @@ For a full breakdown of how to demo TariqMap, please see [docs/hackathon-demo.md
 
 ## Dataset & Training Audit
 
-Honesty in AI is paramount. Please see [docs/dataset-audit.md](docs/dataset-audit.md) for a comprehensive review of the `Global_Potholes_Dataset-image`. It details known label drifts, missing masks, and our methodology for training an ethical, transparent model.
+Honesty in AI is paramount. Please see [docs/dataset-audit.md](docs/dataset-audit.md) for a comprehensive review of the `Global_Potholes_Dataset-image`. It details known label drifts, missing masks, and our methodology for training an ethical, transparent model..

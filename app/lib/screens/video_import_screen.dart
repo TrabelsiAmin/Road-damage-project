@@ -2,6 +2,7 @@ import 'dart:io';
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:geolocator/geolocator.dart';
+import 'package:image_picker/image_picker.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:share_plus/share_plus.dart';
 import 'package:uuid/uuid.dart';
@@ -82,9 +83,43 @@ class _VideoImportScreenState extends State<VideoImportScreen> {
     super.dispose();
   }
 
-  // ── File picker ────────────────────────────────────────────────────────────
+  // ── File picker / camera ───────────────────────────────────────────────────
 
-  Future<void> _pickVideo() async {
+  Future<void> _loadVideoFile(File file) async {
+    final ctrl = VideoPlayerController.file(file);
+    await ctrl.initialize();
+    _outputCtrl?.dispose();
+    setState(() {
+      _videoFile   = file;
+      _inputCtrl?.dispose();
+      _inputCtrl   = ctrl;
+      _duration    = ctrl.value.duration;
+      _picking     = false;
+      _outputVideo = null;
+      _outputCtrl  = null;
+      _results.clear();
+      _status = 'Ready — ${file.uri.pathSegments.last}';
+    });
+  }
+
+  Future<void> _recordVideo() async {
+    setState(() { _picking = true; _status = 'Opening camera…'; });
+    try {
+      final picked = await ImagePicker().pickVideo(
+        source: ImageSource.camera,
+        maxDuration: const Duration(minutes: 10),
+      );
+      if (picked == null) {
+        setState(() { _picking = false; _status = ''; });
+        return;
+      }
+      await _loadVideoFile(File(picked.path));
+    } catch (e) {
+      setState(() { _picking = false; _status = 'Error: $e'; });
+    }
+  }
+
+  Future<void> _pickVideoFile() async {
     setState(() { _picking = true; _status = 'Picking video…'; });
     try {
       final result = await FilePicker.platform.pickFiles(
@@ -95,24 +130,7 @@ class _VideoImportScreenState extends State<VideoImportScreen> {
         setState(() { _picking = false; _status = ''; });
         return;
       }
-
-      final file = File(result.files.single.path!);
-      final ctrl = VideoPlayerController.file(file);
-      await ctrl.initialize();
-
-      // Reset output
-      _outputCtrl?.dispose();
-      setState(() {
-        _videoFile  = file;
-        _inputCtrl?.dispose();
-        _inputCtrl  = ctrl;
-        _duration   = ctrl.value.duration;
-        _picking    = false;
-        _outputVideo = null;
-        _outputCtrl  = null;
-        _results.clear();
-        _status = 'Ready — ${file.uri.pathSegments.last}';
-      });
+      await _loadVideoFile(File(result.files.single.path!));
     } catch (e) {
       setState(() { _picking = false; _status = 'Error: $e'; });
     }
@@ -289,7 +307,7 @@ class _VideoImportScreenState extends State<VideoImportScreen> {
       appBar: AppBar(
         backgroundColor: AppColors.navy,
         foregroundColor: Colors.white,
-        title: const Text('Video Import', style: TextStyle(fontWeight: FontWeight.bold)),
+        title: const Text('Record Video', style: TextStyle(fontWeight: FontWeight.bold)),
         actions: [
           if (_outputVideo != null)
             IconButton(
@@ -305,22 +323,41 @@ class _VideoImportScreenState extends State<VideoImportScreen> {
 
           // ── Video picker ──────────────────────────────────────────────────
           _Section(
-            title: 'SELECT VIDEO',
+            title: 'ADD VIDEO',
             child: Column(
               children: [
-                SizedBox(
-                  width: double.infinity,
-                  child: OutlinedButton.icon(
-                    style: OutlinedButton.styleFrom(
-                      padding: const EdgeInsets.symmetric(vertical: 16),
-                      side: const BorderSide(color: AppColors.teal),
-                      foregroundColor: AppColors.teal,
+                Row(children: [
+                  Expanded(
+                    child: ElevatedButton.icon(
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: AppColors.teal,
+                        foregroundColor: Colors.white,
+                        padding: const EdgeInsets.symmetric(vertical: 16),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(12)),
+                      ),
+                      onPressed: isBusy ? null : _recordVideo,
+                      icon: const Icon(Icons.videocam_rounded),
+                      label: const Text('Record',
+                        style: TextStyle(fontWeight: FontWeight.w700)),
                     ),
-                    onPressed: isBusy ? null : _pickVideo,
-                    icon: const Icon(Icons.video_file_outlined),
-                    label: Text(_videoFile == null ? 'Choose video file' : 'Change video'),
                   ),
-                ),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: OutlinedButton.icon(
+                      style: OutlinedButton.styleFrom(
+                        padding: const EdgeInsets.symmetric(vertical: 16),
+                        side: const BorderSide(color: AppColors.teal),
+                        foregroundColor: AppColors.teal,
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(12)),
+                      ),
+                      onPressed: isBusy ? null : _pickVideoFile,
+                      icon: const Icon(Icons.video_file_outlined),
+                      label: Text(_videoFile == null ? 'From Files' : 'Change'),
+                    ),
+                  ),
+                ]),
                 if (_videoFile != null && _inputCtrl != null) ...[
                   const SizedBox(height: 12),
                   _VideoPreview(ctrl: _inputCtrl!, label: 'Input'),

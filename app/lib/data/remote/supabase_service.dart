@@ -5,6 +5,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:uuid/uuid.dart';
 import '../../core/supabase_config.dart';
 import '../../models/observation.dart';
+import '../../services/image_compressor.dart';
 
 /// Central service for all Supabase interactions from the mobile app.
 ///
@@ -39,6 +40,7 @@ class SupabaseService {
   // Image upload
 
   /// Uploads a still-image capture to Supabase Storage.
+  /// The image is compressed to WebP before upload to reduce storage usage.
   /// Returns the public URL of the stored object, or null on failure.
   Future<String?> uploadObservationImage({
     required String observationId,
@@ -46,32 +48,33 @@ class SupabaseService {
     required File imageFile,
   }) async {
     try {
-      final bytes = await imageFile.readAsBytes();
-      final mimeType = lookupMimeType(imageFile.path) ?? 'image/jpeg';
-      final ext = mimeType == 'image/png' ? 'png' : 'jpg';
-      final storagePath = '$observationId/$captureId.$ext';
+      // Compress to WebP — saves 40-60% storage vs original JPEG/PNG
+      final compressed = await ImageCompressor.compressToWebP(imageFile);
+      final storagePath = '$observationId/$captureId.${compressed.extension}';
 
       await _client.storage
           .from(SupabaseCfg.imagesBucket)
           .uploadBinary(
             storagePath,
-            bytes,
-            fileOptions: FileOptions(contentType: mimeType, upsert: true),
+            compressed.bytes,
+            fileOptions: FileOptions(
+              contentType: compressed.mimeType, upsert: true),
           );
 
       final url = _client.storage
           .from(SupabaseCfg.imagesBucket)
           .getPublicUrl(storagePath);
 
-      debugPrint('[SupabaseService] Image uploaded: $url');
+      debugPrint('[SupabaseService] Image uploaded (WebP): $url '
+          '(saved ${compressed.savedBytes ~/ 1024} KB)');
       await _recordMediaFile(
         observationId: observationId,
         bucket: SupabaseCfg.imagesBucket,
         storagePath: storagePath,
         publicUrl: url,
         mediaType: 'image',
-        mimeType: mimeType,
-        fileSizeBytes: bytes.length,
+        mimeType: compressed.mimeType,
+        fileSizeBytes: compressed.compressedSizeBytes,
       );
       return url;
     } catch (e) {
@@ -80,7 +83,8 @@ class SupabaseService {
     }
   }
 
-  /// Uploads raw JPEG bytes (live camera frame) without a local file.
+  /// Uploads raw JPEG/YUV bytes (e.g. from a camera stream) to Supabase Storage.
+  /// The bytes are compressed to WebP before upload.
   Future<String?> uploadObservationImageBytes({
     required String observationId,
     required String captureId,
@@ -88,26 +92,28 @@ class SupabaseService {
     String mimeType = 'image/jpeg',
   }) async {
     try {
-      final storagePath = '$observationId/$captureId.jpg';
+      final compressed = await ImageCompressor.compressBytes(bytes);
+      final storagePath = '$observationId/$captureId.${compressed.extension}';
       await _client.storage
           .from(SupabaseCfg.imagesBucket)
           .uploadBinary(
             storagePath,
-            bytes,
-            fileOptions: FileOptions(contentType: mimeType, upsert: true),
+            compressed.bytes,
+            fileOptions: FileOptions(
+              contentType: compressed.mimeType, upsert: true),
           );
       final url = _client.storage
           .from(SupabaseCfg.imagesBucket)
           .getPublicUrl(storagePath);
-      debugPrint('[SupabaseService] Frame image uploaded: $url');
+      debugPrint('[SupabaseService] Frame image uploaded (WebP): $url');
       await _recordMediaFile(
         observationId: observationId,
         bucket: SupabaseCfg.imagesBucket,
         storagePath: storagePath,
         publicUrl: url,
         mediaType: 'image',
-        mimeType: mimeType,
-        fileSizeBytes: bytes.length,
+        mimeType: compressed.mimeType,
+        fileSizeBytes: compressed.compressedSizeBytes,
       );
       return url;
     } catch (e) {

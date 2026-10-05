@@ -386,11 +386,13 @@ class _ClusterDetailsSheet extends StatelessWidget {
                 final id = obs['id'];
                 final captureId = obs['capture_id'];
                 
-                // Construct the public URL assuming imagesBucket is "observation-images"
                 final client = Supabase.instance.client;
-                final imageUrl = client.storage
-                    .from('observation-images')
-                    .getPublicUrl('$id/$captureId.jpg');
+                final futureUrl = client
+                    .from('media_files')
+                    .select('public_url')
+                    .eq('observation_id', id)
+                    .maybeSingle()
+                    .then((row) => row != null ? row['public_url'] as String : null);
 
                 return Container(
                   decoration: BoxDecoration(
@@ -404,15 +406,29 @@ class _ClusterDetailsSheet extends StatelessWidget {
                       Container(
                         height: 200,
                         color: Colors.grey.shade100,
-                        child: Image.network(
-                          imageUrl,
-                          fit: BoxFit.cover,
-                          errorBuilder: (ctx, err, stack) => const Center(
-                            child: Icon(Icons.broken_image, size: 40, color: Colors.grey),
-                          ),
-                          loadingBuilder: (ctx, child, progress) {
-                            if (progress == null) return child;
-                            return const Center(child: CircularProgressIndicator());
+                        child: FutureBuilder<String?>(
+                          future: futureUrl,
+                          builder: (ctx, snapshot) {
+                            if (snapshot.connectionState == ConnectionState.waiting) {
+                              return const Center(child: CircularProgressIndicator());
+                            }
+                            final imageUrl = snapshot.data;
+                            if (imageUrl == null) {
+                              return const Center(
+                                child: Icon(Icons.image_not_supported, size: 40, color: Colors.grey),
+                              );
+                            }
+                            return Image.network(
+                              imageUrl,
+                              fit: BoxFit.cover,
+                              errorBuilder: (ctx, err, stack) => const Center(
+                                child: Icon(Icons.broken_image, size: 40, color: Colors.grey),
+                              ),
+                              loadingBuilder: (ctx, child, progress) {
+                                if (progress == null) return child;
+                                return const Center(child: CircularProgressIndicator());
+                              },
+                            );
                           },
                         ),
                       ),

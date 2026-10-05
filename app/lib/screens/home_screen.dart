@@ -17,6 +17,7 @@ import 'camera_detection_screen.dart';
 import 'live_stream_screen.dart';
 import 'model_status_screen.dart';
 import 'offline_queue_screen.dart';
+import 'photo_confirm_screen.dart';
 import 'result_screen.dart';
 import 'settings_screen.dart';
 import 'video_import_screen.dart';
@@ -170,6 +171,49 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
     if (mounted) setState(() => _observations = loaded);
   }
 
+  Future<void> _openTakePhoto() async {
+    // Prompt the user: camera or gallery?
+    final source = await showModalBottomSheet<ImageSource>(
+      context: context,
+      backgroundColor: Colors.transparent,
+      builder: (ctx) => _SourcePicker(
+        title: 'Take a Photo',
+        cameraLabel: 'Open Camera',
+        galleryLabel: 'Choose from Gallery',
+        cameraIcon: Icons.camera_alt_rounded,
+        galleryIcon: Icons.photo_library_rounded,
+      ),
+    );
+    if (source == null || !mounted) return;
+
+    setState(() { _busy = true; _message = null; });
+    try {
+      final picked = await _picker.pickImage(
+        source: source,
+        imageQuality: 92,
+        maxWidth: 1600,
+      );
+      if (picked == null) return;
+      if (!mounted) return;
+      await Navigator.of(context).push(
+        MaterialPageRoute<void>(
+          builder: (_) => PhotoConfirmScreen(
+            imageFile:       File(picked.path),
+            detectionService: _detection,
+            repository:      _repository,
+            actor:           _actor,
+          ),
+        ),
+      );
+      final loaded = await _repository.list();
+      if (mounted) setState(() => _observations = loaded);
+    } catch (error) {
+      setState(() => _message = error.toString().replaceFirst('Bad state: ', ''));
+    } finally {
+      if (mounted) setState(() => _busy = false);
+    }
+  }
+
   Future<void> _openVideoImport() async {
     await Navigator.of(context).push(MaterialPageRoute<void>(
       builder: (_) => VideoImportScreen(service: _detection, actor: _actor),
@@ -225,10 +269,8 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
                         const SizedBox(height: 10),
                         _ActionGrid(
                           busy: _busy,
-                          onLiveStream:    _openLiveStream,
-                          onCamera:        _openCamera,
-                          onImportImage:   _importFromGallery,
-                          onImportVideo:   _openVideoImport,
+                          onTakePhoto:   _openTakePhoto,
+                          onRecordVideo: _openVideoImport,
                         ),
 
                         // ── Error / message banner ─────────────────────────
@@ -550,73 +592,40 @@ class _ModelPill extends StatelessWidget {
 class _ActionGrid extends StatelessWidget {
   const _ActionGrid({
     required this.busy,
-    required this.onLiveStream,
-    required this.onCamera,
-    required this.onImportImage,
-    required this.onImportVideo,
+    required this.onTakePhoto,
+    required this.onRecordVideo,
   });
 
   final bool         busy;
-  final VoidCallback onLiveStream;
-  final VoidCallback onCamera;
-  final VoidCallback onImportImage;
-  final VoidCallback onImportVideo;
+  final VoidCallback onTakePhoto;
+  final VoidCallback onRecordVideo;
 
   @override
   Widget build(BuildContext context) {
     return Column(
       children: [
-        // Primary full-width — Live Stream
+        // ── Take Photo — primary large button ───────────────────────────────
         _ActionButton(
-          label: 'Live Stream',
-          subtitle: 'Record & upload to cloud',
-          icon: Icons.fiber_manual_record_rounded,
-          gradient: const [Color(0xFFE11D48), Color(0xFFBE123C)],
-          glow: const Color(0xFFE11D48),
+          label: 'Take Photo',
+          subtitle: 'Capture & analyse with AI',
+          icon: Icons.camera_alt_rounded,
+          gradient: const [AppColors.teal, AppColors.tealGlow],
+          glow: AppColors.teal,
           enabled: !busy,
-          onTap: onLiveStream,
+          onTap: onTakePhoto,
           large: true,
         ),
-        const SizedBox(height: 10),
-        // 2-column row
-        Row(children: [
-          Expanded(
-            flex: 3,
-            child: _ActionButton(
-              label: 'Quick Scan',
-              subtitle: 'Snap & detect',
-              icon: Icons.camera_alt_rounded,
-              gradient: const [AppColors.teal, AppColors.tealGlow],
-              glow: AppColors.teal,
-              enabled: !busy,
-              onTap: onCamera,
-            ),
-          ),
-          const SizedBox(width: 10),
-          Expanded(
-            flex: 2,
-            child: _ActionButton(
-              label: 'Import',
-              subtitle: 'From gallery',
-              icon: Icons.photo_library_rounded,
-              gradient: const [Color(0xFF7C3AED), Color(0xFF9333EA)],
-              glow: const Color(0xFF7C3AED),
-              enabled: !busy,
-              onTap: onImportImage,
-            ),
-          ),
-        ]),
-        const SizedBox(height: 10),
-        // Video import full-width
+        const SizedBox(height: 12),
+        // ── Record Video — secondary button ────────────────────────────────
         _ActionButton(
-          label: 'Import Video',
-          subtitle: 'Analyse frame by frame',
-          icon: Icons.video_file_rounded,
-          gradient: const [Color(0xFF0F766E), Color(0xFF14B8A6)],
-          glow: const Color(0xFF0F766E),
+          label: 'Record Video',
+          subtitle: 'Extract & detect anomalies frame by frame',
+          icon: Icons.videocam_rounded,
+          gradient: const [Color(0xFF7C3AED), Color(0xFF9333EA)],
+          glow: const Color(0xFF7C3AED),
           enabled: !busy,
-          onTap: onImportVideo,
-          secondary: true,
+          onTap: onRecordVideo,
+          large: true,
         ),
         // Loading indicator
         if (busy) const Padding(
@@ -1108,3 +1117,125 @@ class _SyncDot extends StatelessWidget {
     return Icon(icon, color: color, size: 18);
   }
 }
+
+// ── Source Picker ─────────────────────────────────────────────────────────────
+
+class _SourcePicker extends StatelessWidget {
+  const _SourcePicker({
+    required this.title,
+    required this.cameraLabel,
+    required this.galleryLabel,
+    required this.cameraIcon,
+    required this.galleryIcon,
+  });
+
+  final String   title;
+  final String   cameraLabel;
+  final String   galleryLabel;
+  final IconData cameraIcon;
+  final IconData galleryIcon;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.fromLTRB(20, 12, 20, 32),
+      decoration: const BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+      ),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          // drag handle
+          Container(
+            width: 40, height: 4,
+            margin: const EdgeInsets.only(bottom: 20),
+            decoration: BoxDecoration(
+              color: Colors.grey.shade300,
+              borderRadius: BorderRadius.circular(2),
+            ),
+          ),
+          Text(title,
+            style: const TextStyle(
+              fontSize: 18, fontWeight: FontWeight.w800,
+              color: AppColors.navy)),
+          const SizedBox(height: 20),
+          Row(children: [
+            Expanded(
+              child: _SourceOption(
+                icon: cameraIcon,
+                label: cameraLabel,
+                color: AppColors.teal,
+                onTap: () => Navigator.of(context).pop(ImageSource.camera),
+              ),
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: _SourceOption(
+                icon: galleryIcon,
+                label: galleryLabel,
+                color: const Color(0xFF7C3AED),
+                onTap: () => Navigator.of(context).pop(ImageSource.gallery),
+              ),
+            ),
+          ]),
+        ],
+      ),
+    );
+  }
+}
+
+class _SourceOption extends StatelessWidget {
+  const _SourceOption({
+    required this.icon,
+    required this.label,
+    required this.color,
+    required this.onTap,
+  });
+
+  final IconData   icon;
+  final String     label;
+  final Color      color;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      onTap: onTap,
+      child: Container(
+        padding: const EdgeInsets.symmetric(vertical: 20),
+        decoration: BoxDecoration(
+          color: color.withAlpha(15),
+          borderRadius: BorderRadius.circular(16),
+          border: Border.all(color: color.withAlpha(60)),
+        ),
+        child: Column(
+          children: [
+            Container(
+              width: 52, height: 52,
+              decoration: BoxDecoration(
+                gradient: LinearGradient(
+                  colors: [color, color.withAlpha(180)],
+                  begin: Alignment.topLeft,
+                  end: Alignment.bottomRight,
+                ),
+                borderRadius: BorderRadius.circular(14),
+                boxShadow: [BoxShadow(
+                  color: color.withAlpha(80), blurRadius: 12,
+                  offset: const Offset(0, 4))],
+              ),
+              child: Icon(icon, color: Colors.white, size: 26),
+            ),
+            const SizedBox(height: 12),
+            Text(label,
+              textAlign: TextAlign.center,
+              style: TextStyle(
+                color: color, fontSize: 13,
+                fontWeight: FontWeight.w700)),
+          ],
+        ),
+      ),
+    );
+  }
+}
+

@@ -1,5 +1,7 @@
 import 'dart:io';
+import 'dart:typed_data';
 import 'package:flutter/foundation.dart';
+import 'package:http/http.dart' as http;
 import 'package:mime/mime.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:uuid/uuid.dart';
@@ -159,6 +161,51 @@ class SupabaseService {
   }
 
   // Observation sync
+
+  /// Loads the most recent image for an observation as decoded bytes.
+  ///
+  /// Storage is the source of truth. The public URL is only a fallback for
+  /// older rows or deployments where Storage.download is not available to the
+  /// current client. Returning bytes lets the map work with both public and
+  /// private buckets and avoids relying on a stale URL stored in the database.
+  Future<Uint8List?> downloadObservationImage({
+    required String observationId,
+  }) async {
+    try {
+      final rows = await _client
+          .from(SupabaseCfg.tableMediaFiles)
+          .select('bucket, storage_path, public_url')
+          .eq('observation_id', observationId)
+          .order('uploaded_at', ascending: false)
+          .limit(1);
+
+      if (rows.isEmpty) return null;
+      final row = rows.first;
+      final bucket = row['bucket'] as String?;
+      final storagePath = row['storage_path'] as String?;
+      if (bucket == null || storagePath == null) return null;
+
+      try {
+        return await _client.storage.from(bucket).download(storagePath);
+      } catch (storageError) {
+        debugPrint('[SupabaseService] Storage download failed: $storageError');
+      }
+
+      final publicUrl = row['public_url'] as String?;
+      if (publicUrl == null || publicUrl.isEmpty) return null;
+      final response = await http.get(Uri.parse(publicUrl));
+      if (response.statusCode < 200 || response.statusCode >= 300) {
+        debugPrint('[SupabaseService] Image URL returned ${response.statusCode}');
+        return null;
+      }
+      return response.bodyBytes;
+    } catch (e) {
+      // A missing media row is expected for older observations created before
+      // image upload was enabled; do not fail the whole map for it.
+      debugPrint('[SupabaseService] Observation image lookup failed: $e');
+      return null;
+    }
+  }
 
   /// Syncs a complete observation directly to Supabase DB.
   /// Also uploads the captured image to Storage if [imageFile] is provided.

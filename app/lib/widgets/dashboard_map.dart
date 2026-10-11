@@ -1,9 +1,11 @@
+import 'dart:typed_data';
 import 'package:flutter/material.dart';
 import 'package:flutter_map/flutter_map.dart';
 import 'package:latlong2/latlong.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../core/app_colors.dart';
 import '../services/territorial_service.dart';
+import '../data/remote/supabase_service.dart';
 
 class DashboardMap extends StatefulWidget {
   const DashboardMap({super.key});
@@ -383,16 +385,9 @@ class _ClusterDetailsSheet extends StatelessWidget {
               separatorBuilder: (_, __) => const SizedBox(height: 16),
               itemBuilder: (ctx, i) {
                 final obs = cluster.observations[i];
-                final id = obs['id'];
-                final captureId = obs['capture_id'];
-                
-                final client = Supabase.instance.client;
-                final futureUrl = client
-                    .from('media_files')
-                    .select('public_url')
-                    .eq('observation_id', id)
-                    .maybeSingle()
-                    .then((row) => row != null ? row['public_url'] as String : null);
+                final id = obs['id'] as String;
+                final futureImage = SupabaseService.instance
+                    .downloadObservationImage(observationId: id);
 
                 return Container(
                   decoration: BoxDecoration(
@@ -406,20 +401,20 @@ class _ClusterDetailsSheet extends StatelessWidget {
                       Container(
                         height: 200,
                         color: Colors.grey.shade100,
-                        child: FutureBuilder<String?>(
-                          future: futureUrl,
+                        child: FutureBuilder<Uint8List?>(
+                          future: futureImage,
                           builder: (ctx, snapshot) {
                             if (snapshot.connectionState == ConnectionState.waiting) {
                               return const Center(child: CircularProgressIndicator());
                             }
-                            final imageUrl = snapshot.data;
-                            if (imageUrl == null) {
+                            final imageBytes = snapshot.data;
+                            if (imageBytes == null || imageBytes.isEmpty) {
                               return const Center(
                                 child: Icon(Icons.image_not_supported, size: 40, color: Colors.grey),
                               );
                             }
-                            return Image.network(
-                              imageUrl,
+                            return Image.memory(
+                              imageBytes,
                               fit: BoxFit.cover,
                               errorBuilder: (ctx, err, stack) => const Center(
                                 child: Icon(Icons.broken_image, size: 40, color: Colors.grey),

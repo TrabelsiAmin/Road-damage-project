@@ -67,9 +67,10 @@ class TariqMapApp extends StatelessWidget {
       cardTheme: CardThemeData(
         margin: EdgeInsets.zero,
         elevation: 0,
+        surfaceTintColor: Colors.transparent,
         color: Colors.white,
         shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(16),
+          borderRadius: BorderRadius.circular(20),
           side: const BorderSide(color: AppColors.borderLight, width: 1),
         ),
       ),
@@ -77,7 +78,7 @@ class TariqMapApp extends StatelessWidget {
         style: FilledButton.styleFrom(
           backgroundColor: AppColors.teal,
           foregroundColor: Colors.white,
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
           textStyle: GoogleFonts.inter(fontWeight: FontWeight.w700),
         ),
       ),
@@ -85,7 +86,7 @@ class TariqMapApp extends StatelessWidget {
         style: OutlinedButton.styleFrom(
           foregroundColor: AppColors.teal,
           side: const BorderSide(color: AppColors.teal),
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
         ),
       ),
       inputDecorationTheme: InputDecorationTheme(

@@ -270,6 +270,7 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
                         _ActionGrid(
                           busy: _busy,
                           onTakePhoto:   _openTakePhoto,
+                          onLiveScan:    _openLiveStream,
                           onRecordVideo: _openVideoImport,
                         ),
 
@@ -593,11 +594,13 @@ class _ActionGrid extends StatelessWidget {
   const _ActionGrid({
     required this.busy,
     required this.onTakePhoto,
+    required this.onLiveScan,
     required this.onRecordVideo,
   });
 
   final bool         busy;
   final VoidCallback onTakePhoto;
+  final VoidCallback onLiveScan;
   final VoidCallback onRecordVideo;
 
   @override
@@ -607,7 +610,7 @@ class _ActionGrid extends StatelessWidget {
         // ── Take Photo — primary large button ───────────────────────────────
         _ActionButton(
           label: 'Take Photo',
-          subtitle: 'Capture & analyse with AI',
+          subtitle: 'Focused road defect report',
           icon: Icons.camera_alt_rounded,
           gradient: const [AppColors.teal, AppColors.tealGlow],
           glow: AppColors.teal,
@@ -616,16 +619,34 @@ class _ActionGrid extends StatelessWidget {
           large: true,
         ),
         const SizedBox(height: 12),
-        // ── Record Video — secondary button ────────────────────────────────
-        _ActionButton(
-          label: 'Record Video',
-          subtitle: 'Extract & detect anomalies frame by frame',
-          icon: Icons.videocam_rounded,
-          gradient: const [Color(0xFF7C3AED), Color(0xFF9333EA)],
-          glow: const Color(0xFF7C3AED),
-          enabled: !busy,
-          onTap: onRecordVideo,
-          large: true,
+        Row(
+          children: [
+            Expanded(
+              child: _ActionButton(
+                label: 'Live Scan',
+                subtitle: 'Inspect as you drive',
+                icon: Icons.radar_rounded,
+                gradient: const [Color(0xFF0F766E), Color(0xFF14B8A6)],
+                glow: const Color(0xFF0F766E),
+                enabled: !busy,
+                onTap: onLiveScan,
+                compact: true,
+              ),
+            ),
+            const SizedBox(width: 10),
+            Expanded(
+              child: _ActionButton(
+                label: 'Video Scan',
+                subtitle: 'Review a road route',
+                icon: Icons.video_library_rounded,
+                gradient: const [Color(0xFF7C3AED), Color(0xFF9333EA)],
+                glow: const Color(0xFF7C3AED),
+                enabled: !busy,
+                onTap: onRecordVideo,
+                compact: true,
+              ),
+            ),
+          ],
         ),
         // Loading indicator
         if (busy) const Padding(
@@ -652,6 +673,7 @@ class _ActionButton extends StatefulWidget {
     required this.enabled,
     required this.onTap,
     this.large    = false,
+    this.compact  = false,
     this.secondary = false,
   });
 
@@ -663,6 +685,7 @@ class _ActionButton extends StatefulWidget {
   final bool       enabled;
   final VoidCallback onTap;
   final bool       large;
+  final bool       compact;
   final bool       secondary;
 
   @override
@@ -691,7 +714,7 @@ class _ActionButtonState extends State<_ActionButton>
 
   @override
   Widget build(BuildContext context) {
-    final verticalPad = widget.large ? 18.0 : 14.0;
+    final verticalPad = widget.compact ? 14.0 : (widget.large ? 18.0 : 14.0);
 
     return GestureDetector(
       onTapDown: (_) { if (widget.enabled) _ctrl.forward(); },
@@ -758,15 +781,15 @@ class _ActionButtonState extends State<_ActionButton>
                 child: Row(
                   children: [
                     Container(
-                      width: widget.large ? 40 : 34,
-                      height: widget.large ? 40 : 34,
+                      width: widget.compact ? 32 : (widget.large ? 40 : 34),
+                      height: widget.compact ? 32 : (widget.large ? 40 : 34),
                       decoration: BoxDecoration(
                         color: Colors.white.withAlpha(30),
                         borderRadius: BorderRadius.circular(10),
                       ),
                       child: Icon(widget.icon,
                         color: Colors.white,
-                        size: widget.large ? 22 : 18),
+                        size: widget.compact ? 18 : (widget.large ? 22 : 18)),
                     ),
                     const SizedBox(width: 14),
                     Column(
@@ -776,13 +799,13 @@ class _ActionButtonState extends State<_ActionButton>
                         Text(widget.label,
                           style: TextStyle(
                             color: Colors.white,
-                            fontSize: widget.large ? 16 : 14,
+                            fontSize: widget.compact ? 13 : (widget.large ? 16 : 14),
                             fontWeight: FontWeight.w800,
                           )),
                         Text(widget.subtitle,
                           style: TextStyle(
                             color: Colors.white.withAlpha(180),
-                            fontSize: 11,
+                            fontSize: widget.compact ? 9 : 11,
                           )),
                       ],
                     ),
@@ -1238,4 +1261,3 @@ class _SourceOption extends StatelessWidget {
     );
   }
 }
-

@@ -4,6 +4,7 @@ import 'package:flutter_map/flutter_map.dart';
 import 'package:latlong2/latlong.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../core/app_colors.dart';
+import '../core/constants.dart';
 import '../services/territorial_service.dart';
 import '../data/remote/supabase_service.dart';
 
@@ -55,7 +56,7 @@ class _DashboardMapState extends State<DashboardMap> {
       // We do separate queries if joins fail, but let's try direct first.
       // A safer approach for a hackathon without guaranteed FKs is querying separately.
       
-      final obsData = await client.from('observations').select('id, capture_id, priority_score, priority_label');
+      final obsData = await client.from('observations').select('id, capture_id, anomaly_type, priority_score, priority_label');
       final locData = await client.from('locations').select('observation_id, latitude, longitude');
       final detData = await client.from('detections').select('observation_id, class_code, confidence');
 
@@ -92,7 +93,10 @@ class _DashboardMapState extends State<DashboardMap> {
           // Find the dominant class for this observation
           dets.sort((a, b) => (b['confidence'] as num).compareTo(a['confidence'] as num));
           dominantClass = dets.first['class_code'] as String;
-        } else if (obs['priority_label'] != null && (obs['priority_label'] as String).isNotEmpty) {
+        } else if (TariqMapConstants.allCodes.contains(obs['anomaly_type'])) {
+          dominantClass = obs['anomaly_type'] as String;
+        } else if (TariqMapConstants.allCodes.contains(obs['priority_label'])) {
+          // Compatibility fallback for records created before anomaly_type.
           dominantClass = obs['priority_label'] as String;
         }
 
@@ -136,20 +140,13 @@ class _DashboardMapState extends State<DashboardMap> {
   }
 
   Widget _buildMarkerWidget(_Cluster cluster) {
-    Color color;
-    IconData icon;
-    
-    // Assign colors based on anomaly type
-    if (cluster.dominantClass.contains('crack')) {
-      color = AppColors.high;
-      icon = Icons.timeline;
-    } else if (cluster.dominantClass.contains('pothole')) {
-      color = AppColors.critical;
-      icon = Icons.radio_button_unchecked;
-    } else {
-      color = AppColors.teal;
-      icon = Icons.warning_amber_rounded;
-    }
+    final color = AppColors.forClassCode(cluster.dominantClass);
+    final icon = switch (cluster.dominantClass) {
+      'D00' || 'D10' => Icons.timeline,
+      'D20' => Icons.grid_4x4,
+      'D40' => Icons.radio_button_unchecked,
+      _ => Icons.warning_amber_rounded,
+    };
 
     return GestureDetector(
       onTap: () {

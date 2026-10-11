@@ -5,6 +5,7 @@ import 'package:http/http.dart' as http;
 import 'package:mime/mime.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:uuid/uuid.dart';
+import '../../core/constants.dart';
 import '../../core/supabase_config.dart';
 import '../../models/observation.dart';
 import '../../services/image_compressor.dart';
@@ -232,6 +233,7 @@ class SupabaseService {
       'image_height':         obs.imageHeight,
       'priority_score':       obs.priorityScore,
       'priority_label':       obs.priorityLabel,
+      'anomaly_type':         _anomalyTypeFor(obs),
       'model_bundle_version': obs.modelBundleVersion,
       'created_at':           capturedAt,
     });
@@ -388,6 +390,17 @@ class SupabaseService {
   }
 
   // Private helpers
+
+  String? _anomalyTypeFor(Observation obs) {
+    final detections = [...obs.detections]
+      ..sort((a, b) => b.confidence.compareTo(a.confidence));
+    for (final detection in detections) {
+      if (TariqMapConstants.allCodes.contains(detection.classCode)) {
+        return detection.classCode;
+      }
+    }
+    return null;
+  }
 
   Future<void> _recordMediaFile({
     required String? observationId,

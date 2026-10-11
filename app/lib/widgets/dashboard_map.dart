@@ -416,10 +416,6 @@ class _ClusterDetailsSheet extends StatelessWidget {
                               errorBuilder: (ctx, err, stack) => const Center(
                                 child: Icon(Icons.broken_image, size: 40, color: Colors.grey),
                               ),
-                              loadingBuilder: (ctx, child, progress) {
-                                if (progress == null) return child;
-                                return const Center(child: CircularProgressIndicator());
-                              },
                             );
                           },
                         ),

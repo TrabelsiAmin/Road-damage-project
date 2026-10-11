@@ -270,7 +270,6 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
                         _ActionGrid(
                           busy: _busy,
                           onTakePhoto:   _openTakePhoto,
-                          onLiveScan:    _openLiveStream,
                           onRecordVideo: _openVideoImport,
                         ),
 
@@ -594,13 +593,11 @@ class _ActionGrid extends StatelessWidget {
   const _ActionGrid({
     required this.busy,
     required this.onTakePhoto,
-    required this.onLiveScan,
     required this.onRecordVideo,
   });
 
   final bool         busy;
   final VoidCallback onTakePhoto;
-  final VoidCallback onLiveScan;
   final VoidCallback onRecordVideo;
 
   @override
@@ -610,7 +607,7 @@ class _ActionGrid extends StatelessWidget {
         // ── Take Photo — primary large button ───────────────────────────────
         _ActionButton(
           label: 'Take Photo',
-          subtitle: 'Focused road defect report',
+          subtitle: 'Capture & analyse road defects with AI',
           icon: Icons.camera_alt_rounded,
           gradient: const [AppColors.teal, AppColors.tealGlow],
           glow: AppColors.teal,
@@ -619,34 +616,16 @@ class _ActionGrid extends StatelessWidget {
           large: true,
         ),
         const SizedBox(height: 12),
-        Row(
-          children: [
-            Expanded(
-              child: _ActionButton(
-                label: 'Live Scan',
-                subtitle: 'Inspect as you drive',
-                icon: Icons.radar_rounded,
-                gradient: const [Color(0xFF0F766E), Color(0xFF14B8A6)],
-                glow: const Color(0xFF0F766E),
-                enabled: !busy,
-                onTap: onLiveScan,
-                compact: true,
-              ),
-            ),
-            const SizedBox(width: 10),
-            Expanded(
-              child: _ActionButton(
-                label: 'Video Scan',
-                subtitle: 'Review a road route',
-                icon: Icons.video_library_rounded,
-                gradient: const [Color(0xFF7C3AED), Color(0xFF9333EA)],
-                glow: const Color(0xFF7C3AED),
-                enabled: !busy,
-                onTap: onRecordVideo,
-                compact: true,
-              ),
-            ),
-          ],
+        // ── Record Video — secondary large button ───────────────────────────
+        _ActionButton(
+          label: 'Record Video',
+          subtitle: 'Extract & detect anomalies frame by frame',
+          icon: Icons.videocam_rounded,
+          gradient: const [Color(0xFF7C3AED), Color(0xFF9333EA)],
+          glow: const Color(0xFF7C3AED),
+          enabled: !busy,
+          onTap: onRecordVideo,
+          large: true,
         ),
         // Loading indicator
         if (busy) const Padding(

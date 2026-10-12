@@ -562,9 +562,26 @@ class _ModelPill extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final isMock = detection.usingMock;
-    final color  = isMock ? AppColors.mockWarning : AppColors.syncDone;
-    final icon   = isMock ? Icons.science_outlined : Icons.verified_outlined;
-    final label  = isMock ? 'DEMO MODE' : 'TFLite AI ACTIVE';
+    final isFallback = detection.isRoadSenseFallback;
+    final isHybrid = detection.isHybridActive;
+
+    final color = isMock
+        ? AppColors.mockWarning
+        : isFallback
+            ? Colors.orange
+            : AppColors.syncDone;
+    final icon = isMock
+        ? Icons.science_outlined
+        : isFallback
+            ? Icons.warning_amber_outlined
+            : Icons.verified_outlined;
+    final label = isMock
+        ? 'DEMO MODE'
+        : isFallback
+            ? 'TFLite AI (FALLBACK)'
+            : isHybrid
+                ? 'TFLite AI ACTIVE (HYBRID)'
+                : 'TFLite AI ACTIVE';
 
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),

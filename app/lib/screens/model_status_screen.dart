@@ -30,12 +30,18 @@ class _ModelStatusScreenState extends State<ModelStatusScreen> {
     final statuses = <String, ModelStatus>{};
     for (final runner in widget.service.runners) {
       final path = await ModelManager.instance.localModelPath(runner.agentName);
+      final classes = TariqMapConstants.agentClasses[runner.agentName] ??
+          (runner.agentName == 'road_damage_roadsense'
+              ? const ['D00', 'D10', 'D20']
+              : (runner.agentName == 'road_damage_pothole'
+                  ? const ['D40']
+                  : const <String>[]));
       statuses[runner.agentName] = ModelStatus(
         agentName: runner.agentName,
         isLoaded:  runner.isReady && !runner.isMock,
         isMock:    runner.isMock,
         filePath:  path,
-        classes:   TariqMapConstants.agentClasses[runner.agentName] ?? const [],
+        classes:   classes,
       );
     }
     if (mounted) setState(() { _statuses = statuses; _loading = false; });
@@ -58,7 +64,13 @@ class _ModelStatusScreenState extends State<ModelStatusScreen> {
               padding: const EdgeInsets.all(16),
               children: [
                 // ── Overall status banner ───────────────────────────────────
-                _StatusBanner(allMock: allMock, partial: widget.service.partialMock),
+                _StatusBanner(
+                  allMock: allMock,
+                  partial: widget.service.partialMock,
+                  isHybrid: widget.service.isHybridActive,
+                  isFallback: widget.service.isRoadSenseFallback,
+                  fallbackReason: widget.service.fallbackReason,
+                ),
                 const SizedBox(height: 16),
 
                 // ── Bundle info ─────────────────────────────────────────────
@@ -119,20 +131,35 @@ class _ModelStatusScreenState extends State<ModelStatusScreen> {
 // ---------------------------------------------------------------------------
 
 class _StatusBanner extends StatelessWidget {
-  const _StatusBanner({required this.allMock, required this.partial});
+  const _StatusBanner({
+    required this.allMock,
+    required this.partial,
+    this.isHybrid = false,
+    this.isFallback = false,
+    this.fallbackReason,
+  });
   final bool allMock;
   final bool partial;
+  final bool isHybrid;
+  final bool isFallback;
+  final String? fallbackReason;
 
   @override
   Widget build(BuildContext context) {
     final (color, icon, text) = allMock
         ? (AppColors.mockWarning, Icons.science_outlined,
            'DEMO MOCK INFERENCE — all agents are deterministic mocks')
-        : partial
-            ? (AppColors.partialWarning, Icons.warning_amber_outlined,
-               'PARTIAL REAL — some agents loaded real models, some are mocks')
-            : (AppColors.syncDone, Icons.verified_outlined,
-               'REAL MODELS — all agents running on-device TFLite weights');
+        : isFallback
+            ? (Colors.orange, Icons.warning_amber_outlined,
+               'TFLite AI (FALLBACK) — RoadSense failed to load; running legacy model alone${fallbackReason != null ? ' ($fallbackReason)' : ''}')
+            : isHybrid
+                ? (AppColors.syncDone, Icons.verified_outlined,
+                   'TFLite AI ACTIVE (HYBRID) — RoadSense (D00/D10/D20) + Legacy (D40)')
+                : partial
+                    ? (AppColors.partialWarning, Icons.warning_amber_outlined,
+                       'PARTIAL REAL — some agents loaded real models, some are mocks')
+                    : (AppColors.syncDone, Icons.verified_outlined,
+                       'REAL MODELS — all agents running on-device TFLite weights');
 
     return Container(
       padding: const EdgeInsets.all(14),

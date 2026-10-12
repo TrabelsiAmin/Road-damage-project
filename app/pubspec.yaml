@@ -63,3 +63,4 @@ flutter:
   uses-material-design: true
   assets:
     - assets/models/
+    - assets/models/road_damage_roadsense.tflite

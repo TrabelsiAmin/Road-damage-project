@@ -57,6 +57,38 @@ class TariqMapConstants {
   static const defaultIouThreshold = 0.45;
   static const defaultLiveFps = 5;  // frames per second for live inference
 
+  // ── RoadSense Hybrid Configuration (Feature Flags - Default OFF) ─────────
+  /// When true, enables the hybrid pipeline using RoadSense for cracks
+  /// (D00, D10, D20) and legacy model for potholes (D40).
+  /// Defaults to false so app behavior is completely identical to before.
+  static const bool useRoadSenseModel = false;
+
+  /// When [useRoadSenseModel] is true, determines whether the legacy model is
+  /// run alongside RoadSense to provide D40 (pothole) detections.
+  static const bool usePotholeModelForD40 = true;
+
+  /// When true and running hybrid, drops legacy D40 detections if a RoadSense
+  /// "Repair" box overlaps it with IoU > 0.5 (filters patched-asphalt false potholes).
+  /// Defaults to false.
+  static const bool filterPotholesWithRepair = false;
+
+  /// Separate confidence threshold for D40 pothole detections from the legacy model.
+  static const double d40ConfidenceThreshold = 0.40;
+
+  /// Video frame-skip factor for the pothole model in video mode (run every N frames).
+  /// Default 1 (run on every frame).
+  static const int potholeModelFrameSkip = 1;
+
+  /// Model asset paths
+  static const String legacyModelAsset = 'assets/models/road_damage.tflite';
+  static const String roadSenseModelAsset = 'assets/models/road_damage_roadsense.tflite';
+
+  /// RoadSense confidence thresholds
+  static const double roadSenseD00Threshold = 0.35;
+  static const double roadSenseD10Threshold = 0.35;
+  static const double roadSenseD20Threshold = 0.30;
+  static const double roadSenseRepairThreshold = 0.25;
+
   // ── Sync ────────────────────────────────────────────────────────────────
   static const maxUploadRetries = 5;
   static const retryBackoffBase = Duration(seconds: 2);

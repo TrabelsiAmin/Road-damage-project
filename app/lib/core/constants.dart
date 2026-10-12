@@ -60,12 +60,13 @@ class TariqMapConstants {
   // ── RoadSense Hybrid Configuration (Feature Flags - Default OFF) ─────────
   /// When true, enables the hybrid pipeline using RoadSense for cracks
   /// (D00, D10, D20) and legacy model for potholes (D40).
-  /// Defaults to false so app behavior is completely identical to before.
-  static const bool useRoadSenseModel = false;
+  static const bool useRoadSenseModel =
+      bool.fromEnvironment('USE_ROADSENSE_MODEL', defaultValue: false);
 
   /// When [useRoadSenseModel] is true, determines whether the legacy model is
   /// run alongside RoadSense to provide D40 (pothole) detections.
-  static const bool usePotholeModelForD40 = true;
+  static const bool usePotholeModelForD40 =
+      bool.fromEnvironment('USE_POTHOLE_MODEL_FOR_D40', defaultValue: true);
 
   /// When true and running hybrid, drops legacy D40 detections if a RoadSense
   /// "Repair" box overlaps it with IoU > 0.5 (filters patched-asphalt false potholes).

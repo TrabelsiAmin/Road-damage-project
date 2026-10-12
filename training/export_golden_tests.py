@@ -223,8 +223,16 @@ def main():
         crack_dets_nms = class_aware_nms(raw_candidates, iou_thresh=0.45)
         repair_dets_nms = class_aware_nms(repair_candidates, iou_thresh=0.45)
 
+        # Save binary output tensor for exact decoder testing in Dart
+        tensors_dir = GOLDEN_DIR / "tensors"
+        tensors_dir.mkdir(parents=True, exist_ok=True)
+        tensor_file_name = f"{Path(img_name).stem}_output.bin"
+        with open(tensors_dir / tensor_file_name, "wb") as bf:
+            bf.write(output_tensor.astype(np.float32).tobytes())
+
         record = {
             "imageName": img_name,
+            "tensorFile": f"tensors/{tensor_file_name}",
             "originalWidth": orig_w,
             "originalHeight": orig_h,
             "letterbox": {

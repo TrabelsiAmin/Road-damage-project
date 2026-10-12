@@ -22,6 +22,7 @@
   "records": [
     {
       "imageName": "China_Drone_000017.jpg",
+      "tensorFile": "tensors/China_Drone_000017_output.bin",
       "originalWidth": 512,
       "originalHeight": 512,
       "letterbox": {
@@ -110,6 +111,7 @@
     },
     {
       "imageName": "China_Drone_000273.jpg",
+      "tensorFile": "tensors/China_Drone_000273_output.bin",
       "originalWidth": 512,
       "originalHeight": 512,
       "letterbox": {
@@ -181,6 +183,7 @@
     },
     {
       "imageName": "China_Drone_000085.jpg",
+      "tensorFile": "tensors/China_Drone_000085_output.bin",
       "originalWidth": 512,
       "originalHeight": 512,
       "letterbox": {
@@ -252,6 +255,7 @@
     },
     {
       "imageName": "Norway_000001.jpg",
+      "tensorFile": "tensors/Norway_000001_output.bin",
       "originalWidth": 3643,
       "originalHeight": 2041,
       "letterbox": {
@@ -305,6 +309,7 @@
     },
     {
       "imageName": "Czech_000010.jpg",
+      "tensorFile": "tensors/Czech_000010_output.bin",
       "originalWidth": 600,
       "originalHeight": 600,
       "letterbox": {

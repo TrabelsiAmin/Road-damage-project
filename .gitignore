@@ -38,3 +38,8 @@ venv/
 # Secrets and local environment configuration
 *.env
 !.env.example
+
+# Web / Dashboard
+node_modules/
+dist/
+.vite/

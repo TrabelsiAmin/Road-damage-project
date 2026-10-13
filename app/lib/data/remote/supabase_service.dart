@@ -219,7 +219,7 @@ class SupabaseService {
     final capturedAt = obs.createdAt.toUtc().toIso8601String();
     final orgId = organizationId ?? '11111111-1111-4111-8111-111111111111';
 
-    // 1. Observation row
+    // 1. Observation row (insert with ignore-duplicates so sync is idempotent without anon UPDATE)
     await _client.from(SupabaseCfg.tableObservations).upsert({
       'id':                   obs.id,
       'capture_id':           obs.captureId,
@@ -236,7 +236,9 @@ class SupabaseService {
       'anomaly_type':         _anomalyTypeFor(obs),
       'model_bundle_version': obs.modelBundleVersion,
       'created_at':           capturedAt,
-    });
+      'is_demo':              false,
+      'status':               'unconfirmed',
+    }, onConflict: 'id', ignoreDuplicates: true);
 
     // 2. Location row
     await _client.from(SupabaseCfg.tableLocations).upsert({
@@ -245,7 +247,7 @@ class SupabaseService {
       'longitude':       obs.longitude,
       'accuracy_meters': obs.accuracyMeters,
       'captured_at':     capturedAt,
-    });
+    }, ignoreDuplicates: true);
 
     // 3. Agent runs + detections. RLS on agent_runs rejects the publishable
     // key; the observation and location above are still kept.
@@ -291,9 +293,13 @@ class SupabaseService {
         detections.sort((a, b) => b.confidence.compareTo(a.confidence));
         final code = detections.first.classCode.trim();
         if (code.isNotEmpty) {
-          await _client.from(SupabaseCfg.tableObservations).update({
-            'priority_label': code,
-          }).eq('id', obs.id);
+          try {
+            await _client.from(SupabaseCfg.tableObservations).update({
+              'priority_label': code,
+            }).eq('id', obs.id);
+          } catch (_) {
+            // In hardened RLS, anon update is disabled; initial insert already included priority_label.
+          }
         }
       }
     }

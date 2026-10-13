@@ -42,7 +42,9 @@ class ApiClient implements ObservationSyncClient {
       "priority_label": obs.priorityLabel,
       "model_bundle_version": obs.modelBundleVersion,
       "created_at": capturedAt,
-    });
+      "is_demo": false,
+      "status": "unconfirmed",
+    }, onConflict: 'id', ignoreDuplicates: true);
 
     // 2. Locations Table
     await client.from(SupabaseCfg.tableLocations).upsert({
@@ -51,11 +53,9 @@ class ApiClient implements ObservationSyncClient {
       "longitude": obs.longitude,
       "accuracy_meters": obs.accuracyMeters,
       "captured_at": capturedAt,
-    });
+    }, ignoreDuplicates: true);
 
-    // 3. Agent runs and detections. The publishable key can write observations
-    // and locations, but current RLS rejects agent_runs. Keep the dominant
-    // class on the observation so the map still colors the pin.
+    // 3. Agent runs and detections.
     try {
       for (final result in obs.agentResults) {
         final agentRunId = _uuid.v4();
@@ -68,7 +68,7 @@ class ApiClient implements ObservationSyncClient {
           "is_mock": result.isMock,
           "latency_ms": result.latencyMs,
           "model_bundle_version": obs.modelBundleVersion,
-        });
+        }, onConflict: 'id', ignoreDuplicates: true);
 
         if (result.detections.isNotEmpty) {
           final detectionsData = result.detections.map((d) => {
@@ -88,26 +88,25 @@ class ApiClient implements ObservationSyncClient {
             "detected_at": (d.timestamp ?? obs.createdAt).toUtc().toIso8601String(),
           }).toList();
 
-          await client.from(SupabaseCfg.tableDetections).upsert(detectionsData);
+          await client.from(SupabaseCfg.tableDetections).upsert(
+            detectionsData,
+            onConflict: 'id',
+            ignoreDuplicates: true,
+          );
         }
       }
     } on PostgrestException catch (e) {
       if (!_isRlsDenied(e)) rethrow;
-      final dominant = _dominantClass(obs);
-      if (dominant != null) {
-        await client.from(SupabaseCfg.tableObservations).update({
-          "priority_label": dominant,
-        }).eq("id", obs.id);
-      }
+      // In hardened RLS, anon update is disabled; initial insert already included priority_label.
     }
 
-    // 4. Sync receipts are optional. RLS currently rejects them too.
+    // 4. Sync receipts are optional.
     try {
       await client.from(SupabaseCfg.tableSyncReceipts).upsert({
         "observation_id": obs.id,
         "idempotency_key": idempotencyKey,
         "payload_hash": "flutter-direct-sync",
-      });
+      }, ignoreDuplicates: true);
     } on PostgrestException catch (e) {
       if (!_isRlsDenied(e)) rethrow;
     }
@@ -116,13 +115,5 @@ class ApiClient implements ObservationSyncClient {
   bool _isRlsDenied(PostgrestException error) {
     return error.code == "42501" ||
         error.message.contains("row-level security");
-  }
-
-  String? _dominantClass(Observation obs) {
-    final detections = obs.detections;
-    if (detections.isEmpty) return null;
-    detections.sort((a, b) => b.confidence.compareTo(a.confidence));
-    final code = detections.first.classCode.trim();
-    return code.isEmpty ? null : code;
   }
 }

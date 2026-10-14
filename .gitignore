@@ -43,3 +43,13 @@ venv/
 node_modules/
 dist/
 .vite/
+
+# Datasets, model weights, and scratch
+archive*/
+Global_Potholes_Dataset*/
+inference_results/
+runs/
+scratch/
+*.pt
+*.bak
+roadsense_best.tflite

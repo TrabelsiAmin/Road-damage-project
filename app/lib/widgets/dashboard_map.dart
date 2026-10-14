@@ -1,15 +1,28 @@
-import 'dart:typed_data';
+import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter_map/flutter_map.dart';
 import 'package:latlong2/latlong.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../core/app_colors.dart';
 import '../core/constants.dart';
+import '../models/observation.dart';
+import '../services/observation_repository.dart';
 import '../services/territorial_service.dart';
-import '../data/remote/supabase_service.dart';
+import 'annotated_image.dart';
 
 class DashboardMap extends StatefulWidget {
-  const DashboardMap({super.key});
+  const DashboardMap({
+    super.key,
+    this.repository,
+    this.initialObservations,
+    this.initialLocations,
+    this.initialDetections,
+  });
+
+  final ObservationRepository? repository;
+  final List<Map<String, dynamic>>? initialObservations;
+  final List<Map<String, dynamic>>? initialLocations;
+  final List<Map<String, dynamic>>? initialDetections;
 
   @override
   State<DashboardMap> createState() => _DashboardMapState();
@@ -19,7 +32,7 @@ class _DashboardMapState extends State<DashboardMap> {
   bool _loading = true;
   final List<Marker> _markers = [];
   String? _error;
-  
+
   final MapController _mapController = MapController();
   LatLng? _userLocation;
 
@@ -38,7 +51,6 @@ class _DashboardMapState extends State<DashboardMap> {
         setState(() {
           _userLocation = LatLng(pos.latitude, pos.longitude);
         });
-        // Try to move if map is already built
         try {
           _mapController.move(_userLocation!, 15.0);
         } catch (_) {}
@@ -50,66 +62,95 @@ class _DashboardMapState extends State<DashboardMap> {
 
   Future<void> _fetchAnomalies() async {
     try {
-      final client = Supabase.instance.client;
-      
-      // Fetch observations with their locations and highest confidence detections
-      // We do separate queries if joins fail, but let's try direct first.
-      // A safer approach for a hackathon without guaranteed FKs is querying separately.
-      
-      final obsData = await client.from('observations').select('id, capture_id, anomaly_type, priority_score, priority_label');
-      final locData = await client.from('locations').select('observation_id, latitude, longitude');
-      final detData = await client.from('detections').select('observation_id, class_code, confidence');
+      List<dynamic> obsData;
+      List<dynamic> locData;
+      List<dynamic> detData;
+
+      if (widget.initialObservations != null &&
+          widget.initialLocations != null &&
+          widget.initialDetections != null) {
+        obsData = widget.initialObservations!;
+        locData = widget.initialLocations!;
+        detData = widget.initialDetections!;
+      } else {
+        final client = Supabase.instance.client;
+        obsData = await client
+            .from('observations')
+            .select('id, capture_id, anomaly_type, priority_score, priority_label, status, created_at, captured_at');
+        locData = await client
+            .from('locations')
+            .select('observation_id, latitude, longitude, accuracy_meters');
+        detData = await client
+            .from('detections')
+            .select('observation_id, class_code, confidence, box_x, box_y, box_w, box_h');
+      }
 
       final locMap = <String, Map<String, dynamic>>{};
       for (final l in locData) {
-        if (l['latitude'] != 0.0 && l['longitude'] != 0.0) {
-          locMap[l['observation_id'] as String] = l;
+        final obsId = l['observation_id']?.toString() ?? '';
+        final lat = (l['latitude'] as num?)?.toDouble() ?? 0.0;
+        final lng = (l['longitude'] as num?)?.toDouble() ?? 0.0;
+        if (lat != 0.0 && lng != 0.0 && obsId.isNotEmpty) {
+          locMap[obsId] = Map<String, dynamic>.from(l as Map);
         }
       }
 
       final detMap = <String, List<Map<String, dynamic>>>{};
       for (final d in detData) {
-        final obsId = d['observation_id'] as String;
-        detMap.putIfAbsent(obsId, () => []).add(d);
+        final obsId = d['observation_id']?.toString() ?? '';
+        if (obsId.isNotEmpty) {
+          detMap.putIfAbsent(obsId, () => []).add(Map<String, dynamic>.from(d as Map));
+        }
       }
 
-      // Group by proximity (rounding to 4 decimal places, approx 11 meters)
+      // Group by proximity (approx 11-20 meters)
       final Map<String, _Cluster> clusters = {};
 
-      for (final obs in obsData) {
-        final obsId = obs['id'] as String;
+      for (final rawObs in obsData) {
+        final obs = Map<String, dynamic>.from(rawObs as Map);
+        final obsId = obs['id']?.toString() ?? '';
         final loc = locMap[obsId];
         if (loc == null) continue;
 
         final lat = (loc['latitude'] as num).toDouble();
         final lng = (loc['longitude'] as num).toDouble();
-        
         final gridKey = '${lat.toStringAsFixed(4)}_${lng.toStringAsFixed(4)}';
-        
+
         final dets = detMap[obsId] ?? [];
-        
-        String dominantClass = 'unknown';
+        String dominantClass = 'D40';
+        double highestConfidence = 0.0;
+
         if (dets.isNotEmpty) {
-          // Find the dominant class for this observation
-          dets.sort((a, b) => (b['confidence'] as num).compareTo(a['confidence'] as num));
-          dominantClass = dets.first['class_code'] as String;
+          dets.sort((a, b) =>
+              ((b['confidence'] as num?) ?? 0).compareTo((a['confidence'] as num?) ?? 0));
+          dominantClass = dets.first['class_code']?.toString() ?? 'D40';
+          highestConfidence = ((dets.first['confidence'] as num?) ?? 0).toDouble();
         } else if (TariqMapConstants.allCodes.contains(obs['anomaly_type'])) {
           dominantClass = obs['anomaly_type'] as String;
         } else if (TariqMapConstants.allCodes.contains(obs['priority_label'])) {
-          // Compatibility fallback for records created before anomaly_type.
           dominantClass = obs['priority_label'] as String;
         }
 
+        final enrichedObs = {
+          ...obs,
+          'latitude': lat,
+          'longitude': lng,
+          'accuracy_meters': loc['accuracy_meters'],
+          'dominant_class': dominantClass,
+          'highest_confidence': highestConfidence,
+          'detections': dets,
+        };
+
         if (clusters.containsKey(gridKey)) {
           clusters[gridKey]!.count++;
-          clusters[gridKey]!.observations.add(obs);
+          clusters[gridKey]!.observations.add(enrichedObs);
         } else {
           clusters[gridKey] = _Cluster(
             lat: lat,
             lng: lng,
             dominantClass: dominantClass,
             count: 1,
-            observations: [obs],
+            observations: [enrichedObs],
           );
         }
       }
@@ -117,14 +158,15 @@ class _DashboardMapState extends State<DashboardMap> {
       final markers = clusters.values.map((c) {
         return Marker(
           point: LatLng(c.lat, c.lng),
-          width: 40,
-          height: 40,
+          width: 44,
+          height: 44,
           child: _buildMarkerWidget(c),
         );
       }).toList();
 
       if (mounted) {
         setState(() {
+          _markers.clear();
           _markers.addAll(markers);
           _loading = false;
         });
@@ -148,34 +190,45 @@ class _DashboardMapState extends State<DashboardMap> {
       _ => Icons.warning_amber_rounded,
     };
 
-    return GestureDetector(
-      onTap: () {
-        _showClusterDetails(cluster);
-      },
-      child: Container(
-        decoration: BoxDecoration(
-          color: color,
-          shape: BoxShape.circle,
-          border: Border.all(color: Colors.white, width: 2),
-          boxShadow: [
-            BoxShadow(
-              color: Colors.black.withAlpha(50),
-              blurRadius: 4,
-              offset: const Offset(0, 2),
+    return Semantics(
+      label: 'Map pin ${cluster.dominantClass} (${cluster.count})',
+      button: true,
+      child: MouseRegion(
+        cursor: SystemMouseCursors.click,
+        child: GestureDetector(
+          behavior: HitTestBehavior.opaque,
+          key: ValueKey('pin_${cluster.lat.toStringAsFixed(4)}_${cluster.lng.toStringAsFixed(4)}'),
+          onTap: () {
+            debugPrint('[DashboardMap] Pin tapped at ${cluster.lat}, ${cluster.lng}');
+            _showClusterDetails(cluster);
+          },
+          child: Container(
+            width: 44,
+            height: 44,
+            alignment: Alignment.center,
+            decoration: BoxDecoration(
+              color: color,
+              shape: BoxShape.circle,
+              border: Border.all(color: Colors.white, width: 2.5),
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.black.withAlpha(70),
+                  blurRadius: 6,
+                  offset: const Offset(0, 2),
+                ),
+              ],
             ),
-          ],
-        ),
-        child: Center(
-          child: cluster.count > 1
-              ? Text(
-                  '${cluster.count}',
-                  style: const TextStyle(
-                    color: Colors.white,
-                    fontWeight: FontWeight.bold,
-                    fontSize: 12,
-                  ),
-                )
-              : Icon(icon, color: Colors.white, size: 16),
+            child: cluster.count > 1
+                ? Text(
+                    '${cluster.count}',
+                    style: const TextStyle(
+                      color: Colors.white,
+                      fontWeight: FontWeight.bold,
+                      fontSize: 13,
+                    ),
+                  )
+                : Icon(icon, color: Colors.white, size: 20),
+          ),
         ),
       ),
     );
@@ -186,14 +239,22 @@ class _DashboardMapState extends State<DashboardMap> {
       context: context,
       isScrollControlled: true,
       backgroundColor: Colors.transparent,
-      builder: (ctx) => _ClusterDetailsSheet(cluster: cluster),
+      builder: (ctx) => _ClusterDetailsSheet(
+        cluster: cluster,
+        repository: widget.repository ?? SqliteObservationRepository(),
+      ),
     );
   }
 
   @override
   Widget build(BuildContext context) {
     if (_error != null) {
-      return Center(child: Text(_error!, style: const TextStyle(color: Colors.red)));
+      return Center(
+        child: Padding(
+          padding: const EdgeInsets.all(16.0),
+          child: Text(_error!, style: const TextStyle(color: Colors.red, fontSize: 12)),
+        ),
+      );
     }
 
     if (_loading) {
@@ -201,8 +262,8 @@ class _DashboardMapState extends State<DashboardMap> {
     }
 
     // Default center to Tunisia if no markers, else center on first marker
-    final center = _userLocation ?? 
-        (_markers.isNotEmpty ? _markers.first.point : const LatLng(36.8065, 10.1815)); 
+    final center = _userLocation ??
+        (_markers.isNotEmpty ? _markers.first.point : const LatLng(36.8065, 10.1815));
 
     return ClipRRect(
       borderRadius: BorderRadius.circular(16),
@@ -210,59 +271,64 @@ class _DashboardMapState extends State<DashboardMap> {
         children: [
           FlutterMap(
             mapController: _mapController,
-        options: MapOptions(
-          initialCenter: center,
-          initialZoom: _userLocation != null ? 15.0 : 12.0,
-          onMapReady: () {
-            if (_userLocation != null) {
-              _mapController.move(_userLocation!, 15.0);
-            }
-          },
-          interactionOptions: const InteractionOptions(
-            flags: InteractiveFlag.all & ~InteractiveFlag.rotate,
-          ),
-        ),
-        children: [
-          TileLayer(
-            urlTemplate: 'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
-            userAgentPackageName: 'com.tariqmap.app',
-          ),
-          MarkerLayer(markers: _markers),
-          if (_userLocation != null)
-            MarkerLayer(
-              markers: [
-                Marker(
-                  point: _userLocation!,
-                  width: 32,
-                  height: 32,
-                  child: Stack(
-                    alignment: Alignment.center,
-                    children: [
-                      Container(
-                        width: 32, height: 32,
-                        decoration: BoxDecoration(
-                          shape: BoxShape.circle,
-                          color: Colors.blue.withAlpha(50),
-                        ),
-                      ),
-                      Container(
-                        width: 14, height: 14,
-                        decoration: BoxDecoration(
-                          shape: BoxShape.circle,
-                          color: Colors.blue,
-                          border: Border.all(color: Colors.white, width: 2.5),
-                          boxShadow: const [
-                            BoxShadow(color: Colors.black26, blurRadius: 4, offset: Offset(0, 2))
+            options: MapOptions(
+              initialCenter: center,
+              initialZoom: _userLocation != null ? 15.0 : 12.0,
+              onMapReady: () {
+                if (_userLocation != null) {
+                  _mapController.move(_userLocation!, 15.0);
+                }
+              },
+              interactionOptions: const InteractionOptions(
+                flags: InteractiveFlag.all & ~InteractiveFlag.rotate,
+              ),
+            ),
+            children: [
+              TileLayer(
+                urlTemplate: 'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
+                userAgentPackageName: 'com.tariqmap.app',
+              ),
+              MarkerLayer(markers: _markers),
+              if (_userLocation != null)
+                MarkerLayer(
+                  markers: [
+                    Marker(
+                      point: _userLocation!,
+                      width: 32,
+                      height: 32,
+                      child: IgnorePointer(
+                        child: Stack(
+                          alignment: Alignment.center,
+                          children: [
+                            Container(
+                              width: 32,
+                              height: 32,
+                              decoration: BoxDecoration(
+                                shape: BoxShape.circle,
+                                color: Colors.blue.withAlpha(50),
+                              ),
+                            ),
+                            Container(
+                              width: 14,
+                              height: 14,
+                              decoration: BoxDecoration(
+                                shape: BoxShape.circle,
+                                color: Colors.blue,
+                                border: Border.all(color: Colors.white, width: 2.5),
+                                boxShadow: const [
+                                  BoxShadow(
+                                      color: Colors.black26, blurRadius: 4, offset: Offset(0, 2))
+                                ],
+                              ),
+                            ),
                           ],
                         ),
                       ),
-                    ],
-                  ),
+                    ),
+                  ],
                 ),
-              ],
-            ),
-        ],
-      ),
+            ],
+          ),
           Positioned(
             bottom: 10,
             left: 10,
@@ -342,13 +408,19 @@ class _Cluster {
 
 class _ClusterDetailsSheet extends StatelessWidget {
   final _Cluster cluster;
+  final ObservationRepository repository;
 
-  const _ClusterDetailsSheet({required this.cluster});
+  const _ClusterDetailsSheet({
+    required this.cluster,
+    required this.repository,
+  });
 
   @override
   Widget build(BuildContext context) {
+    final title = '${cluster.count} Anomaly Record${cluster.count > 1 ? 's' : ''}';
+
     return Container(
-      height: MediaQuery.of(context).size.height * 0.7,
+      height: MediaQuery.of(context).size.height * 0.78,
       decoration: const BoxDecoration(
         color: Colors.white,
         borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
@@ -365,16 +437,26 @@ class _ClusterDetailsSheet extends StatelessWidget {
             ),
           ),
           Padding(
-            padding: const EdgeInsets.all(16.0),
-            child: Text(
-              '${cluster.count} Anomaly Record${cluster.count > 1 ? 's' : ''}',
-              style: const TextStyle(
-                fontSize: 20,
-                fontWeight: FontWeight.bold,
-                color: AppColors.navy,
-              ),
+            padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                Text(
+                  title,
+                  style: const TextStyle(
+                    fontSize: 18,
+                    fontWeight: FontWeight.bold,
+                    color: AppColors.navy,
+                  ),
+                ),
+                IconButton(
+                  icon: const Icon(Icons.close, color: Colors.grey),
+                  onPressed: () => Navigator.of(context).pop(),
+                ),
+              ],
             ),
           ),
+          const Divider(height: 1),
           Expanded(
             child: ListView.separated(
               padding: const EdgeInsets.all(16),
@@ -382,58 +464,372 @@ class _ClusterDetailsSheet extends StatelessWidget {
               separatorBuilder: (_, __) => const SizedBox(height: 16),
               itemBuilder: (ctx, i) {
                 final obs = cluster.observations[i];
-                final id = obs['id'] as String;
-                final futureImage = SupabaseService.instance
-                    .downloadObservationImage(observationId: id);
-
-                return Container(
-                  decoration: BoxDecoration(
-                    borderRadius: BorderRadius.circular(12),
-                    border: Border.all(color: Colors.grey.shade200),
-                  ),
-                  clipBehavior: Clip.antiAlias,
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.stretch,
-                    children: [
-                      Container(
-                        height: 200,
-                        color: Colors.grey.shade100,
-                        child: FutureBuilder<Uint8List?>(
-                          future: futureImage,
-                          builder: (ctx, snapshot) {
-                            if (snapshot.connectionState == ConnectionState.waiting) {
-                              return const Center(child: CircularProgressIndicator());
-                            }
-                            final imageBytes = snapshot.data;
-                            if (imageBytes == null || imageBytes.isEmpty) {
-                              return const Center(
-                                child: Icon(Icons.image_not_supported, size: 40, color: Colors.grey),
-                              );
-                            }
-                            return Image.memory(
-                              imageBytes,
-                              fit: BoxFit.cover,
-                              errorBuilder: (ctx, err, stack) => const Center(
-                                child: Icon(Icons.broken_image, size: 40, color: Colors.grey),
-                              ),
-                            );
-                          },
-                        ),
-                      ),
-                      Padding(
-                        padding: const EdgeInsets.all(12.0),
-                        child: Text(
-                          'Label: ${obs['priority_label'] ?? 'Unknown'}',
-                          style: const TextStyle(
-                            fontWeight: FontWeight.bold,
-                            fontSize: 16,
-                          ),
-                        ),
-                      ),
-                    ],
-                  ),
+                return _ObservationCard(
+                  obs: obs,
+                  repository: repository,
                 );
               },
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _ObservationCard extends StatelessWidget {
+  final Map<String, dynamic> obs;
+  final ObservationRepository repository;
+
+  const _ObservationCard({
+    required this.obs,
+    required this.repository,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final obsId = obs['id']?.toString() ?? '';
+    final classCode = obs['dominant_class']?.toString() ?? 'D40';
+    final classLabel = TariqMapConstants.labelFor(classCode);
+    final color = AppColors.forClassCode(classCode);
+
+    final priorityScore = (obs['priority_score'] as num?)?.toDouble() ?? 0.0;
+    final priorityLabel = obs['priority_label']?.toString() ??
+        (priorityScore >= 70 ? 'CRITICAL' : priorityScore >= 40 ? 'HIGH' : 'MEDIUM');
+
+    final highestConfidence = (obs['highest_confidence'] as num?)?.toDouble() ?? 0.0;
+    final confidenceText = highestConfidence > 0
+        ? '${(highestConfidence * 100).toStringAsFixed(0)}%'
+        : 'N/A';
+
+    final status = obs['status']?.toString() ?? 'unconfirmed';
+
+    final lat = (obs['latitude'] as num?)?.toDouble() ?? 0.0;
+    final lng = (obs['longitude'] as num?)?.toDouble() ?? 0.0;
+    final accuracy = (obs['accuracy_meters'] as num?)?.toDouble();
+
+    final dateStr = (obs['created_at'] ?? obs['captured_at'])?.toString() ?? '';
+    String formattedDate = 'Recent';
+    if (dateStr.isNotEmpty) {
+      final parsed = DateTime.tryParse(dateStr);
+      if (parsed != null) {
+        final local = parsed.toLocal();
+        formattedDate = '${local.year}-${local.month.toString().padLeft(2, '0')}-${local.day.toString().padLeft(2, '0')} ${local.hour.toString().padLeft(2, '0')}:${local.minute.toString().padLeft(2, '0')}';
+      }
+    }
+
+    return Container(
+      key: ValueKey('detail_card_$obsId'),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: Colors.grey.shade200),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withAlpha(10),
+            blurRadius: 8,
+            offset: const Offset(0, 2),
+          ),
+        ],
+      ),
+      clipBehavior: Clip.antiAlias,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          // ── Header: Class Pill and Status Badge ─────────────────────────
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+            color: color.withAlpha(20),
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                Row(
+                  children: [
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                      decoration: BoxDecoration(
+                        color: color,
+                        borderRadius: BorderRadius.circular(6),
+                      ),
+                      child: Text(
+                        classCode,
+                        style: const TextStyle(
+                          color: Colors.white,
+                          fontWeight: FontWeight.bold,
+                          fontSize: 12,
+                        ),
+                      ),
+                    ),
+                    const SizedBox(width: 8),
+                    Text(
+                      classLabel,
+                      style: const TextStyle(
+                        fontWeight: FontWeight.bold,
+                        fontSize: 14,
+                        color: AppColors.navy,
+                      ),
+                    ),
+                  ],
+                ),
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                  decoration: BoxDecoration(
+                    color: Colors.white,
+                    borderRadius: BorderRadius.circular(6),
+                    border: Border.all(color: Colors.grey.shade300),
+                  ),
+                  child: Text(
+                    status.toUpperCase(),
+                    style: TextStyle(
+                      fontSize: 10,
+                      fontWeight: FontWeight.w700,
+                      color: Colors.grey.shade800,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+
+          // ── Telemetry Grid (Anon-Readable: confidence, priority, date, position) ──
+          Padding(
+            padding: const EdgeInsets.all(14.0),
+            child: Column(
+              children: [
+                Row(
+                  children: [
+                    Expanded(
+                      child: _buildMetricTile(
+                        label: 'CONFIDENCE',
+                        value: confidenceText,
+                        valueColor: AppColors.teal,
+                      ),
+                    ),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: _buildMetricTile(
+                        label: 'PRIORITY',
+                        value: '${priorityScore.toStringAsFixed(0)} ($priorityLabel)',
+                        valueColor: color,
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 10),
+                Row(
+                  children: [
+                    Expanded(
+                      child: _buildMetricTile(
+                        label: 'DATE',
+                        value: formattedDate,
+                        valueColor: AppColors.navy,
+                      ),
+                    ),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: _buildMetricTile(
+                        label: 'STATUS',
+                        value: status.toUpperCase(),
+                        valueColor: AppColors.navy,
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 10),
+                Row(
+                  children: [
+                    Expanded(
+                      child: _buildMetricTile(
+                        label: 'POSITION',
+                        value: '${lat.toStringAsFixed(4)}, ${lng.toStringAsFixed(4)}${accuracy != null ? ' (±${accuracy.toStringAsFixed(0)}m)' : ''}',
+                        valueColor: AppColors.navy,
+                      ),
+                    ),
+                  ],
+                ),
+              ],
+            ),
+          ),
+
+          // ── Image Section (Local Image if on device / Neutral Placeholder otherwise) ──
+          _ObservationImageSection(
+            observationId: obsId,
+            repository: repository,
+            remoteDetections: (obs['detections'] as List?) ?? [],
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildMetricTile({
+    required String label,
+    required String value,
+    required Color valueColor,
+  }) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+      decoration: BoxDecoration(
+        color: Colors.grey.shade50,
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(color: Colors.grey.shade200),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            label,
+            style: TextStyle(
+              fontSize: 10,
+              fontWeight: FontWeight.w600,
+              color: Colors.grey.shade600,
+              letterSpacing: 0.5,
+            ),
+          ),
+          const SizedBox(height: 2),
+          Text(
+            value,
+            style: TextStyle(
+              fontSize: 12,
+              fontWeight: FontWeight.bold,
+              color: valueColor,
+            ),
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _ObservationImageSection extends StatelessWidget {
+  final String observationId;
+  final ObservationRepository repository;
+  final List<dynamic> remoteDetections;
+
+  const _ObservationImageSection({
+    required this.observationId,
+    required this.repository,
+    required this.remoteDetections,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    if (observationId.isEmpty) {
+      return _buildNeutralPlaceholder();
+    }
+
+    return FutureBuilder<Observation?>(
+      future: repository.findById(observationId),
+      builder: (ctx, snapshot) {
+        if (snapshot.connectionState == ConnectionState.waiting) {
+          return Container(
+            height: 140,
+            color: Colors.grey.shade100,
+            alignment: Alignment.center,
+            child: const SizedBox(
+              width: 24,
+              height: 24,
+              child: CircularProgressIndicator(strokeWidth: 2, color: AppColors.teal),
+            ),
+          );
+        }
+
+        final localObs = snapshot.data;
+        final localPath = localObs?.annotatedImagePath ?? localObs?.imagePath;
+
+        if (localPath != null && File(localPath).existsSync()) {
+          // Captured on this device: show local image with bounding boxes
+          final detections = localObs?.detections.isNotEmpty == true
+              ? localObs!.detections
+              : remoteDetections.map((d) {
+                  final map = Map<String, dynamic>.from(d as Map);
+                  return Detection(
+                    agent: 'road_damage',
+                    classCode: map['class_code']?.toString() ?? 'D40',
+                    confidence: ((map['confidence'] as num?) ?? 0.0).toDouble(),
+                    box: BoundingBox(
+                      x: ((map['box_x'] as num?) ?? 0.0).toDouble(),
+                      y: ((map['box_y'] as num?) ?? 0.0).toDouble(),
+                      width: ((map['box_w'] as num?) ?? 0.0).toDouble(),
+                      height: ((map['box_h'] as num?) ?? 0.0).toDouble(),
+                    ),
+                  );
+                }).toList();
+
+          return Container(
+            height: 220,
+            color: Colors.black,
+            child: Stack(
+              children: [
+                Positioned.fill(
+                  child: AnnotatedImageWidget(
+                    imagePath: localPath,
+                    detections: detections,
+                  ),
+                ),
+                Positioned(
+                  top: 8,
+                  left: 8,
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                    decoration: BoxDecoration(
+                      color: AppColors.teal.withAlpha(220),
+                      borderRadius: BorderRadius.circular(4),
+                    ),
+                    child: const Text(
+                      'Local capture (on device)',
+                      style: TextStyle(
+                        color: Colors.white,
+                        fontSize: 10,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          );
+        }
+
+        // From another device: neutral "photo not public" placeholder
+        return _buildNeutralPlaceholder();
+      },
+    );
+  }
+
+  Widget _buildNeutralPlaceholder() {
+    return Container(
+      height: 130,
+      margin: const EdgeInsets.fromLTRB(14, 0, 14, 14),
+      decoration: BoxDecoration(
+        color: const Color(0xFFF1F5F9), // Slate 100
+        borderRadius: BorderRadius.circular(10),
+        border: Border.all(color: const Color(0xFFCBD5E1)),
+      ),
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+      child: const Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          Icon(Icons.lock_outline, size: 24, color: Color(0xFF64748B)),
+          SizedBox(height: 6),
+          Text(
+            'Photo not public',
+            style: TextStyle(
+              fontSize: 13,
+              fontWeight: FontWeight.bold,
+              color: Color(0xFF334155),
+            ),
+          ),
+          SizedBox(height: 4),
+          Text(
+            'Municipal privacy policy restricts raw imagery to authorized road authorities. Anomaly telemetry and AI bounding boxes are public.',
+            textAlign: TextAlign.center,
+            style: TextStyle(
+              fontSize: 10.5,
+              color: Color(0xFF64748B),
+              height: 1.25,
             ),
           ),
         ],

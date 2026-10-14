@@ -191,6 +191,7 @@ class RoadSenseAgentRunner implements DetectionAgentRunner {
       agent: agentName,
       detections: decoded.crackDetections,
       isMock: false,
+      latencyMs: sw.elapsedMilliseconds,
     );
   }
 }

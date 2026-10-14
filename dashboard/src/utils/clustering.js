@@ -88,8 +88,10 @@ export function clusterObservations(observations, radiusMeters = 20, maxAccuracy
     const newestDate = new Date(dates[dates.length - 1]);
     const ageDays = Math.round((Date.now() - oldestDate.getTime()) / (1000 * 60 * 60 * 24));
 
-    // Best photo available in cluster
-    const photo = members.find((m) => m.photo_url)?.photo_url || null;
+    // Best photo available in cluster (storage_path for authenticated signed url generation)
+    const storageMember = members.find((m) => m.storage_path);
+    const storagePath = storageMember?.storage_path || null;
+    const bucket = storageMember?.bucket || 'observation-images';
 
     // Highest status priority in cluster
     const statusPriority = ['repaired', 'verified', 'scheduled', 'confirmed', 'unconfirmed', 'dismissed'];
@@ -113,7 +115,9 @@ export function clusterObservations(observations, radiusMeters = 20, maxAccuracy
       newestDate: newestDate.toISOString(),
       ageDays,
       status: dominantStatus,
-      photoUrl: photo,
+      photoUrl: null,
+      storagePath,
+      bucket,
       members,
     });
   }

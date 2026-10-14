@@ -179,24 +179,6 @@ class TFLiteAgentRunner implements DetectionAgentRunner {
     }
   }
 
-  /// Fast path for live camera: accepts a pre-built Float32List tensor
-  /// [1, inputSize, inputSize, 3] that was already prepared off-thread.
-  /// Skips JPEG encode/decode → saves ~100-200 ms per frame.
-  Future<AgentResult> detectFromTensor(Float32List inputTensor) async {
-    if (_failed || _interpreter == null) {
-      return AgentResult(
-        agent: agentName,
-        detections: const [],
-        error: 'Model not loaded',
-      );
-    }
-    try {
-      return _runInferenceOnTensor(inputTensor);
-    } catch (e) {
-      return AgentResult(agent: agentName, detections: const [], error: e.toString());
-    }
-  }
-
   Future<AgentResult> _runInferenceOnBytes(Uint8List rawBytes) async {
     final interpreter = _interpreter!;
 
@@ -258,36 +240,12 @@ class TFLiteAgentRunner implements DetectionAgentRunner {
     }
 
     // 5. Shared decode logic
-    return _decodeOutput(output, numClasses, numAnchors);
+    return _decodeOutput(output, numClasses, numAnchors, latencyMs: sw.elapsedMilliseconds);
   }
 
-  /// Runs the interpreter on a pre-built Float32List — NO image decode needed.
-  AgentResult _runInferenceOnTensor(Float32List inputTensor) {
-    final interpreter = _interpreter!;
-    final numClasses  = _classNames.length;
-    final outputShape = interpreter.getOutputTensor(0).shape;
-    final numAnchors  = outputShape[2];
-
-    final output = List.generate(
-      1, (_) => List.generate(4 + numClasses, (_) => List.filled(numAnchors, 0.0)));
-
-    final sw = Stopwatch()..start();
-    interpreter.runForMultipleInputs(
-      [inputTensor.reshape([1, inputSize, inputSize, 3])],
-      {0: output},
-    );
-    sw.stop();
-    _lastInferenceDuration = sw.elapsed;
-    if (kDebugMode) {
-      debugPrint('[TFLite:$agentName] Inference time: ${sw.elapsedMilliseconds} ms');
-    }
-
-    return _decodeOutput(output, numClasses, numAnchors);
-  }
-
-  /// Shared output decoder used by both inference paths.
+  /// Shared output decoder used by inference.
   AgentResult _decodeOutput(
-      List<dynamic> output, int numClasses, int numAnchors) {
+      List<dynamic> output, int numClasses, int numAnchors, {int? latencyMs}) {
     final rawDetections = <Detection>[];
     for (var anchor = 0; anchor < numAnchors; anchor++) {
       double bestScore = 0;
@@ -330,6 +288,7 @@ class TFLiteAgentRunner implements DetectionAgentRunner {
       agent: agentName,
       detections: applyClassAwareNms(rawDetections, iouThreshold: iouThreshold),
       isMock: false,
+      latencyMs: latencyMs,
     );
   }
 }

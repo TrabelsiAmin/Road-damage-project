@@ -1,12 +1,15 @@
 import 'dart:io';
 import 'package:flutter/material.dart';
 import '../core/app_colors.dart';
+import '../core/constants.dart';
+import '../inference/preprocessing.dart';
 import '../models/observation.dart';
 import '../services/detection_service.dart';
 import '../services/observation_repository.dart';
 import '../services/territorial_service.dart';
-import 'result_screen.dart';
+import 'package:geolocator/geolocator.dart';
 import 'package:uuid/uuid.dart';
+import 'result_screen.dart';
 
 /// Shown after the user takes/picks a photo.
 /// Displays the image full-screen and asks for confirmation before running AI.
@@ -36,7 +39,18 @@ class _PhotoConfirmScreenState extends State<PhotoConfirmScreen> {
   Future<void> _analyze() async {
     setState(() => _analyzing = true);
     try {
-      final position = await _location.currentPosition().catchError((_) => null);
+      Position? position;
+      try {
+        position = await _location.currentPosition();
+      } catch (_) {
+        position = null;
+      }
+
+      // Read image dimensions
+      final bytes = await widget.imageFile.readAsBytes();
+      final decoded = decodeAndOrient(bytes);
+      final imageWidth = decoded.width;
+      final imageHeight = decoded.height;
 
       final results = await widget.detectionService.detectAll(widget.imageFile);
       final obs = Observation(
@@ -49,12 +63,25 @@ class _PhotoConfirmScreenState extends State<PhotoConfirmScreen> {
         accuracyMeters: position?.accuracy,
         actor:          widget.actor,
         agentResults:   results,
+        imageWidth:     imageWidth,
+        imageHeight:    imageHeight,
+        modelBundleVersion: TariqMapConstants.modelBundleVersion,
       );
+
+      debugPrint('[Pipeline:ResultObject] Observation created: ${obs.id}, '
+          'detections: ${obs.detections.length}, size: ${imageWidth}x$imageHeight, '
+          'score: ${obs.priorityScore.toStringAsFixed(1)}, '
+          'anomaly: ${obs.detections.firstOrNull?.classCode}');
+
       await widget.repository.save(obs);
+
+      // Read back from storage to ensure detail screen reads only from storage
+      final storedObs = await widget.repository.findById(obs.id) ?? obs;
+
       if (mounted) {
         await Navigator.of(context).pushReplacement(
           MaterialPageRoute<void>(
-            builder: (_) => ResultScreen(observation: obs),
+            builder: (_) => ResultScreen(observation: storedObs),
           ),
         );
       }

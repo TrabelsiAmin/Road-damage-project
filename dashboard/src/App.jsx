@@ -13,6 +13,7 @@ import {
   signOut,
   getCurrentUser,
   checkIsAuthority,
+  getMediaUrl,
 } from './supabase';
 import { clusterObservations, calculateRoadHealthScore } from './utils/clustering';
 import {
@@ -22,6 +23,7 @@ import {
   Printer,
   DollarSign,
   Clock,
+  Shield,
   ShieldCheck,
   ShieldAlert,
   Globe,
@@ -36,6 +38,72 @@ import {
   Sliders,
   HelpCircle,
 } from 'lucide-react';
+
+function ClusterImageCard({ cluster, isAuthority }) {
+  const [signedUrl, setSignedUrl] = useState(null);
+  const [loading, setLoading] = useState(false);
+
+  useEffect(() => {
+    let active = true;
+    if (isAuthority && cluster?.storagePath) {
+      setLoading(true);
+      getMediaUrl(cluster.storagePath, cluster.bucket || 'observation-images')
+        .then((url) => {
+          if (active) {
+            setSignedUrl(url);
+            setLoading(false);
+          }
+        })
+        .catch(() => {
+          if (active) {
+            setSignedUrl(null);
+            setLoading(false);
+          }
+        });
+    } else {
+      setSignedUrl(null);
+      setLoading(false);
+    }
+    return () => { active = false; };
+  }, [cluster?.storagePath, cluster?.bucket, isAuthority]);
+
+  if (isAuthority && cluster?.storagePath) {
+    if (loading) {
+      return (
+        <div className="cluster-img-placeholder">
+          <div className="spinner-sm" style={{ width: '16px', height: '16px', border: '2px solid rgba(255,255,255,0.2)', borderTopColor: 'var(--teal-accent)', borderRadius: '50%', animation: 'spin 0.8s linear infinite' }} />
+          <span style={{ fontSize: '0.75rem' }}>Génération URL signée (sécurisée 5 min)...</span>
+        </div>
+      );
+    }
+    if (signedUrl) {
+      return (
+        <div className="cluster-img-container">
+          <img
+            src={signedUrl}
+            alt="Cliché chaussée"
+            className="cluster-img"
+            onError={() => setSignedUrl(null)}
+          />
+          <span className="cluster-img-badge">Cliché signé (Autorité)</span>
+        </div>
+      );
+    }
+  }
+
+  // Neutral placeholder for anonymous users or records without storage_path
+  return (
+    <div className="cluster-img-placeholder neutral-privacy">
+      <Shield size={20} style={{ opacity: 0.8, color: 'var(--teal-accent)' }} />
+      <span style={{ fontWeight: 600, fontSize: '0.8rem' }}>Photo non publique</span>
+      <span style={{ fontSize: '0.72rem', color: 'var(--text-dim)', textAlign: 'center', maxWidth: '280px', lineHeight: 1.3 }}>
+        {isAuthority
+          ? "Aucun cliché photographique stocké pour cette observation."
+          : "Les clichés bruts sont réservés aux autorités habilitées (RGPD & sécurité voirie). Télémétrie géospatiale publique."}
+      </span>
+    </div>
+  );
+}
 
 export default function App() {
   const [lang, setLang] = useState('fr');
@@ -234,6 +302,20 @@ export default function App() {
         marker.on('click', () => {
           setSelectedCluster(cluster);
         });
+
+        const popupContent = `
+          <div style="font-family: inherit; font-size: 12px; line-height: 1.4; color: #1e293b; padding: 2px;">
+            <div style="font-weight: 700; color: ${color}; margin-bottom: 4px;">
+              ${cluster.dominantClass} (${clsMeta.fr})
+            </div>
+            <div><strong>Priorité:</strong> ${cluster.maxPriorityScore}/100 (${cluster.priorityLabel})</div>
+            <div><strong>Signalements:</strong> ${cluster.count} (20m)</div>
+            <div style="margin-top: 6px; font-size: 11px; color: #2563eb; font-weight: 600;">
+              Fiche détaillée ouverte ci-contre
+            </div>
+          </div>
+        `;
+        marker.bindPopup(popupContent, { offset: [0, -10] });
 
         marker.addTo(markersGroup);
       });
@@ -529,6 +611,108 @@ export default function App() {
               ))}
             </div>
           </div>
+
+          {/* Floating Anomaly Detail Card on Pin Tap */}
+          {selectedCluster && (
+            <div className="map-floating-card">
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                  <span
+                    style={{
+                      background: DAMAGE_CLASSES[selectedCluster.dominantClass]?.color || 'var(--red-accent)',
+                      color: '#fff',
+                      fontWeight: 800,
+                      fontSize: '0.8rem',
+                      padding: '2px 8px',
+                      borderRadius: '4px',
+                    }}
+                  >
+                    {selectedCluster.dominantClass}
+                  </span>
+                  <span style={{ fontWeight: 700, fontSize: '0.85rem' }}>
+                    {lang === 'fr'
+                      ? DAMAGE_CLASSES[selectedCluster.dominantClass]?.fr
+                      : DAMAGE_CLASSES[selectedCluster.dominantClass]?.en}
+                  </span>
+                </div>
+                <button
+                  style={{ background: 'transparent', border: 'none', color: 'var(--text-muted)', cursor: 'pointer' }}
+                  onClick={() => setSelectedCluster(null)}
+                >
+                  <X size={16} />
+                </button>
+              </div>
+
+              {/* All Anon-Readable Telemetry Fields: class, confidence, priority, date, status, position */}
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px', fontSize: '0.78rem' }}>
+                <div style={{ background: 'rgba(255,255,255,0.02)', padding: '6px 8px', borderRadius: '4px' }}>
+                  <span style={{ color: 'var(--text-dim)', display: 'block', fontSize: '0.7rem' }}>CONFIANCE IA</span>
+                  <strong style={{ color: 'var(--emerald-accent)' }}>
+                    {selectedCluster.members?.[0]?.detections?.[0]?.confidence
+                      ? `${(selectedCluster.members[0].detections[0].confidence * 100).toFixed(0)}%`
+                      : 'Élevée'}
+                  </strong>
+                </div>
+                <div style={{ background: 'rgba(255,255,255,0.02)', padding: '6px 8px', borderRadius: '4px' }}>
+                  <span style={{ color: 'var(--text-dim)', display: 'block', fontSize: '0.7rem' }}>PRIORITÉ</span>
+                  <strong style={{ color: selectedCluster.maxPriorityScore >= 70 ? 'var(--red-accent)' : 'var(--amber-accent)' }}>
+                    {selectedCluster.maxPriorityScore}/100 ({selectedCluster.priorityLabel})
+                  </strong>
+                </div>
+                <div style={{ background: 'rgba(255,255,255,0.02)', padding: '6px 8px', borderRadius: '4px' }}>
+                  <span style={{ color: 'var(--text-dim)', display: 'block', fontSize: '0.7rem' }}>DATE</span>
+                  <span style={{ color: 'var(--text-main)' }}>
+                    {new Date(selectedCluster.newestDate).toLocaleDateString()}
+                  </span>
+                </div>
+                <div style={{ background: 'rgba(255,255,255,0.02)', padding: '6px 8px', borderRadius: '4px' }}>
+                  <span style={{ color: 'var(--text-dim)', display: 'block', fontSize: '0.7rem' }}>STATUT</span>
+                  <span className={`badge ${STATUS_LABELS[selectedCluster.status]?.badge || 'badge-gray'}`} style={{ fontSize: '0.7rem' }}>
+                    {lang === 'fr'
+                      ? STATUS_LABELS[selectedCluster.status]?.fr
+                      : STATUS_LABELS[selectedCluster.status]?.en}
+                  </span>
+                </div>
+              </div>
+
+              <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>
+                <span>Position: </span>
+                <span className="mono" style={{ color: 'var(--text-main)' }}>
+                  {selectedCluster.latitude.toFixed(6)}, {selectedCluster.longitude.toFixed(6)}
+                </span>
+                <span style={{ color: 'var(--text-dim)', marginLeft: '6px' }}>({selectedCluster.count} signalements)</span>
+              </div>
+
+              {/* Image Section: Signed URL for Authority / Neutral Privacy Placeholder for Anon */}
+              <ClusterImageCard cluster={selectedCluster} isAuthority={isAuthorityUser} />
+
+              {/* Authority Actions */}
+              {isAuthorityUser && (
+                <div style={{ display: 'flex', gap: '8px', marginTop: '4px' }}>
+                  <select
+                    className="select-input"
+                    value={selectedCluster.status}
+                    onChange={(e) => handleStatusChange(selectedCluster.members?.[0]?.id, e.target.value)}
+                    style={{ flex: 1, fontSize: '0.75rem', padding: '4px 8px' }}
+                  >
+                    {Object.keys(STATUS_LABELS).map((st) => (
+                      <option key={st} value={st}>
+                        {lang === 'fr' ? STATUS_LABELS[st].fr : STATUS_LABELS[st].en}
+                      </option>
+                    ))}
+                  </select>
+                  <button
+                    className="btn btn-primary"
+                    style={{ fontSize: '0.75rem', padding: '4px 10px' }}
+                    onClick={() => setWorkOrderModal(selectedCluster)}
+                  >
+                    <Printer size={13} />
+                    <span>Ordre</span>
+                  </button>
+                </div>
+              )}
+            </div>
+          )}
         </div>
 
         {/* Right Decision Support Sidebar */}
@@ -1000,15 +1184,9 @@ export default function App() {
                 </button>
               </div>
 
-              {workOrderModal.photoUrl && (
-                <div style={{ marginBottom: '16px', textAlign: 'center' }}>
-                  <img
-                    src={workOrderModal.photoUrl}
-                    alt="Road defect"
-                    style={{ maxHeight: '220px', width: '100%', objectFit: 'cover', borderRadius: 'var(--radius-sm)' }}
-                  />
-                </div>
-              )}
+              <div style={{ marginBottom: '16px' }}>
+                <ClusterImageCard cluster={workOrderModal} isAuthority={isAuthorityUser} />
+              </div>
 
               <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.85rem', marginBottom: '24px' }}>
                 <tbody>

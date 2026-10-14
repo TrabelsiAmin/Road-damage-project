@@ -48,21 +48,28 @@ export async function checkIsAuthority() {
 }
 
 /**
- * Generates signed URL for private observation-images if user is authority.
- * For demo-images, returns direct public URL.
+ * Generates signed URL for private observation-images bucket (short expiry: 300s = 5m).
+ * Never uses getPublicUrl for observation-images.
+ * For demo-images bucket only, returns direct public URL.
  */
 export async function getMediaUrl(storagePath, bucket = 'observation-images', isDemo = false) {
-  if (isDemo || bucket === 'demo-images') {
-    const { data } = supabase.storage.from(bucket).getPublicUrl(storagePath);
-    return data?.publicUrl;
+  if (!storagePath) return null;
+  if (bucket === 'demo-images') {
+    const { data } = supabase.storage.from('demo-images').getPublicUrl(storagePath);
+    return data?.publicUrl || null;
   }
+  // observation-images is private: strictly use createSignedUrl with short expiry
   try {
     const { data, error } = await supabase.storage
       .from('observation-images')
-      .createSignedUrl(storagePath, 3600); // 1 hour token
-    if (error || !data) return null;
+      .createSignedUrl(storagePath, 300); // 300 seconds (5 min short expiry)
+    if (error || !data) {
+      console.warn('[Supabase] createSignedUrl failed:', error?.message);
+      return null;
+    }
     return data.signedUrl;
-  } catch (_) {
+  } catch (err) {
+    console.warn('[Supabase] createSignedUrl error:', err);
     return null;
   }
 }
@@ -131,7 +138,7 @@ export async function fetchObservations() {
         longitude: Number(loc.longitude) || 0,
         accuracy_meters: loc.accuracy_meters,
         detections: dets,
-        photo_url: media?.public_url || null,
+        photo_url: null, // Private bucket: never populate unauthenticated public_url
         storage_path: media?.storage_path || null,
         bucket: media?.bucket || 'observation-images',
       };
@@ -150,7 +157,7 @@ export async function updateObservationStatus(id, newStatus) {
     .from('observations')
     .update({ status: newStatus })
     .eq('id', id)
-    .select();
+    .select('id, status, assigned_contractor, budget_estimate_tnd');
 
   if (error) throw error;
   return data;

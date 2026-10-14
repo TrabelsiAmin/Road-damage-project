@@ -76,9 +76,6 @@ class TariqMapConstants {
   /// Separate confidence threshold for D40 pothole detections from the legacy model.
   static const double d40ConfidenceThreshold = 0.40;
 
-  /// Video frame-skip factor for the pothole model in video mode (run every N frames).
-  /// Default 1 (run on every frame).
-  static const int potholeModelFrameSkip = 1;
 
   /// Model asset paths
   static const String legacyModelAsset = 'assets/models/road_damage.tflite';

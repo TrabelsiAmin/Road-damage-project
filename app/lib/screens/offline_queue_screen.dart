@@ -16,7 +16,7 @@ class OfflineQueueScreen extends StatefulWidget {
   });
 
   final ObservationRepository     repository;
-  final Future<void> Function()   onSync;
+  final Future<SyncResult> Function({SyncCancelToken? cancelToken}) onSync;
 
   @override
   State<OfflineQueueScreen> createState() => _OfflineQueueScreenState();
@@ -27,6 +27,8 @@ class _OfflineQueueScreenState extends State<OfflineQueueScreen>
   List<Observation> _all = [];
   bool _loading  = true;
   bool _syncing  = false;
+  SyncCancelToken? _cancelToken;
+  String? _statusBanner;
 
   late TabController _tab;
 
@@ -50,13 +52,39 @@ class _OfflineQueueScreenState extends State<OfflineQueueScreen>
   }
 
   Future<void> _syncAll() async {
-    setState(() => _syncing = true);
+    final token = SyncCancelToken();
+    setState(() {
+      _syncing = true;
+      _cancelToken = token;
+      _statusBanner = null;
+    });
     try {
-      await widget.onSync();
+      final result = await widget.onSync(cancelToken: token);
       await _load();
+      if (mounted) {
+        setState(() {
+          _statusBanner = result.message;
+        });
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(result.message),
+            backgroundColor: result.cancelled ? Colors.orange.shade800 : AppColors.teal,
+            duration: const Duration(seconds: 4),
+          ),
+        );
+      }
     } finally {
-      if (mounted) setState(() => _syncing = false);
+      if (mounted) {
+        setState(() {
+          _syncing = false;
+          _cancelToken = null;
+        });
+      }
     }
+  }
+
+  void _cancelSync() {
+    _cancelToken?.cancel();
   }
 
   List<Observation> get _pending   => _all
@@ -93,26 +121,40 @@ class _OfflineQueueScreenState extends State<OfflineQueueScreen>
           ],
         ),
         actions: [
-          if (hasPendingOrFailed)
+          if (_syncing)
             Padding(
               padding: const EdgeInsets.only(right: 12),
               child: FilledButton.icon(
+                key: const ValueKey('cancel_sync_button'),
                 style: FilledButton.styleFrom(
-                  backgroundColor: _syncing
-                      ? AppColors.navyLight
-                      : AppColors.teal,
+                  backgroundColor: Colors.red.shade700,
+                  foregroundColor: Colors.white,
                   padding: const EdgeInsets.symmetric(horizontal: 14),
                   shape: RoundedRectangleBorder(
                     borderRadius: BorderRadius.circular(10)),
                 ),
-                onPressed: _syncing ? null : _syncAll,
-                icon: _syncing
-                    ? const SizedBox(width: 14, height: 14,
-                        child: CircularProgressIndicator(
-                          strokeWidth: 2, color: Colors.white))
-                    : const Icon(Icons.cloud_upload_outlined, size: 16),
-                label: Text(_syncing ? 'Syncing…' : 'Sync All',
-                  style: const TextStyle(
+                onPressed: _cancelSync,
+                icon: const Icon(Icons.close_rounded, size: 16),
+                label: const Text('Cancel',
+                  style: TextStyle(
+                    fontSize: 13, fontWeight: FontWeight.w700)),
+              ),
+            )
+          else if (hasPendingOrFailed)
+            Padding(
+              padding: const EdgeInsets.only(right: 12),
+              child: FilledButton.icon(
+                key: const ValueKey('sync_all_button'),
+                style: FilledButton.styleFrom(
+                  backgroundColor: AppColors.teal,
+                  padding: const EdgeInsets.symmetric(horizontal: 14),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(10)),
+                ),
+                onPressed: _syncAll,
+                icon: const Icon(Icons.cloud_upload_outlined, size: 16),
+                label: const Text('Sync All',
+                  style: TextStyle(
                     fontSize: 13, fontWeight: FontWeight.w700)),
               ),
             ),
@@ -135,22 +177,88 @@ class _OfflineQueueScreenState extends State<OfflineQueueScreen>
       body: _loading
           ? const Center(child: CircularProgressIndicator(
               valueColor: AlwaysStoppedAnimation<Color>(AppColors.teal)))
-          : _all.isEmpty
-              ? _buildEmpty()
-              : TabBarView(
-                  controller: _tab,
-                  children: [
-                    _ObsList(observations: _pending, emptyMessage: 'All caught up!',
-                      emptyIcon: Icons.cloud_done_rounded,
-                      emptyColor: AppColors.syncDone),
-                    _ObsList(observations: _failed, emptyMessage: 'No failed uploads.',
-                      emptyIcon: Icons.check_circle_outline_rounded,
-                      emptyColor: AppColors.syncDone),
-                    _ObsList(observations: _synced, emptyMessage: 'Nothing synced yet.',
-                      emptyIcon: Icons.cloud_outlined,
-                      emptyColor: AppColors.textFaintOnDark),
-                  ],
+          : Column(
+              children: [
+                if (_syncing)
+                  Container(
+                    width: double.infinity,
+                    color: AppColors.navyLight,
+                    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+                    child: Row(
+                      children: [
+                        const SizedBox(
+                          width: 14,
+                          height: 14,
+                          child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
+                        ),
+                        const SizedBox(width: 12),
+                        const Expanded(
+                          child: Text(
+                            'Syncing in progress…',
+                            style: TextStyle(color: Colors.white, fontSize: 13, fontWeight: FontWeight.w600),
+                          ),
+                        ),
+                        TextButton(
+                          onPressed: _cancelSync,
+                          style: TextButton.styleFrom(
+                            foregroundColor: Colors.orangeAccent,
+                            padding: const EdgeInsets.symmetric(horizontal: 8),
+                            minimumSize: Size.zero,
+                            tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                          ),
+                          child: const Text('Cancel', style: TextStyle(fontWeight: FontWeight.w700)),
+                        ),
+                      ],
+                    ),
+                  )
+                else if (_statusBanner != null)
+                  Container(
+                    width: double.infinity,
+                    color: _statusBanner!.contains('cancelled')
+                        ? Colors.orange.shade900
+                        : AppColors.navyLight,
+                    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+                    child: Row(
+                      children: [
+                        Icon(
+                          _statusBanner!.contains('cancelled')
+                              ? Icons.warning_amber_rounded
+                              : Icons.check_circle_outline,
+                          color: _statusBanner!.contains('cancelled')
+                              ? Colors.orangeAccent
+                              : AppColors.syncDone,
+                          size: 16,
+                        ),
+                        const SizedBox(width: 8),
+                        Expanded(
+                          child: Text(
+                            _statusBanner!,
+                            style: const TextStyle(color: Colors.white, fontSize: 13, fontWeight: FontWeight.w600),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                Expanded(
+                  child: _all.isEmpty
+                      ? _buildEmpty()
+                      : TabBarView(
+                          controller: _tab,
+                          children: [
+                            _ObsList(observations: _pending, emptyMessage: 'All caught up!',
+                              emptyIcon: Icons.cloud_done_rounded,
+                              emptyColor: AppColors.syncDone),
+                            _ObsList(observations: _failed, emptyMessage: 'No failed uploads.',
+                              emptyIcon: Icons.check_circle_outline_rounded,
+                              emptyColor: AppColors.syncDone),
+                            _ObsList(observations: _synced, emptyMessage: 'Nothing synced yet.',
+                              emptyIcon: Icons.cloud_outlined,
+                              emptyColor: AppColors.textFaintOnDark),
+                          ],
+                        ),
                 ),
+              ],
+            ),
     );
   }
 

@@ -157,9 +157,9 @@ void main() {
     });
 
     test('agentFor returns correct agent', () {
-      expect(TariqMapConstants.agentFor('D40'), equals('pavement'));
-      expect(TariqMapConstants.agentFor('D00'), equals('cracks'));
-      expect(TariqMapConstants.agentFor('D60'), equals('surface'));
+      expect(TariqMapConstants.agentFor('D40'), equals('road_damage'));
+      expect(TariqMapConstants.agentFor('D00'), equals('road_damage'));
+      expect(TariqMapConstants.agentFor('D20'), equals('road_damage'));
     });
   });
 

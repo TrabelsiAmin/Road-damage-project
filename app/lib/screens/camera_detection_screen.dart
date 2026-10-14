@@ -1,26 +1,24 @@
 import 'dart:async';
 import 'dart:io';
-import 'dart:typed_data';
 import 'package:camera/camera.dart';
-import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:geolocator/geolocator.dart';
-import 'package:shared_preferences/shared_preferences.dart';
 import 'package:uuid/uuid.dart';
 import '../core/app_colors.dart';
 import '../core/constants.dart';
+import '../inference/preprocessing.dart';
 import '../models/observation.dart';
 import '../services/detection_service.dart';
 import '../services/observation_repository.dart';
-import '../data/remote/supabase_service.dart';
-import '../utils/yuv_converter.dart';
 import 'result_screen.dart';
 
-/// Full-screen live camera view with real-time bounding-box overlay.
+/// Full-screen camera view with plain preview only.
 ///
-/// Detection runs on every [_frameInterval]-th camera frame so the UI stays
-/// responsive. On capture the current frame is frozen, saved as an Observation,
-/// and the ResultScreen is pushed.
+/// Per CHANGE 1:
+/// - No image stream analysis or model calls while previewing.
+/// - When capture is pressed, high-quality photo is taken, inference runs once,
+///   an "Analyzing…" state is displayed, results are saved to local database,
+///   and [ResultScreen] is pushed reading strictly from storage.
 class CameraDetectionScreen extends StatefulWidget {
   const CameraDetectionScreen({
     super.key,
@@ -42,37 +40,14 @@ class _CameraDetectionScreenState extends State<CameraDetectionScreen>
   CameraController? _controller;
   List<CameraDescription> _cameras = [];
   bool _initialized = false;
-  bool _processing = false;
-  bool _capturing = false;
-  int _frameCount = 0;
-  // Computed from SharedPreferences 'live_fps' setting.
-  // Default 5 = run inference on every 5th frame (≈ 6 fps at 30fps camera).
-  int _frameInterval = 5;
-
-  List<Detection> _liveDetections = [];
+  bool _analyzing = false;
   final _uuid = const Uuid();
-
-  double _fps = 0;
-  int _lastLatency = 0;
-  DateTime? _lastFrameTime;
 
   @override
   void initState() {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
-    _loadSettings().then((_) => _initCamera());
-  }
-
-  Future<void> _loadSettings() async {
-    final prefs = await SharedPreferences.getInstance();
-    final fps = prefs.getInt('live_fps') ?? TariqMapConstants.defaultLiveFps;
-    // Camera typically runs at 30 fps. _frameInterval controls how often we
-    // run inference: interval = 30 / desired_fps, clamped to [1, 30].
-    if (mounted) {
-      setState(() {
-        _frameInterval = (30 / fps.clamp(1, 30)).round().clamp(1, 30);
-      });
-    }
+    _initCamera();
   }
 
   Future<void> _initCamera() async {
@@ -88,9 +63,7 @@ class _CameraDetectionScreenState extends State<CameraDetectionScreen>
   Future<void> _startCamera(CameraDescription desc) async {
     final controller = CameraController(
       desc,
-      // Medium (720p) for live inference — YOLOv8 resizes to 640 anyway.
-      // Full-res capture is done separately via takePicture().
-      ResolutionPreset.medium,
+      ResolutionPreset.high,
       enableAudio: false,
       imageFormatGroup: ImageFormatGroup.jpeg,
     );
@@ -100,80 +73,23 @@ class _CameraDetectionScreenState extends State<CameraDetectionScreen>
       _controller = controller;
       _initialized = true;
     });
-    controller.startImageStream(_onCameraFrame);
-  }
-
-  void _onCameraFrame(CameraImage frame) {
-    if (_processing || _capturing) return;
-    _frameCount++;
-    if (_frameCount % _frameInterval != 0) return;
-
-    _processing = true;
-    _runDetectionOnFrame(frame).then((results) {
-      if (!mounted) return;
-      final detections = results.expand((r) => r.detections).toList();
-      final now = DateTime.now();
-      if (_lastFrameTime != null) {
-        final elapsed = now.difference(_lastFrameTime!).inMilliseconds;
-        _fps = elapsed > 0 ? (1000 / elapsed * _frameInterval) : 0;
-      }
-      _lastFrameTime = now;
-      
-      // Calculate max latency across agents for diagnostic overlay
-      final maxLatency = results.fold<int>(0, (max, r) => r.latencyMs != null && r.latencyMs! > max ? r.latencyMs! : max);
-      
-      setState(() {
-        _liveDetections = detections;
-        _lastLatency = maxLatency;
-      });
-    }).catchError((e) {
-      debugPrint('[Camera] Frame inference error: $e');
-    }).whenComplete(() {
-      _processing = false;
-    });
-  }
-
-  Future<List<AgentResult>> _runDetectionOnFrame(CameraImage frame) async {
-    // ⚡ FAST PATH: YUV420 → Float32 tensor in background isolate → direct inference
-    // Saves ~200-400ms vs the old JPEG encode/decode round-trip.
-    if (frame.format.group == ImageFormatGroup.yuv420 ||
-        frame.format.group == ImageFormatGroup.jpeg) {
-
-      if (frame.format.group == ImageFormatGroup.yuv420) {
-        // Off-thread: pixel loop + normalisation
-        final tensor = await convertYUVToTensorInBackground(frame, 640);
-        return widget.detectionService.detectAllFromTensor(tensor);
-      } else {
-        // JPEG: bytes already ready, no conversion needed
-        final bytes = frame.planes.first.bytes;
-        return widget.detectionService.detectAllFromBytes(bytes);
-      }
-    } else if (frame.format.group == ImageFormatGroup.bgra8888) {
-      // iOS BGRA — convert to tensor off-thread too
-      final tensor = await _bgraToTensor(frame, 640);
-      return widget.detectionService.detectAllFromTensor(tensor);
-    }
-    return [];
-  }
-
-  Future<Float32List> _bgraToTensor(CameraImage frame, int targetSize) async {
-    return compute(_bgraToTensorIsolate, {
-      'bytes':      frame.planes.first.bytes,
-      'width':      frame.width,
-      'height':     frame.height,
-      'targetSize': targetSize,
-    });
   }
 
   Future<void> _capture() async {
-    if (_capturing || _controller == null) return;
-    setState(() => _capturing = true);
+    if (_analyzing || _controller == null || !_controller!.value.isInitialized) return;
+    setState(() => _analyzing = true);
 
     try {
-      // Stop stream, take high-quality photo, restart stream.
-      await _controller!.stopImageStream();
       final photo = await _controller!.takePicture();
+      final imageFile = File(photo.path);
 
+      // Read image dimensions and orientation
+      final bytes = await imageFile.readAsBytes();
+      final decoded = decodeAndOrient(bytes);
+      final imageWidth = decoded.width;
+      final imageHeight = decoded.height;
+
+      // GPS snapshot
       Position? position;
       try {
         position = await Geolocator.getCurrentPosition(
@@ -181,8 +97,9 @@ class _CameraDetectionScreenState extends State<CameraDetectionScreen>
         );
       } catch (_) {}
 
-      final imageFile = File(photo.path);
+      // Run inference ONCE on the captured file
       final results = await widget.detectionService.detectAll(imageFile);
+
       final observation = Observation(
         id: _uuid.v4(),
         captureId: _uuid.v4(),
@@ -193,49 +110,47 @@ class _CameraDetectionScreenState extends State<CameraDetectionScreen>
         accuracyMeters: position?.accuracy,
         actor: widget.actor,
         agentResults: results,
+        imageWidth: imageWidth,
+        imageHeight: imageHeight,
+        modelBundleVersion: TariqMapConstants.modelBundleVersion,
       );
+
+      debugPrint('[Pipeline:ResultObject] Observation created: ${observation.id}, '
+          'detections: ${observation.detections.length}, size: ${imageWidth}x$imageHeight, '
+          'score: ${observation.priorityScore.toStringAsFixed(1)}, '
+          'anomaly: ${observation.detections.firstOrNull?.classCode}');
+
+      // Save to local database
       await widget.repository.save(observation);
 
-      // Fire-and-forget: upload image + sync metadata to Supabase Storage.
-      // Non-blocking — does not delay the UI or affect offline operation.
-      SupabaseService.instance.syncObservation(
-        observation,
-        imageFile: imageFile,
-      ).catchError((e) {
-        debugPrint('[Camera] Supabase sync skipped (offline?): $e');
-      });
+      // Read back from storage to guarantee ResultScreen reads strictly from storage
+      final storedObs = await widget.repository.findById(observation.id) ?? observation;
 
       if (mounted) {
         await Navigator.of(context).push(
           MaterialPageRoute<void>(
-            builder: (_) => ResultScreen(observation: observation),
+            builder: (_) => ResultScreen(observation: storedObs),
           ),
         );
-      }
-
-      // Restart stream after returning.
-      if (mounted && _controller != null) {
-        await _controller!.startImageStream(_onCameraFrame);
       }
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Capture failed: $e')),
+          SnackBar(content: Text('Capture failed: $e'), backgroundColor: AppColors.critical),
         );
       }
     } finally {
-      if (mounted) setState(() => _capturing = false);
+      if (mounted) setState(() => _analyzing = false);
     }
   }
 
   void _switchCamera() async {
-    if (_cameras.length < 2) return;
+    if (_cameras.length < 2 || _analyzing) return;
     final current = _controller?.description;
     final next = _cameras.firstWhere(
       (c) => c != current,
       orElse: () => _cameras.first,
     );
-    await _controller?.stopImageStream();
     await _controller?.dispose();
     setState(() {
       _controller = null;
@@ -268,7 +183,7 @@ class _CameraDetectionScreenState extends State<CameraDetectionScreen>
       body: Stack(
         fit: StackFit.expand,
         children: [
-          // ── Camera preview ──────────────────────────────────────
+          // ── Camera plain preview ────────────────────────────────
           if (_initialized && _controller != null)
             CameraPreview(_controller!)
           else
@@ -283,14 +198,6 @@ class _CameraDetectionScreenState extends State<CameraDetectionScreen>
               ),
             ),
 
-          // ── Bounding box overlay ─────────────────────────────────
-          if (_initialized && _liveDetections.isNotEmpty && _controller != null)
-            Positioned.fill(
-              child: CustomPaint(
-                painter: _LiveBoxPainter(_liveDetections),
-              ),
-            ),
-
           // ── Top bar ─────────────────────────────────────────────
           Positioned(
             top: 0, left: 0, right: 0,
@@ -299,9 +206,8 @@ class _CameraDetectionScreenState extends State<CameraDetectionScreen>
                 padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
                 child: Row(
                   children: [
-                    // Back button
                     GestureDetector(
-                      onTap: () => Navigator.of(context).pop(),
+                      onTap: _analyzing ? null : () => Navigator.of(context).pop(),
                       child: Container(
                         padding: const EdgeInsets.all(8),
                         decoration: BoxDecoration(
@@ -312,68 +218,15 @@ class _CameraDetectionScreenState extends State<CameraDetectionScreen>
                       ),
                     ),
                     const SizedBox(width: 12),
-                    // Detection counter
-                    Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-                      decoration: BoxDecoration(
-                        color: _liveDetections.isEmpty ? Colors.black45 : Colors.red.withAlpha(200),
-                        borderRadius: BorderRadius.circular(20),
-                      ),
-                      child: Text(
-                        _liveDetections.isEmpty
-                            ? 'Scanning…'
-                            : '${_liveDetections.length} anomal${_liveDetections.length == 1 ? 'y' : 'ies'} detected',
-                        style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 13),
-                      ),
-                    ),
-                    const Spacer(),
-                    // Diagnostics
-                    Column(
-                      crossAxisAlignment: CrossAxisAlignment.end,
-                      children: [
-                        Text(
-                          '${_fps.toStringAsFixed(0)} FPS',
-                          style: const TextStyle(color: Colors.white54, fontSize: 11),
-                        ),
-                        if (_lastLatency > 0)
-                          Text(
-                            '${_lastLatency}ms Inf',
-                            style: const TextStyle(color: Colors.white54, fontSize: 11),
-                          ),
-                      ],
+                    const Text(
+                      'Camera',
+                      style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 18),
                     ),
                   ],
                 ),
               ),
             ),
           ),
-
-          // ── Live detection label strip ───────────────────────────
-          if (_liveDetections.isNotEmpty)
-            Positioned(
-              bottom: 140,
-              left: 12, right: 12,
-              child: SingleChildScrollView(
-                scrollDirection: Axis.horizontal,
-                child: Row(
-                  children: _liveDetections.map((d) {
-                    final color = AppColors.forClassCode(d.classCode);
-                    return Container(
-                      margin: const EdgeInsets.only(right: 6),
-                      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
-                      decoration: BoxDecoration(
-                        color: color.withAlpha(220),
-                        borderRadius: BorderRadius.circular(14),
-                      ),
-                      child: Text(
-                        '${TariqMapConstants.labelFor(d.classCode)}  ${(d.confidence * 100).toStringAsFixed(0)}%',
-                        style: const TextStyle(color: Colors.black, fontWeight: FontWeight.bold, fontSize: 11),
-                      ),
-                    );
-                  }).toList(),
-                ),
-              ),
-            ),
 
           // ── Bottom controls ──────────────────────────────────────
           Positioned(
@@ -388,90 +241,86 @@ class _CameraDetectionScreenState extends State<CameraDetectionScreen>
                     _ControlButton(
                       icon: Icons.flip_camera_android_outlined,
                       label: 'Flip',
-                      onTap: _cameras.length > 1 ? _switchCamera : null,
+                      onTap: (_cameras.length > 1 && !_analyzing) ? _switchCamera : null,
                     ),
-                    // Capture shutter
+                    // Shutter button
                     GestureDetector(
-                      onTap: _capturing ? null : _capture,
+                      onTap: _analyzing ? null : _capture,
                       child: AnimatedContainer(
                         duration: const Duration(milliseconds: 150),
-                        width: _capturing ? 68 : 72,
-                        height: _capturing ? 68 : 72,
+                        width: _analyzing ? 68 : 74,
+                        height: _analyzing ? 68 : 74,
                         decoration: BoxDecoration(
                           shape: BoxShape.circle,
-                          color: _capturing ? Colors.grey : Colors.white,
+                          color: _analyzing ? Colors.grey : Colors.white,
                           border: Border.all(color: Colors.white, width: 3),
                           boxShadow: [
                             BoxShadow(color: Colors.white.withAlpha(80), blurRadius: 16),
                           ],
                         ),
-                        child: _capturing
-                            ? const Center(child: CircularProgressIndicator(strokeWidth: 2))
+                        child: _analyzing
+                            ? const Center(child: CircularProgressIndicator(strokeWidth: 2, color: AppColors.teal))
                             : const Icon(Icons.camera, color: Colors.black, size: 32),
                       ),
                     ),
-                    // Placeholder for symmetry
                     const _ControlButton(icon: Icons.info_outline, label: 'Info', onTap: null),
                   ],
                 ),
               ),
             ),
           ),
+
+          // ── Analyzing overlay state (CHANGE 1) ────────────────────
+          if (_analyzing)
+            Positioned.fill(
+              child: Container(
+                color: Colors.black.withAlpha(180),
+                child: Center(
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 28, vertical: 24),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFF1E293B),
+                      borderRadius: BorderRadius.circular(16),
+                      boxShadow: [
+                        BoxShadow(
+                          color: Colors.black.withAlpha(100),
+                          blurRadius: 20,
+                          offset: const Offset(0, 8),
+                        ),
+                      ],
+                    ),
+                    child: const Column(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        CircularProgressIndicator(color: AppColors.teal, strokeWidth: 3),
+                        SizedBox(height: 18),
+                        Text(
+                          'Analyzing…',
+                          style: TextStyle(
+                            color: Colors.white,
+                            fontSize: 16,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                        SizedBox(height: 6),
+                        Text(
+                          'Detecting road surface anomalies',
+                          style: TextStyle(
+                            color: Colors.white70,
+                            fontSize: 12,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              ),
+            ),
         ],
       ),
     );
   }
 }
-
-// ---------------------------------------------------------------------------
-// Live bounding box painter
-// ---------------------------------------------------------------------------
-
-class _LiveBoxPainter extends CustomPainter {
-  _LiveBoxPainter(this.detections);
-  final List<Detection> detections;
-
-  @override
-  void paint(Canvas canvas, Size size) {
-    for (final d in detections) {
-      final color = AppColors.forClassCode(d.classCode);
-      final b = d.box;
-      final rect = Rect.fromLTWH(
-        b.x * size.width,
-        b.y * size.height,
-        b.width * size.width,
-        b.height * size.height,
-      );
-
-      // Glow
-      canvas.drawRect(rect.inflate(4),
-          Paint()..color = color.withAlpha(50)..style = PaintingStyle.fill);
-
-      // Box
-      canvas.drawRect(rect,
-          Paint()..color = color..style = PaintingStyle.stroke..strokeWidth = 2.5);
-
-      // Label
-      final label = '${TariqMapConstants.labelFor(d.classCode)}  ${(d.confidence * 100).toStringAsFixed(0)}%';
-      final tp = TextPainter(
-        text: TextSpan(text: label, style: const TextStyle(color: Colors.black, fontSize: 11, fontWeight: FontWeight.w700)),
-        textDirection: TextDirection.ltr,
-      )..layout();
-      const pad = 4.0;
-      final pillRect = Rect.fromLTWH(rect.left, rect.top - tp.height - pad * 2, tp.width + pad * 2, tp.height + pad * 2);
-      canvas.drawRRect(RRect.fromRectAndRadius(pillRect, const Radius.circular(4)), Paint()..color = color);
-      tp.paint(canvas, Offset(pillRect.left + pad, pillRect.top + pad));
-    }
-  }
-
-  @override
-  bool shouldRepaint(_LiveBoxPainter old) => old.detections != detections;
-}
-
-
-// ---------------------------------------------------------------------------
-// Small icon button used in bottom controls
-// ---------------------------------------------------------------------------
 
 class _ControlButton extends StatelessWidget {
   const _ControlButton({required this.icon, required this.label, required this.onTap});
@@ -498,40 +347,4 @@ class _ControlButton extends StatelessWidget {
       ],
     ),
   );
-}
-
-// ── Background Isolates ────────────────────────────────────────────────────────
-
-Float32List _bgraToTensorIsolate(Map<String, dynamic> params) {
-  final bytes      = params['bytes'] as Uint8List;
-  final width      = params['width'] as int;
-  final height     = params['height'] as int;
-  final targetSize = params['targetSize'] as int;
-
-  final out = Float32List(targetSize * targetSize * 3);
-  int idx = 0;
-
-  final xScale = width / targetSize;
-  final yScale = height / targetSize;
-
-  for (var dy = 0; dy < targetSize; dy++) {
-    final srcY = (dy * yScale).toInt().clamp(0, height - 1);
-    final rowOffset = srcY * width * 4;
-
-    for (var dx = 0; dx < targetSize; dx++) {
-      final srcX = (dx * xScale).toInt().clamp(0, width - 1);
-      final pixelOffset = rowOffset + srcX * 4;
-
-      // BGRA
-      final b = bytes[pixelOffset];
-      final g = bytes[pixelOffset + 1];
-      final r = bytes[pixelOffset + 2];
-
-      out[idx++] = r / 255.0;
-      out[idx++] = g / 255.0;
-      out[idx++] = b / 255.0;
-    }
-  }
-
-  return out;
 }

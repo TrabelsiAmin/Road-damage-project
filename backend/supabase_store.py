@@ -198,7 +198,7 @@ class SupabaseStore:
     def get_observation(self, observation_id: str) -> dict[str, Any] | None:
         params = {
             "id": f"eq.{quote(observation_id, safe='')}",
-            "select": "*",
+            "select": "id,capture_id,parent_observation_id,created_by,organization_id,source,captured_at,image_width,image_height,priority_score,priority_label,anomaly_type,model_bundle_version,created_at,synced_at,is_demo,status,assigned_contractor,budget_estimate_tnd",
             "limit": "1",
         }
         rows = self._request("GET", "observations", params=params).json()

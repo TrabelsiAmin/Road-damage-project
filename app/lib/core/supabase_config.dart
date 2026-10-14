@@ -28,9 +28,6 @@ class SupabaseCfg {
   /// Bucket for captured still images (annotated JPEGs).
   static const String imagesBucket = 'observation-images';
 
-  /// Bucket for recorded live-stream video clips.
-  static const String videosBucket = 'live-session-videos';
-
   // ── Database tables ────────────────────────────────────────────────────────
 
   static const String tableObservations = 'observations';
@@ -39,6 +36,5 @@ class SupabaseCfg {
   static const String tableDetections   = 'detections';
   static const String tableSyncReceipts = 'sync_receipts';
   static const String tableMediaFiles   = 'media_files';
-  static const String tableLiveSessions = 'live_sessions';
 }
 

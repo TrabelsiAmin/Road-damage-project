@@ -126,7 +126,7 @@ TariqMap uses Supabase for database persistence and image storage:
 2. Execute the migration scripts located in `supabase/migrations/` in your SQL Editor:
    - `20260928183500_align_rdd_model.sql`
    - `20260928183800_allow_unauthenticated_observation_ingest.sql`
-   - `20260929_add_media_and_live_sessions.sql`
+   - `20260929_add_media.sql`
    - `20260929_add_anon_rls_policies.sql`
    - `20261011164600_add_anomaly_type.sql`
 3. Create a Supabase Storage bucket named `observation-images`.

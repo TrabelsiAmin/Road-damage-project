@@ -1,8 +1,6 @@
 import 'dart:io';
 import 'package:flutter/foundation.dart';
-import 'package:image/image.dart' as img;
 import '../core/constants.dart';
-import '../inference/preprocessing.dart';
 import '../inference/roadsense_decoder.dart';
 import '../models/observation.dart';
 import 'model_manager.dart';
@@ -115,10 +113,6 @@ class DetectionService {
 
   /// The active legacy pothole runner when running hybrid.
   final TFLiteAgentRunner? potholeRunner;
-
-  /// Cached pothole detections across frames (used for frame-skip).
-  List<Detection> _lastPotholeDetections = const [];
-  int _potholeFrameCounter = 0;
 
   /// True when ALL runners are mocks (no real TFLite models loaded).
   bool get usingMock => _runners.every((r) => r.isMock);
@@ -256,7 +250,8 @@ class DetectionService {
       return _detectHybrid(image: image);
     }
 
-    return Future.wait(_runners.map((runner) async {
+    final sw = Stopwatch()..start();
+    final results = await Future.wait(_runners.map((runner) async {
       try {
         return await runner.detect(image);
       } catch (error) {
@@ -269,6 +264,10 @@ class DetectionService {
         );
       }
     }));
+    sw.stop();
+    final totalDets = results.expand((r) => r.detections).length;
+    debugPrint('[Pipeline:Inference] Produced $totalDets detections (latency: ${sw.elapsedMilliseconds}ms)');
+    return results;
   }
 
   /// Runs all agents on raw image bytes (JPEG/PNG).
@@ -277,7 +276,8 @@ class DetectionService {
       return _detectHybrid(bytes: bytes);
     }
 
-    return Future.wait(_runners.map((runner) async {
+    final sw = Stopwatch()..start();
+    final results = await Future.wait(_runners.map((runner) async {
       try {
         if (runner is TFLiteAgentRunner) {
           return await runner.detectFromBytes(bytes);
@@ -293,37 +293,10 @@ class DetectionService {
         );
       }
     }));
-  }
-
-  /// ⚡ Fastest path for live camera: skip JPEG encode/decode entirely.
-  ///
-  /// [inputTensor] must be Float32List [inputSize*inputSize*3] normalised [0..1]
-  /// produced off-thread by [convertYUVToTensorInBackground].
-  Future<List<AgentResult>> detectAllFromTensor(Float32List inputTensor) async {
-    if (isHybridActive && roadSenseRunner != null) {
-      return _detectHybridFromTensor(inputTensor);
-    }
-
-    return Future.wait(_runners.map((runner) async {
-      try {
-        if (runner is TFLiteAgentRunner) {
-          return await runner.detectFromTensor(inputTensor);
-        }
-        return AgentResult(
-          agent: runner.agentName,
-          detections: const [],
-          isMock: runner.isMock,
-        );
-      } catch (error) {
-        debugPrint('[DetectionService] Agent ${runner.agentName} failed: $error');
-        return AgentResult(
-          agent: runner.agentName,
-          detections: const [],
-          error: error.toString(),
-          isMock: runner.isMock,
-        );
-      }
-    }));
+    sw.stop();
+    final totalDets = results.expand((r) => r.detections).length;
+    debugPrint('[Pipeline:Inference] Produced $totalDets detections (latency: ${sw.elapsedMilliseconds}ms)');
+    return results;
   }
 
   // ── Hybrid Execution & Merging ─────────────────────────────────────────────
@@ -341,37 +314,31 @@ class DetectionService {
     }
 
     var potholeDets = <Detection>[];
+    int potholeLatency = 0;
 
     if (potholeRunner != null) {
-      final shouldRunPothole =
-          (_potholeFrameCounter++ % TariqMapConstants.potholeModelFrameSkip) == 0;
-
-      if (shouldRunPothole) {
-        AgentResult phResult;
-        if (bytes != null) {
-          phResult = await potholeRunner!.detectFromBytes(bytes);
-        } else {
-          phResult = await potholeRunner!.detect(image!);
-        }
-
-        var d40Detections = phResult.detections;
-
-        // Optional filter: drop D40 box if RoadSense Repair overlaps with IoU > 0.5
-        if (TariqMapConstants.filterPotholesWithRepair && rs.lastRepairDetections.isNotEmpty) {
-          d40Detections = RoadSenseDecoder.filterPotholesOverlappingRepairs(
-            d40Detections,
-            rs.lastRepairDetections,
-            iouThreshold: 0.5,
-          );
-        }
-
-        _lastPotholeDetections = d40Detections;
-        potholeDets = d40Detections;
+      AgentResult phResult;
+      if (bytes != null) {
+        phResult = await potholeRunner!.detectFromBytes(bytes);
       } else {
-        // Reuse cached pothole detections on skipped frames
-        potholeDets = _lastPotholeDetections;
+        phResult = await potholeRunner!.detect(image!);
       }
+      potholeLatency = phResult.latencyMs ?? 0;
+
+      var d40Detections = phResult.detections;
+
+      // Optional filter: drop D40 box if RoadSense Repair overlaps with IoU > 0.5
+      if (TariqMapConstants.filterPotholesWithRepair && rs.lastRepairDetections.isNotEmpty) {
+        d40Detections = RoadSenseDecoder.filterPotholesOverlappingRepairs(
+          d40Detections,
+          rs.lastRepairDetections,
+          iouThreshold: 0.5,
+        );
+      }
+      potholeDets = d40Detections;
     }
+
+    final totalLatency = (rsResult.latencyMs ?? 0) + potholeLatency;
 
     // Merge both outputs into canonical 'road_damage' AgentResult
     final mergedDetections = <Detection>[
@@ -379,84 +346,29 @@ class DetectionService {
       ...potholeDets,
     ];
 
-    return [
-      AgentResult(
-        agent: 'road_damage',
-        detections: mergedDetections,
-        isMock: false,
-      ),
-    ];
-  }
+    // Ensure all detections use the canonical agent 'road_damage' matching AgentResult.agent
+    final canonicalDetections = mergedDetections.map((d) => Detection(
+      agent: 'road_damage',
+      classCode: d.classCode,
+      confidence: d.confidence,
+      box: d.box,
+      frameIndex: d.frameIndex,
+      modelBundleVersion: d.modelBundleVersion.isNotEmpty
+          ? d.modelBundleVersion
+          : TariqMapConstants.modelBundleVersion,
+      timestamp: d.timestamp,
+    )).toList();
 
-  Future<List<AgentResult>> _detectHybridFromTensor(Float32List nhwcTensor) async {
-    final rs = roadSenseRunner!;
-
-    // Convert NHWC Float32List to NCHW for RoadSense
-    final nchwTensor = _nhwcToNchw(nhwcTensor, rs.inputSize);
-    final letterbox = LetterboxResult(
-      image: img.Image(width: rs.inputSize, height: rs.inputSize),
-      originalWidth: rs.inputSize,
-      originalHeight: rs.inputSize,
-      scale: 1.0,
-      padX: 0,
-      padY: 0,
-      newWidth: rs.inputSize,
-      newHeight: rs.inputSize,
-      inputSize: rs.inputSize,
-    );
-
-    final rsResult = rs.runOnTensor(nchwTensor, letterbox);
-
-    var potholeDets = <Detection>[];
-    if (potholeRunner != null) {
-      final shouldRunPothole =
-          (_potholeFrameCounter++ % TariqMapConstants.potholeModelFrameSkip) == 0;
-
-      if (shouldRunPothole) {
-        final phResult = await potholeRunner!.detectFromTensor(nhwcTensor);
-        var d40Detections = phResult.detections;
-
-        if (TariqMapConstants.filterPotholesWithRepair && rs.lastRepairDetections.isNotEmpty) {
-          d40Detections = RoadSenseDecoder.filterPotholesOverlappingRepairs(
-            d40Detections,
-            rs.lastRepairDetections,
-            iouThreshold: 0.5,
-          );
-        }
-
-        _lastPotholeDetections = d40Detections;
-        potholeDets = d40Detections;
-      } else {
-        potholeDets = _lastPotholeDetections;
-      }
-    }
-
-    final mergedDetections = <Detection>[
-      ...rsResult.detections,
-      ...potholeDets,
-    ];
+    debugPrint('[Pipeline:Inference] Produced ${canonicalDetections.length} detections (latency: ${totalLatency}ms)');
 
     return [
       AgentResult(
         agent: 'road_damage',
-        detections: mergedDetections,
+        detections: canonicalDetections,
         isMock: false,
+        latencyMs: totalLatency,
       ),
     ];
-  }
-
-  Float32List _nhwcToNchw(Float32List nhwc, int size) {
-    final planeSize = size * size;
-    final nchw = Float32List(3 * planeSize);
-    final gOffset = planeSize;
-    final bOffset = 2 * planeSize;
-    for (var i = 0; i < planeSize; i++) {
-      final nhwcBase = i * 3;
-      nchw[i] = nhwc[nhwcBase];
-      nchw[gOffset + i] = nhwc[nhwcBase + 1];
-      nchw[bOffset + i] = nhwc[nhwcBase + 2];
-    }
-    return nchw;
   }
 
   void dispose() {

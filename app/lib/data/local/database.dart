@@ -11,6 +11,8 @@ class AppDatabase {
   AppDatabase._();
   static final AppDatabase instance = AppDatabase._();
 
+  AppDatabase.withDatabase(Database db) : _db = db;
+
   Database? _db;
 
   Future<Database> get database async {
@@ -110,11 +112,15 @@ class AppDatabase {
     );
   }
 
-  Future<void> _onCreate(Database db, int version) async {
+  static Future<void> createSchema(Database db) async {
     await db.execute(_createObservations);
     await db.execute(_createDetections);
     await db.execute(_createAgentResults);
     await db.execute(_createAuditLog);
+  }
+
+  Future<void> _onCreate(Database db, int version) async {
+    await createSchema(db);
     debugPrint('[AppDatabase] Schema created at version $version');
   }
 

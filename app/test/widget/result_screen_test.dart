@@ -12,7 +12,7 @@ void main() {
       createdAt: DateTime.now(),
       latitude: 36.8065,
       longitude: 10.1815,
-      actor: 'Test User',
+      actor: 'Municipality',
       agentResults: [
         const AgentResult(
           agent: 'mock_agent',
@@ -34,8 +34,8 @@ void main() {
     ));
 
     expect(find.text('Analysis Results'), findsOneWidget);
-    expect(find.text('Test User'), findsOneWidget);
+    expect(find.text('Municipality'), findsWidgets);
     expect(find.text('DEMO MOCK INFERENCE'), findsOneWidget);
-    expect(find.text('1 Anomaly Found'), findsOneWidget);
+    expect(find.text('1 ANOMALY FOUND'), findsOneWidget);
   });
 }

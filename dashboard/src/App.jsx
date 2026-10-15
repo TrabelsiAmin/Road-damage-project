@@ -5,6 +5,7 @@ import {
   SEVERITY_COLORS,
   STATUS_LABELS,
   I18N,
+  MAP_CONFIG,
 } from './constants';
 import {
   fetchObservations,
@@ -257,10 +258,10 @@ export default function App() {
 
       L.control.zoom({ position: 'bottomright' }).addTo(map);
 
-      L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', {
-        attribution: '&copy; OpenStreetMap &copy; CARTO',
-        subdomains: 'abcd',
-        maxZoom: 19,
+      L.tileLayer(MAP_CONFIG.tileUrl, {
+        attribution: MAP_CONFIG.tileAttribution,
+        maxZoom: MAP_CONFIG.maxZoom,
+        className: 'dark-tiles',
       }).addTo(map);
 
       const markersGroup = L.layerGroup().addTo(map);

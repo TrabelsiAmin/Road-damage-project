@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo, useRef } from 'react';
+import React, { useState, useEffect, useMemo, useRef, useCallback } from 'react';
 import L from 'leaflet';
 import {
   DAMAGE_CLASSES,
@@ -15,6 +15,10 @@ import {
   getCurrentUser,
   checkIsAuthority,
   getMediaUrl,
+  getSignedMediaUrl,
+  getPublicMediaUrl,
+  fetchMediaFilesForObservations,
+  supabase,
 } from './supabase';
 import { clusterObservations, calculateRoadHealthScore } from './utils/clustering';
 import { calculatePriorityScore, PRIORITY_CONFIG } from './utils/priorityScoring';
@@ -35,12 +39,15 @@ import {
   HelpCircle,
   BarChart3,
   ChevronRight,
+  ChevronLeft,
   Eye,
   Camera,
+  CameraOff,
   Layers,
   Wrench,
   Clock,
   ArrowRight,
+  Lock,
 } from 'lucide-react';
 
 // Priority Colors for Leaflet pins (v2: HIGH, MEDIUM, LOW)
@@ -52,67 +59,212 @@ const PRIORITY_PIN_COLORS = {
 };
 
 /**
- * Report Image Card: uses createSignedUrl with short expiry (300s) for observation-images.
- * Never calls getPublicUrl. Shows neutral placeholder when no image is available.
+ * Score formatter: rounds to 1 decimal place.
  */
-function ReportImageThumbnail({ storagePath, bucket = 'observation-images', isAuthority }) {
-  const [signedUrl, setSignedUrl] = useState(null);
+function formatScore(score) {
+  if (score === null || score === undefined || isNaN(score)) return '--';
+  return Number(score).toFixed(1);
+}
+
+/**
+ * Image Lightbox Modal: shows original image full-size with details on click.
+ */
+function ImageLightbox({ image, onClose }) {
+  useEffect(() => {
+    function handleKeyDown(e) {
+      if (e.key === 'Escape') onClose();
+    }
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [onClose]);
+
+  if (!image) return null;
+
+  return (
+    <div className="lightbox-backdrop" onClick={onClose}>
+      <div className="lightbox-content" onClick={(e) => e.stopPropagation()}>
+        <div className="lightbox-header">
+          <div className="lightbox-title-area">
+            <h4 className="lightbox-title">{image.title}</h4>
+            <span className="lightbox-badge">{image.badge}</span>
+          </div>
+          <button className="icon-btn" onClick={onClose} title="Fermer (Échap)">
+            <X size={20} />
+          </button>
+        </div>
+        <div className="lightbox-body">
+          <img src={image.url} alt={image.title} className="lightbox-image" />
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/**
+ * Report Image Card:
+ * - When Authority: fetches 10-minute signed URL from observation-images for original photo,
+ *   auto-refreshes 30s before expiry. Falls back to public thumbnail only if original is missing.
+ * - When Citizen / Logged Out: displays public thumbnail from public-photos if available.
+ * - Distinct UI states: loading ("Chargement de la photo..."), no photo uploaded ("Aucune photo enregistrée"),
+ *   load failure ("Échec du chargement" + Retry button), and not authority ("Photo réservée autorité").
+ * - Click-to-zoom into Lightbox.
+ */
+function ReportImageThumbnail({ obs, clusterMedia, isAuthority, onOpenLightbox }) {
+  const orig = clusterMedia?.original || obs?.original_media;
+  const thumb = clusterMedia?.thumbnail || obs?.thumbnail_media;
+
+  const [imageUrl, setImageUrl] = useState(null);
   const [loading, setLoading] = useState(false);
+  const [errorInfo, setErrorInfo] = useState(null);
+  const [retryKey, setRetryKey] = useState(0);
+
+  const hasOriginal = Boolean(orig?.storage_path);
+  const hasThumbnail = Boolean(thumb?.storage_path);
 
   useEffect(() => {
     let active = true;
-    if (isAuthority && storagePath) {
-      setLoading(true);
-      getMediaUrl(storagePath, bucket)
-        .then((url) => {
-          if (active) {
-            setSignedUrl(url);
-            setLoading(false);
-          }
-        })
-        .catch(() => {
-          if (active) {
-            setSignedUrl(null);
-            setLoading(false);
-          }
-        });
-    } else {
-      setSignedUrl(null);
-      setLoading(false);
-    }
-    return () => { active = false; };
-  }, [storagePath, bucket, isAuthority]);
+    let refreshTimer = null;
 
-  if (isAuthority && storagePath) {
-    if (loading) {
-      return (
-        <div className="report-img-placeholder">
-          <div className="spinner-sm" style={{ width: '14px', height: '14px', border: '2px solid rgba(255,255,255,0.2)', borderTopColor: 'var(--color-primary)', borderRadius: '50%', animation: 'spin 0.8s linear infinite' }} />
-          <span style={{ fontSize: '0.7rem' }}>Chargement URL signée...</span>
-        </div>
-      );
+    async function resolveImage() {
+      setErrorInfo(null);
+
+      // ── Case A: User is Authority ───────────────────────────────────────────
+      if (isAuthority) {
+        if (hasOriginal) {
+          setLoading(true);
+          try {
+            const res = await getSignedMediaUrl(orig.storage_path, 'observation-images', 600);
+            if (!active) return;
+            setImageUrl(res.signedUrl);
+            setLoading(false);
+
+            // Auto-refresh before 10min expiry (30s buffer)
+            const msUntilRefresh = Math.max(30000, res.expiresAt - Date.now());
+            refreshTimer = setTimeout(() => {
+              if (active) resolveImage();
+            }, msUntilRefresh);
+          } catch (err) {
+            if (!active) return;
+            console.error('[ReportImageThumbnail] Error creating signed URL:', err);
+            setErrorInfo(err?.message || 'Erreur d\'accès au stockage');
+            setImageUrl(null);
+            setLoading(false);
+          }
+          return;
+        }
+
+        // Fallback to public thumbnail only if original doesn't exist
+        if (hasThumbnail) {
+          const pubUrl = getPublicMediaUrl(thumb.storage_path, 'public-photos');
+          if (active) {
+            setImageUrl(pubUrl);
+            setLoading(false);
+          }
+          return;
+        }
+
+        if (active) {
+          setImageUrl(null);
+          setLoading(false);
+        }
+        return;
+      }
+
+      // ── Case B: User is NOT Authority (Anon / Logged out) ───────────────────
+      if (!isAuthority) {
+        if (hasThumbnail) {
+          const pubUrl = getPublicMediaUrl(thumb.storage_path, 'public-photos');
+          if (active) {
+            setImageUrl(pubUrl);
+            setLoading(false);
+          }
+          return;
+        }
+
+        if (active) {
+          setImageUrl(null);
+          setLoading(false);
+        }
+      }
     }
-    if (signedUrl) {
-      return (
-        <div className="report-img-container">
-          <img
-            src={signedUrl}
-            alt="Cliché chaussée"
-            className="report-img"
-            onError={() => setSignedUrl(null)}
-          />
-          <span className="report-img-badge">Signé (300s)</span>
-        </div>
-      );
-    }
+
+    resolveImage();
+
+    return () => {
+      active = false;
+      if (refreshTimer) clearTimeout(refreshTimer);
+    };
+  }, [orig?.storage_path, thumb?.storage_path, isAuthority, retryKey]);
+
+  // State 1: Loading
+  if (loading) {
+    return (
+      <div className="report-img-placeholder">
+        <div className="spinner-sm" style={{ width: '16px', height: '16px', border: '2px solid rgba(255,255,255,0.2)', borderTopColor: 'var(--color-primary)', borderRadius: '50%', animation: 'spin 0.8s linear infinite' }} />
+        <span className="placeholder-text">Chargement de la photo...</span>
+      </div>
+    );
   }
 
+  // State 2: Error with Retry button
+  if (errorInfo) {
+    return (
+      <div className="report-img-placeholder error">
+        <AlertTriangle size={18} />
+        <span className="placeholder-text error-text">Échec du chargement</span>
+        <button
+          className="btn-retry"
+          onClick={() => setRetryKey((k) => k + 1)}
+          title={errorInfo}
+        >
+          Réessayer
+        </button>
+      </div>
+    );
+  }
+
+  // State 3: Photo loaded successfully
+  if (imageUrl) {
+    const isOriginal = isAuthority && hasOriginal;
+    const badgeText = isOriginal ? 'Original HD (Signé 10 min)' : 'Aperçu public flouté';
+    const badgeClass = isOriginal ? 'badge-signed-hd' : 'badge-public-thumb';
+    const title = `#${obs.id.slice(0, 8)} • ${DAMAGE_CLASSES[obs.anomaly_type]?.fr || obs.anomaly_type || 'Anomalie'}`;
+
+    return (
+      <div
+        className="report-img-container"
+        onClick={() => onOpenLightbox && onOpenLightbox(imageUrl, title, badgeText)}
+        title="Cliquer pour agrandir dans la visionneuse"
+      >
+        <img
+          src={imageUrl}
+          alt={title}
+          className="report-img"
+          onError={() => setErrorInfo('Image introuvable')}
+        />
+        <div className="report-img-overlay">
+          <Eye size={20} />
+        </div>
+        <span className={`report-img-badge ${badgeClass}`}>{badgeText}</span>
+      </div>
+    );
+  }
+
+  // State 4: Not Authority (photo exists in private bucket, but user lacks authority rights)
+  if (!isAuthority && (hasOriginal || (!obs?.is_demo && !hasThumbnail))) {
+    return (
+      <div className="report-img-placeholder not-authority">
+        <Lock size={18} />
+        <span className="placeholder-text">Photo réservée autorité</span>
+      </div>
+    );
+  }
+
+  // State 5: No photo uploaded (or demo data)
   return (
-    <div className="report-img-placeholder neutral-privacy">
-      <Camera size={16} style={{ opacity: 0.6 }} />
-      <span style={{ fontSize: '0.7rem', color: 'var(--text-dim)' }}>
-        {storagePath ? 'Photo réservée autorité' : 'Aucun cliché'}
-      </span>
+    <div className="report-img-placeholder">
+      <CameraOff size={18} />
+      <span className="placeholder-text">Aucune photo enregistrée</span>
     </div>
   );
 }
@@ -122,6 +274,7 @@ export default function App() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [lang, setLang] = useState('fr');
+  const [dataVersion, setDataVersion] = useState(0);
 
   // Auth State
   const [currentUser, setCurrentUser] = useState(null);
@@ -139,6 +292,11 @@ export default function App() {
 
   // Selected Cluster & Side Panel
   const [selectedCluster, setSelectedCluster] = useState(null);
+  const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
+  const [clusterMediaMap, setClusterMediaMap] = useState({});
+
+  // Lightbox Image
+  const [lightboxImage, setLightboxImage] = useState(null); // { url, title, badge }
 
   // Status Change Confirmation Modal
   const [statusConfirmModal, setStatusConfirmModal] = useState(null); // { obsId, newStatus, currentStatus }
@@ -159,7 +317,7 @@ export default function App() {
 
   const t = I18N[lang] || I18N.fr;
 
-  // ── 0. Check Auth Session on Mount ─────────────────────────────────────────
+  // ── 0. Check Auth Session on Mount & Listen to Changes ──────────────────────
   useEffect(() => {
     async function checkAuth() {
       try {
@@ -177,23 +335,77 @@ export default function App() {
       }
     }
     checkAuth();
+
+    // Listen to token refresh, login, logout
+    const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
+      console.log('[Auth] State changed:', event, session?.user?.email);
+      const user = session?.user || null;
+      setCurrentUser(user);
+      if (user) {
+        const authOk = await checkIsAuthority();
+        setIsAuthorityUser(authOk);
+      } else {
+        setIsAuthorityUser(false);
+      }
+      // Trigger full observation refetch with the new token/context
+      setDataVersion((v) => v + 1);
+    });
+
+    return () => {
+      subscription?.unsubscribe();
+    };
   }, []);
 
   // ── 1. Fetch Observations from Supabase ────────────────────────────────────
-  useEffect(() => {
-    async function loadData() {
-      setLoading(true);
-      try {
-        const data = await fetchObservations();
-        setObservations(data);
-      } catch (err) {
-        setError(err.message || 'Error fetching data from Supabase');
-      } finally {
-        setLoading(false);
-      }
+  const loadData = useCallback(async () => {
+    setLoading(true);
+    try {
+      const data = await fetchObservations();
+      setObservations(data);
+    } catch (err) {
+      setError(err.message || 'Error fetching data from Supabase');
+    } finally {
+      setLoading(false);
     }
-    loadData();
   }, []);
+
+  useEffect(() => {
+    loadData();
+  }, [loadData, dataVersion]);
+
+  // ── 1b. Refetch Media for Open Cluster when Cluster or Auth Changes ────────
+  useEffect(() => {
+    let active = true;
+    if (!selectedCluster || !selectedCluster.members || selectedCluster.members.length === 0) {
+      setClusterMediaMap({});
+      return;
+    }
+
+    const obsIds = selectedCluster.members.map((m) => m.id);
+    fetchMediaFilesForObservations(obsIds)
+      .then((res) => {
+        if (active) {
+          setClusterMediaMap(res);
+        }
+      })
+      .catch((err) => {
+        console.warn('[ClusterMedia] error:', err);
+      });
+
+    return () => {
+      active = false;
+    };
+  }, [selectedCluster?.id, isAuthorityUser, dataVersion]);
+
+  // Keep selectedCluster members synced with latest observations on dataVersion bump
+  useEffect(() => {
+    if (!selectedCluster) return;
+    const currentMemberIds = new Set(selectedCluster.members.map((m) => m.id));
+    const updatedMembers = observations.filter((o) => currentMemberIds.has(o.id));
+    if (updatedMembers.length > 0) {
+      setSelectedCluster((prev) => prev ? { ...prev, members: updatedMembers } : null);
+    }
+  }, [observations]);
 
   // ── 2. Metric Distance Clustering (20m radius, accuracy <= 25m) ────────────
   const clusters = useMemo(() => {
@@ -416,6 +628,7 @@ export default function App() {
       setIsAuthorityUser(isAuth);
       setShowLoginModal(false);
       setAuthPassword('');
+      setDataVersion((v) => v + 1);
       if (!isAuth) {
         alert(
           'Compte authentifié, mais absent de la table authority_users. Accès en lecture seule conservé.'
@@ -433,6 +646,7 @@ export default function App() {
       await signOut();
       setCurrentUser(null);
       setIsAuthorityUser(false);
+      setDataVersion((v) => v + 1);
     } catch (err) {
       console.error(err);
     }
@@ -609,10 +823,22 @@ export default function App() {
       </section>
 
       {/* ── Main Layout: Map + Side Panel ───────────────────────────────────── */}
-      <div className="main-layout">
+      <div className={`main-layout ${isSidebarCollapsed ? 'sidebar-collapsed' : ''}`}>
         {/* Left Map View */}
         <div className="map-wrapper">
           <div ref={mapRef} style={{ width: '100%', height: '100%' }} />
+
+          {/* Expand Sidebar Button (when collapsed) */}
+          {isSidebarCollapsed && (
+            <button
+              className="sidebar-expand-btn"
+              onClick={() => setIsSidebarCollapsed(false)}
+              title="Ouvrir le panneau d'inspection"
+            >
+              <ChevronLeft size={16} />
+              <span>{selectedCluster ? 'Détails cluster' : 'File prioritaire'}</span>
+            </button>
+          )}
 
           {/* Quick Filters Overlay */}
           <div className="map-filter-overlay">
@@ -697,13 +923,22 @@ export default function App() {
                     {selectedCluster.latitude.toFixed(6)}, {selectedCluster.longitude.toFixed(6)}
                   </p>
                 </div>
-                <button
-                  className="icon-btn"
-                  onClick={() => setSelectedCluster(null)}
-                  title="Fermer la sélection"
-                >
-                  <X size={16} />
-                </button>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
+                  <button
+                    className="icon-btn"
+                    onClick={() => setIsSidebarCollapsed(true)}
+                    title="Masquer le panneau"
+                  >
+                    <ChevronRight size={18} />
+                  </button>
+                  <button
+                    className="icon-btn"
+                    onClick={() => setSelectedCluster(null)}
+                    title="Fermer la sélection"
+                  >
+                    <X size={16} />
+                  </button>
+                </div>
               </div>
 
               {/* Cluster KPI Grid */}
@@ -716,7 +951,7 @@ export default function App() {
                       color: PRIORITY_PIN_COLORS[selectedCluster.priorityLabel],
                     }}
                   >
-                    {selectedCluster.maxPriorityScore} ({selectedCluster.priorityLabel})
+                    {formatScore(selectedCluster.maxPriorityScore)} ({selectedCluster.priorityLabel})
                   </strong>
                 </div>
                 <div className="cluster-kpi-card">
@@ -759,22 +994,30 @@ export default function App() {
 
                     return (
                       <div key={obs.id} className="report-card">
-                        <div style={{ display: 'flex', gap: '12px' }}>
-                          {/* Image thumbnail (Signed URL short expiry) */}
-                          <div style={{ width: '80px', flexShrink: 0 }}>
-                            <ReportImageThumbnail
-                              storagePath={obs.storage_path}
-                              bucket={obs.bucket}
-                              isAuthority={isAuthorityUser}
-                            />
-                          </div>
+                        <div style={{ display: 'flex', gap: '14px', alignItems: 'flex-start' }}>
+                          {/* Image thumbnail (150x110px with lightbox) */}
+                          <ReportImageThumbnail
+                            obs={obs}
+                            clusterMedia={clusterMediaMap[obs.id]}
+                            isAuthority={isAuthorityUser}
+                            onOpenLightbox={(url, title, badge) =>
+                              setLightboxImage({ url, title, badge })
+                            }
+                          />
 
                           {/* Report metadata */}
                           <div style={{ flex: 1, minWidth: 0 }}>
-                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
-                              <span style={{ fontWeight: 700, fontSize: '0.82rem', color: DAMAGE_CLASSES[classCode]?.color }}>
-                                #{idx + 1} {classCode} ({DAMAGE_CLASSES[classCode]?.fr})
-                              </span>
+                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: '6px' }}>
+                              <div style={{ display: 'flex', alignItems: 'center', gap: '6px', flexWrap: 'wrap' }}>
+                                <span style={{ fontWeight: 700, fontSize: '0.82rem', color: DAMAGE_CLASSES[classCode]?.color }}>
+                                  #{idx + 1} {classCode} ({DAMAGE_CLASSES[classCode]?.fr})
+                                </span>
+                                {obs.is_demo ? (
+                                  <span className="badge badge-demo">DEMO</span>
+                                ) : (
+                                  <span className="badge badge-real">RÉEL</span>
+                                )}
+                              </div>
                               <span className={`badge ${STATUS_LABELS[obs.status]?.badge || 'badge-gray'}`} style={{ fontSize: '0.68rem' }}>
                                 {STATUS_LABELS[obs.status]?.fr || obs.status}
                               </span>
@@ -789,7 +1032,7 @@ export default function App() {
                               </div>
                               <div>
                                 <span style={{ color: 'var(--text-dim)' }}>Score: </span>
-                                <strong className="mono">{obs.priority_score || '--'}</strong>
+                                <strong className="mono">{formatScore(obs.priority_score)}</strong>
                               </div>
                             </div>
 
@@ -835,6 +1078,15 @@ export default function App() {
             </div>
           ) : (
             <div className="panel-empty-state">
+              <div style={{ width: '100%', display: 'flex', justifyContent: 'flex-end', marginBottom: '8px' }}>
+                <button
+                  className="icon-btn"
+                  onClick={() => setIsSidebarCollapsed(true)}
+                  title="Masquer le panneau"
+                >
+                  <ChevronRight size={18} />
+                </button>
+              </div>
               <Layers size={36} style={{ opacity: 0.4, color: 'var(--color-primary)' }} />
               <h3 style={{ fontSize: '0.95rem', fontWeight: 700, marginTop: '8px' }}>
                 Sélectionnez un cluster sur la carte
@@ -866,7 +1118,7 @@ export default function App() {
                       </div>
                       <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
                         <strong className="mono" style={{ fontSize: '0.8rem', color: PRIORITY_PIN_COLORS[c.priorityLabel] }}>
-                          {c.maxPriorityScore}
+                          {formatScore(c.maxPriorityScore)}
                         </strong>
                         <ChevronRight size={14} color="var(--text-dim)" />
                       </div>
@@ -1065,6 +1317,12 @@ export default function App() {
           </div>
         </div>
       )}
+
+      {/* ── Image Lightbox Modal ────────────────────────────────────────── */}
+      <ImageLightbox
+        image={lightboxImage}
+        onClose={() => setLightboxImage(null)}
+      />
     </div>
   );
 }

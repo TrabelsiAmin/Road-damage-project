@@ -621,11 +621,16 @@ h1, h2, h3, h4 {
 /* ── Main Layout (Map + Sidebar) ─────────────────────────────────────────── */
 .main-layout {
   display: grid;
-  grid-template-columns: 1fr 420px;
+  grid-template-columns: 1fr 520px;
   flex: 1;
   height: calc(100vh - 120px);
   position: relative;
   overflow: hidden;
+  transition: grid-template-columns 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.main-layout.sidebar-collapsed {
+  grid-template-columns: 1fr 0px;
 }
 
 .map-wrapper {
@@ -680,6 +685,42 @@ h1, h2, h3, h4 {
   flex-direction: column;
   overflow-y: auto;
   height: 100%;
+  width: 520px;
+  min-width: 0;
+  transition: opacity 0.2s ease;
+}
+
+.main-layout.sidebar-collapsed .sidebar {
+  overflow: hidden;
+  opacity: 0;
+  pointer-events: none;
+}
+
+.sidebar-expand-btn {
+  position: absolute;
+  right: 12px;
+  top: 12px;
+  z-index: 1000;
+  background: rgba(17, 24, 39, 0.95);
+  backdrop-filter: blur(8px);
+  border: 1px solid var(--border-subtle);
+  color: var(--text-main);
+  padding: 8px 14px;
+  border-radius: var(--radius-sm);
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 0.8rem;
+  font-weight: 700;
+  cursor: pointer;
+  box-shadow: 0 4px 14px rgba(0,0,0,0.4);
+  transition: all 0.2s ease;
+}
+
+.sidebar-expand-btn:hover {
+  background: var(--color-primary);
+  border-color: var(--color-primary);
+  color: #fff;
 }
 
 .cluster-detail-panel {
@@ -774,35 +815,68 @@ h1, h2, h3, h4 {
 
 .report-img-container {
   position: relative;
-  width: 100%;
-  height: 64px;
+  width: 150px;
+  height: 110px;
   border-radius: var(--radius-sm);
   overflow: hidden;
   background: #000;
   border: 1px solid var(--border-subtle);
+  cursor: pointer;
+  flex-shrink: 0;
 }
 
 .report-img {
   width: 100%;
   height: 100%;
   object-fit: cover;
+  transition: transform 0.2s ease;
+}
+
+.report-img-container:hover .report-img {
+  transform: scale(1.04);
+}
+
+.report-img-overlay {
+  position: absolute;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.45);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #fff;
+  opacity: 0;
+  transition: opacity 0.15s ease;
+  pointer-events: none;
+}
+
+.report-img-container:hover .report-img-overlay {
+  opacity: 1;
 }
 
 .report-img-badge {
   position: absolute;
-  bottom: 2px;
-  left: 2px;
-  background: rgba(16, 185, 129, 0.9);
+  bottom: 4px;
+  left: 4px;
   color: #fff;
-  font-size: 0.58rem;
+  font-size: 0.62rem;
   font-weight: 700;
-  padding: 1px 4px;
-  border-radius: 2px;
+  padding: 2px 6px;
+  border-radius: var(--radius-sm);
+  backdrop-filter: blur(4px);
+  pointer-events: none;
+}
+
+.badge-signed-hd {
+  background: rgba(16, 185, 129, 0.95);
+}
+
+.badge-public-thumb {
+  background: rgba(59, 130, 246, 0.95);
 }
 
 .report-img-placeholder {
-  width: 100%;
-  height: 64px;
+  width: 150px;
+  height: 110px;
   border-radius: var(--radius-sm);
   background: rgba(255, 255, 255, 0.02);
   border: 1px dashed var(--border-subtle);
@@ -810,9 +884,148 @@ h1, h2, h3, h4 {
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  gap: 4px;
+  gap: 6px;
   text-align: center;
-  padding: 4px;
+  padding: 8px;
+  flex-shrink: 0;
+  color: var(--text-dim);
+}
+
+.report-img-placeholder.not-authority {
+  border-color: rgba(239, 68, 68, 0.35);
+  color: #ef4444;
+  background: rgba(239, 68, 68, 0.04);
+}
+
+.report-img-placeholder.error {
+  border-color: rgba(245, 158, 11, 0.4);
+  color: #f59e0b;
+  background: rgba(245, 158, 11, 0.04);
+}
+
+.placeholder-text {
+  font-size: 0.68rem;
+  line-height: 1.25;
+}
+
+.placeholder-text.error-text {
+  color: #f59e0b;
+  font-weight: 600;
+}
+
+.btn-retry {
+  background: rgba(245, 158, 11, 0.2);
+  border: 1px solid rgba(245, 158, 11, 0.5);
+  color: #f59e0b;
+  font-size: 0.65rem;
+  font-weight: 700;
+  padding: 3px 8px;
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  margin-top: 4px;
+  transition: all 0.15s ease;
+}
+
+.btn-retry:hover {
+  background: #f59e0b;
+  color: #000;
+}
+
+/* ── Real vs Demo Badges ─────────────────────────────────────────────────── */
+.badge-demo {
+  background: rgba(245, 158, 11, 0.18);
+  color: #F59E0B;
+  border: 1px solid rgba(245, 158, 11, 0.4);
+  font-size: 0.65rem;
+  font-weight: 800;
+  padding: 1px 6px;
+  border-radius: var(--radius-sm);
+  letter-spacing: 0.5px;
+}
+
+.badge-real {
+  background: rgba(16, 185, 129, 0.18);
+  color: #10B981;
+  border: 1px solid rgba(16, 185, 129, 0.4);
+  font-size: 0.65rem;
+  font-weight: 800;
+  padding: 1px 6px;
+  border-radius: var(--radius-sm);
+  letter-spacing: 0.5px;
+}
+
+/* ── Lightbox Modal ───────────────────────────────────────────────────────── */
+.lightbox-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 3000;
+  background: rgba(0, 0, 0, 0.88);
+  backdrop-filter: blur(12px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+  animation: fadeIn 0.15s ease;
+}
+
+.lightbox-content {
+  background: var(--bg-secondary);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-lg);
+  max-width: 92vw;
+  max-height: 92vh;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.7);
+}
+
+.lightbox-header {
+  padding: 14px 20px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  border-bottom: 1px solid var(--border-subtle);
+  background: rgba(255, 255, 255, 0.02);
+}
+
+.lightbox-title-area {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.lightbox-title {
+  font-size: 0.95rem;
+  font-weight: 700;
+  color: var(--text-main);
+}
+
+.lightbox-badge {
+  font-size: 0.65rem;
+  font-weight: 700;
+  padding: 2px 8px;
+  border-radius: var(--radius-sm);
+  background: rgba(16, 185, 129, 0.2);
+  color: #10B981;
+  border: 1px solid rgba(16, 185, 129, 0.4);
+}
+
+.lightbox-body {
+  padding: 16px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow: auto;
+  max-height: calc(92vh - 65px);
+  background: #000;
+}
+
+.lightbox-image {
+  max-width: 100%;
+  max-height: calc(92vh - 90px);
+  object-fit: contain;
+  border-radius: var(--radius-sm);
 }
 
 /* ── Status Workflow Buttons ──────────────────────────────────────────────── */
@@ -931,10 +1144,15 @@ h1, h2, h3, h4 {
   }
 
   .sidebar {
+    width: 100% !important;
     height: auto;
     border-left: none;
     border-top: 1px solid var(--border-subtle);
     max-height: none;
+  }
+
+  .main-layout.sidebar-collapsed .sidebar {
+    display: none;
   }
 
   .map-filter-overlay {

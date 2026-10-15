@@ -48,29 +48,91 @@ export async function checkIsAuthority() {
 }
 
 /**
- * Generates signed URL for private observation-images bucket (short expiry: 300s = 5m).
- * Never uses getPublicUrl for observation-images.
- * For demo-images bucket only, returns direct public URL.
+ * Generates signed URL for private observation-images bucket (10-minute expiry: 600s).
+ * Strictly uses createSignedUrl for observation-images.
+ * Returns { signedUrl, expiresAt }.
+ */
+export async function getSignedMediaUrl(storagePath, bucket = 'observation-images', expiresInSeconds = 600) {
+  if (!storagePath) throw new Error('storagePath is required');
+  const { data, error } = await supabase.storage
+    .from(bucket)
+    .createSignedUrl(storagePath, expiresInSeconds);
+
+  if (error || !data?.signedUrl) {
+    throw error || new Error('Failed to create signed URL from storage');
+  }
+
+  return {
+    signedUrl: data.signedUrl,
+    expiresAt: Date.now() + (expiresInSeconds - 30) * 1000, // Refresh 30s before expiry
+  };
+}
+
+/**
+ * Returns public URL for public-photos or demo-images.
+ */
+export function getPublicMediaUrl(storagePath, bucket = 'public-photos') {
+  if (!storagePath) return null;
+  const { data } = supabase.storage.from(bucket).getPublicUrl(storagePath);
+  return data?.publicUrl || null;
+}
+
+/**
+ * Backwards-compatible getMediaUrl.
  */
 export async function getMediaUrl(storagePath, bucket = 'observation-images', isDemo = false) {
   if (!storagePath) return null;
-  if (bucket === 'demo-images') {
-    const { data } = supabase.storage.from('demo-images').getPublicUrl(storagePath);
-    return data?.publicUrl || null;
+  if (bucket === 'demo-images' || bucket === 'public-photos') {
+    return getPublicMediaUrl(storagePath, bucket);
   }
-  // observation-images is private: strictly use createSignedUrl with short expiry
   try {
-    const { data, error } = await supabase.storage
-      .from('observation-images')
-      .createSignedUrl(storagePath, 300); // 300 seconds (5 min short expiry)
-    if (error || !data) {
-      console.warn('[Supabase] createSignedUrl failed:', error?.message);
-      return null;
-    }
-    return data.signedUrl;
+    const res = await getSignedMediaUrl(storagePath, bucket, 600);
+    return res.signedUrl;
   } catch (err) {
-    console.warn('[Supabase] createSignedUrl error:', err);
+    console.warn('[Supabase] getMediaUrl failed:', err);
     return null;
+  }
+}
+
+/**
+ * Fetches fresh media_files rows for a specific set of observation IDs.
+ * Used whenever a cluster is opened or auth session state changes.
+ */
+export async function fetchMediaFilesForObservations(obsIds) {
+  if (!obsIds || obsIds.length === 0) return {};
+  try {
+    const { data, error } = await supabase
+      .from('media_files')
+      .select('id, observation_id, bucket, storage_path, media_type, is_demo, public_url')
+      .in('observation_id', obsIds);
+
+    if (error) {
+      console.warn('[Supabase] fetchMediaFilesForObservations failed:', error.message);
+      return {};
+    }
+
+    const result = {};
+    obsIds.forEach((id) => {
+      result[id] = { original: null, thumbnail: null };
+    });
+
+    (data || []).forEach((row) => {
+      if (!result[row.observation_id]) {
+        result[row.observation_id] = { original: null, thumbnail: null };
+      }
+      if (row.bucket === 'observation-images' && (row.media_type === 'image' || row.media_type === 'frame')) {
+        result[row.observation_id].original = row;
+      } else if (row.bucket === 'public-photos' || row.media_type === 'thumbnail') {
+        result[row.observation_id].thumbnail = row;
+      } else {
+        result[row.observation_id].original = row;
+      }
+    });
+
+    return result;
+  } catch (err) {
+    console.warn('[Supabase] fetchMediaFilesForObservations error:', err);
+    return {};
   }
 }
 
@@ -119,12 +181,13 @@ export async function fetchObservations() {
       detMap.set(d.observation_id, arr);
     });
 
-    const mediaMap = new Map();
+    const mediaOriginalMap = new Map();
+    const mediaThumbMap = new Map();
     (mediaData || []).forEach((m) => {
-      const existing = mediaMap.get(m.observation_id);
-      // Prioritize full-resolution original from observation-images for authority dashboard
-      if (!existing || (m.bucket === 'observation-images' && m.media_type === 'image')) {
-        mediaMap.set(m.observation_id, m);
+      if (m.bucket === 'observation-images') {
+        mediaOriginalMap.set(m.observation_id, m);
+      } else if (m.bucket === 'public-photos') {
+        mediaThumbMap.set(m.observation_id, m);
       }
     });
 
@@ -132,7 +195,8 @@ export async function fetchObservations() {
     return obsData.map((obs) => {
       const loc = locMap.get(obs.id) || { latitude: 0, longitude: 0, accuracy_meters: null };
       const dets = detMap.get(obs.id) || [];
-      const media = mediaMap.get(obs.id) || null;
+      const orig = mediaOriginalMap.get(obs.id) || null;
+      const thumb = mediaThumbMap.get(obs.id) || null;
 
       return {
         ...obs,
@@ -140,9 +204,10 @@ export async function fetchObservations() {
         longitude: Number(loc.longitude) || 0,
         accuracy_meters: loc.accuracy_meters,
         detections: dets,
-        photo_url: null, // Private bucket: never populate unauthenticated public_url
-        storage_path: media?.storage_path || null,
-        bucket: media?.bucket || 'observation-images',
+        original_media: orig,
+        thumbnail_media: thumb,
+        storage_path: orig?.storage_path || thumb?.storage_path || null,
+        bucket: orig?.bucket || thumb?.bucket || 'observation-images',
       };
     }).filter((o) => o.latitude !== 0 && o.longitude !== 0);
   } catch (err) {

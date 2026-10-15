@@ -1,5 +1,6 @@
 import 'dart:convert';
 import '../core/constants.dart';
+import '../utils/priority_scoring.dart';
 
 // ---------------------------------------------------------------------------
 // BoundingBox
@@ -193,27 +194,13 @@ class Observation {
   bool get anyMock =>
       agentResults.any((r) => r.isMock);
 
-  /// Transparent priority score [0..100].
-  ///
-  /// Formula: weighted average of (severity_weight × confidence) × 100.
-  /// Weights are per TariqMapConstants.severityWeights.
-  double get priorityScore {
-    if (detections.isEmpty) return 0;
-    const weights = TariqMapConstants.severityWeights;
-    final score = detections.fold<double>(0, (sum, d) {
-      final w = weights[d.classCode] ?? 0.5;
-      return sum + w * d.confidence;
-    });
-    return (score / detections.length * 100).clamp(0, 100);
-  }
+  /// Priority score v2 [0..100] anchored on worst detection + bounded bonuses.
+  PriorityScoreResult get priorityResult => calculatePriorityScoreV2(detections);
 
-  String get priorityLabel {
-    final s = priorityScore;
-    if (s >= 70) return 'CRITICAL';
-    if (s >= 40) return 'HIGH';
-    if (s >= 20) return 'MEDIUM';
-    return 'LOW';
-  }
+  double get priorityScore => priorityResult.score;
+
+  String get priorityLabel => priorityResult.label;
+
 
   // ── Serialisation ──────────────────────────────────────────────────────────
 

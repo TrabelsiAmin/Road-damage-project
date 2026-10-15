@@ -17,12 +17,14 @@ class DashboardMap extends StatefulWidget {
     this.initialObservations,
     this.initialLocations,
     this.initialDetections,
+    this.initialMediaFiles,
   });
 
   final ObservationRepository? repository;
   final List<Map<String, dynamic>>? initialObservations;
   final List<Map<String, dynamic>>? initialLocations;
   final List<Map<String, dynamic>>? initialDetections;
+  final List<Map<String, dynamic>>? initialMediaFiles;
 
   @override
   State<DashboardMap> createState() => _DashboardMapState();
@@ -65,6 +67,7 @@ class _DashboardMapState extends State<DashboardMap> {
       List<dynamic> obsData;
       List<dynamic> locData;
       List<dynamic> detData;
+      List<dynamic> mediaData;
 
       if (widget.initialObservations != null &&
           widget.initialLocations != null &&
@@ -72,6 +75,7 @@ class _DashboardMapState extends State<DashboardMap> {
         obsData = widget.initialObservations!;
         locData = widget.initialLocations!;
         detData = widget.initialDetections!;
+        mediaData = widget.initialMediaFiles ?? [];
       } else {
         final client = Supabase.instance.client;
         obsData = await client
@@ -83,6 +87,15 @@ class _DashboardMapState extends State<DashboardMap> {
         detData = await client
             .from('detections')
             .select('observation_id, class_code, confidence, box_x, box_y, box_w, box_h');
+        try {
+          mediaData = await client
+              .from('media_files')
+              .select('observation_id, bucket, storage_path, public_url, media_type')
+              .eq('bucket', 'public-photos');
+        } catch (e) {
+          debugPrint('[DashboardMap] Could not fetch public-photos media_files: $e');
+          mediaData = [];
+        }
       }
 
       final locMap = <String, Map<String, dynamic>>{};
@@ -100,6 +113,15 @@ class _DashboardMapState extends State<DashboardMap> {
         final obsId = d['observation_id']?.toString() ?? '';
         if (obsId.isNotEmpty) {
           detMap.putIfAbsent(obsId, () => []).add(Map<String, dynamic>.from(d as Map));
+        }
+      }
+
+      final mediaMap = <String, Map<String, dynamic>>{};
+      for (final m in mediaData) {
+        final obsId = m['observation_id']?.toString() ?? '';
+        final bucket = m['bucket']?.toString() ?? '';
+        if (obsId.isNotEmpty && bucket == 'public-photos' && !mediaMap.containsKey(obsId)) {
+          mediaMap[obsId] = Map<String, dynamic>.from(m as Map);
         }
       }
 
@@ -131,6 +153,20 @@ class _DashboardMapState extends State<DashboardMap> {
           dominantClass = obs['priority_label'] as String;
         }
 
+        final media = mediaMap[obsId];
+        String? publicThumbnailUrl;
+        if (media != null) {
+          final storagePath = media['storage_path']?.toString();
+          if (storagePath != null && storagePath.isNotEmpty) {
+            try {
+              publicThumbnailUrl = Supabase.instance.client.storage
+                  .from('public-photos')
+                  .getPublicUrl(storagePath);
+            } catch (_) {}
+          }
+          publicThumbnailUrl ??= media['public_url']?.toString();
+        }
+
         final enrichedObs = {
           ...obs,
           'latitude': lat,
@@ -139,6 +175,7 @@ class _DashboardMapState extends State<DashboardMap> {
           'dominant_class': dominantClass,
           'highest_confidence': highestConfidence,
           'detections': dets,
+          'public_thumbnail_url': publicThumbnailUrl,
         };
 
         if (clusters.containsKey(gridKey)) {
@@ -651,11 +688,12 @@ class _ObservationCard extends StatelessWidget {
             ),
           ),
 
-          // ── Image Section (Local Image if on device / Neutral Placeholder otherwise) ──
+          // ── Image Section (3-Tier Fallback: Public Thumbnail -> Local Image -> Neutral Placeholder) ──
           _ObservationImageSection(
             observationId: obsId,
             repository: repository,
             remoteDetections: (obs['detections'] as List?) ?? [],
+            publicThumbnailUrl: obs['public_thumbnail_url'] as String?,
           ),
         ],
       ),
@@ -703,25 +741,34 @@ class _ObservationCard extends StatelessWidget {
   }
 }
 
-class _ObservationImageSection extends StatelessWidget {
+class _ObservationImageSection extends StatefulWidget {
   final String observationId;
   final ObservationRepository repository;
   final List<dynamic> remoteDetections;
+  final String? publicThumbnailUrl;
 
   const _ObservationImageSection({
     required this.observationId,
     required this.repository,
     required this.remoteDetections,
+    this.publicThumbnailUrl,
   });
 
   @override
+  State<_ObservationImageSection> createState() => _ObservationImageSectionState();
+}
+
+class _ObservationImageSectionState extends State<_ObservationImageSection> {
+  bool _networkError = false;
+
+  @override
   Widget build(BuildContext context) {
-    if (observationId.isEmpty) {
+    if (widget.observationId.isEmpty) {
       return _buildNeutralPlaceholder();
     }
 
     return FutureBuilder<Observation?>(
-      future: repository.findById(observationId),
+      future: widget.repository.findById(widget.observationId),
       builder: (ctx, snapshot) {
         if (snapshot.connectionState == ConnectionState.waiting) {
           return Container(
@@ -738,35 +785,46 @@ class _ObservationImageSection extends StatelessWidget {
 
         final localObs = snapshot.data;
         final localPath = localObs?.annotatedImagePath ?? localObs?.imagePath;
+        final hasLocalImage = localPath != null && File(localPath).existsSync();
 
-        if (localPath != null && File(localPath).existsSync()) {
-          // Captured on this device: show local image with bounding boxes
-          final detections = localObs?.detections.isNotEmpty == true
-              ? localObs!.detections
-              : remoteDetections.map((d) {
-                  final map = Map<String, dynamic>.from(d as Map);
-                  return Detection(
-                    agent: 'road_damage',
-                    classCode: map['class_code']?.toString() ?? 'D40',
-                    confidence: ((map['confidence'] as num?) ?? 0.0).toDouble(),
-                    box: BoundingBox(
-                      x: ((map['box_x'] as num?) ?? 0.0).toDouble(),
-                      y: ((map['box_y'] as num?) ?? 0.0).toDouble(),
-                      width: ((map['box_w'] as num?) ?? 0.0).toDouble(),
-                      height: ((map['box_h'] as num?) ?? 0.0).toDouble(),
-                    ),
-                  );
-                }).toList();
-
+        // ── 1. Public Thumbnail (via getPublicUrl for 'public-photos' bucket) ──
+        if (widget.publicThumbnailUrl != null &&
+            widget.publicThumbnailUrl!.isNotEmpty &&
+            !_networkError) {
           return Container(
+            key: const ValueKey('public_thumbnail_container'),
             height: 220,
             color: Colors.black,
             child: Stack(
               children: [
                 Positioned.fill(
-                  child: AnnotatedImageWidget(
-                    imagePath: localPath,
-                    detections: detections,
+                  child: Image.network(
+                    widget.publicThumbnailUrl!,
+                    fit: BoxFit.cover,
+                    loadingBuilder: (context, child, loadingProgress) {
+                      if (loadingProgress == null) return child;
+                      return Container(
+                        color: Colors.grey.shade900,
+                        alignment: Alignment.center,
+                        child: const SizedBox(
+                          width: 24,
+                          height: 24,
+                          child: CircularProgressIndicator(
+                            strokeWidth: 2,
+                            color: AppColors.teal,
+                          ),
+                        ),
+                      );
+                    },
+                    errorBuilder: (context, error, stackTrace) {
+                      debugPrint('[DashboardMap] Failed to load thumbnail from network, falling back: $error');
+                      WidgetsBinding.instance.addPostFrameCallback((_) {
+                        if (mounted) setState(() => _networkError = true);
+                      });
+                      return hasLocalImage
+                          ? _buildLocalImage(localPath, localObs)
+                          : _buildNeutralPlaceholder();
+                    },
                   ),
                 ),
                 Positioned(
@@ -778,13 +836,20 @@ class _ObservationImageSection extends StatelessWidget {
                       color: AppColors.teal.withAlpha(220),
                       borderRadius: BorderRadius.circular(4),
                     ),
-                    child: const Text(
-                      'Local capture (on device)',
-                      style: TextStyle(
-                        color: Colors.white,
-                        fontSize: 10,
-                        fontWeight: FontWeight.bold,
-                      ),
+                    child: const Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Icon(Icons.public, color: Colors.white, size: 11),
+                        SizedBox(width: 4),
+                        Text(
+                          'Public preview (cropped to the damage)',
+                          style: TextStyle(
+                            color: Colors.white,
+                            fontSize: 10,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                      ],
                     ),
                   ),
                 ),
@@ -793,14 +858,74 @@ class _ObservationImageSection extends StatelessWidget {
           );
         }
 
-        // From another device: neutral "photo not public" placeholder
+        // ── 2. Local Image (own captures on device with bounding boxes) ──
+        if (hasLocalImage) {
+          return _buildLocalImage(localPath, localObs);
+        }
+
+        // ── 3. Neutral Placeholder ("Photo not public") ──
         return _buildNeutralPlaceholder();
       },
     );
   }
 
+  Widget _buildLocalImage(String localPath, Observation? localObs) {
+    final detections = localObs?.detections.isNotEmpty == true
+        ? localObs!.detections
+        : widget.remoteDetections.map((d) {
+            final map = Map<String, dynamic>.from(d as Map);
+            return Detection(
+              agent: 'road_damage',
+              classCode: map['class_code']?.toString() ?? 'D40',
+              confidence: ((map['confidence'] as num?) ?? 0.0).toDouble(),
+              box: BoundingBox(
+                x: ((map['box_x'] as num?) ?? 0.0).toDouble(),
+                y: ((map['box_y'] as num?) ?? 0.0).toDouble(),
+                width: ((map['box_w'] as num?) ?? 0.0).toDouble(),
+                height: ((map['box_h'] as num?) ?? 0.0).toDouble(),
+              ),
+            );
+          }).toList();
+
+    return Container(
+      key: const ValueKey('local_image_container'),
+      height: 220,
+      color: Colors.black,
+      child: Stack(
+        children: [
+          Positioned.fill(
+            child: AnnotatedImageWidget(
+              imagePath: localPath,
+              detections: detections,
+            ),
+          ),
+          Positioned(
+            top: 8,
+            left: 8,
+            child: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+              decoration: BoxDecoration(
+                color: AppColors.teal.withAlpha(220),
+                borderRadius: BorderRadius.circular(4),
+              ),
+              child: const Text(
+                'Local capture (on device)',
+                style: TextStyle(
+                  color: Colors.white,
+                  fontSize: 10,
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
   Widget _buildNeutralPlaceholder() {
     return Container(
+      key: const ValueKey('neutral_placeholder_container'),
       height: 130,
       margin: const EdgeInsets.fromLTRB(14, 0, 14, 14),
       decoration: BoxDecoration(
@@ -824,10 +949,10 @@ class _ObservationImageSection extends StatelessWidget {
           ),
           SizedBox(height: 4),
           Text(
-            'Municipal privacy policy restricts raw imagery to authorized road authorities. Anomaly telemetry and AI bounding boxes are public.',
+            'Photo not shared publicly.',
             textAlign: TextAlign.center,
             style: TextStyle(
-              fontSize: 10.5,
+              fontSize: 11,
               color: Color(0xFF64748B),
               height: 1.25,
             ),

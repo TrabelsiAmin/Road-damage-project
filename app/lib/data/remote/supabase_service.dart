@@ -149,6 +149,67 @@ class SupabaseService {
     }
   }
 
+  /// Uploads a public blurred thumbnail to bucket `public-photos`.
+  /// Uses a plain insert (upsert: false) at `<observation_id>/<uuid>.webp`.
+  /// Inserts a `media_files` row with `bucket='public-photos', media_type='thumbnail', is_demo=false`.
+  /// Treats 409 conflict as success.
+  /// Cancelling mid-sync cleans up the uploaded storage object to prevent a half-uploaded state.
+  Future<String?> uploadPublicThumbnail({
+    required String observationId,
+    required Uint8List thumbnailBytes,
+    String mimeType = 'image/webp',
+    SyncCancelToken? cancelToken,
+  }) async {
+    cancelToken?.throwIfCancelled();
+    final storagePath = '$observationId/${_uuid.v4()}.webp';
+
+    try {
+      await _client.storage
+          .from(SupabaseCfg.publicPhotosBucket)
+          .uploadBinary(
+            storagePath,
+            thumbnailBytes,
+            fileOptions: FileOptions(
+              contentType: mimeType,
+              upsert: false,
+            ),
+          );
+    } on StorageException catch (e) {
+      if (e.statusCode == '409' ||
+          e.message.toLowerCase().contains('already exists') ||
+          e.message.toLowerCase().contains('duplicate')) {
+        debugPrint('[SupabaseService] public-photos 409 treated as success: $storagePath');
+      } else {
+        debugPrint('[SupabaseService] public-photos storage upload failed: ${e.message}');
+        rethrow;
+      }
+    } catch (e) {
+      debugPrint('[SupabaseService] public-photos storage upload failed: $e');
+      rethrow;
+    }
+
+    // Cancellation check immediately after storage upload:
+    // Phone has no delete permissions; on cancel, just stop.
+    cancelToken?.throwIfCancelled();
+
+    final publicUrl = _client.storage
+        .from(SupabaseCfg.publicPhotosBucket)
+        .getPublicUrl(storagePath);
+
+    await _recordMediaFile(
+      observationId: observationId,
+      bucket: SupabaseCfg.publicPhotosBucket,
+      storagePath: storagePath,
+      publicUrl: publicUrl,
+      mediaType: 'thumbnail',
+      mimeType: mimeType,
+      fileSizeBytes: thumbnailBytes.lengthInBytes,
+      cancelToken: cancelToken,
+    );
+
+    return publicUrl;
+  }
+
   // Observation sync
 
   /// Loads the most recent image for an observation as decoded bytes.

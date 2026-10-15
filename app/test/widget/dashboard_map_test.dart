@@ -95,11 +95,7 @@ void main() {
 
         // 4. Assert neutral placeholder is shown (not from this device, no local image)
         expect(find.text('Photo not public'), findsOneWidget);
-        expect(
-          find.text(
-              'Municipal privacy policy restricts raw imagery to authorized road authorities. Anomaly telemetry and AI bounding boxes are public.'),
-          findsOneWidget,
-        );
+        expect(find.text('Photo not shared publicly.'), findsOneWidget);
         expect(find.byIcon(Icons.lock_outline), findsOneWidget);
         expect(find.byType(AnnotatedImageWidget), findsNothing);
       },
@@ -212,6 +208,88 @@ void main() {
         expect(find.text('Transverse Crack'), findsOneWidget);
         expect(find.text('88%'), findsOneWidget);
         expect(find.text('62 (HIGH)'), findsOneWidget);
+      },
+    );
+
+    testWidgets(
+      'pin detail card shows public thumbnail through public-photos bucket when available',
+      (tester) async {
+        const obsId = 'public-obs-888';
+
+        final initialObs = [
+          {
+            'id': obsId,
+            'capture_id': 'cap-pub-888',
+            'anomaly_type': 'D40',
+            'priority_score': 75.0,
+            'priority_label': 'CRITICAL',
+            'status': 'unconfirmed',
+            'created_at': '2026-10-15T09:00:00Z',
+          }
+        ];
+
+        final initialLocs = [
+          {
+            'observation_id': obsId,
+            'latitude': 36.8065,
+            'longitude': 10.1815,
+            'accuracy_meters': 2.0,
+          }
+        ];
+
+        final initialDets = [
+          {
+            'observation_id': obsId,
+            'class_code': 'D40',
+            'confidence': 0.92,
+            'box_x': 0.2,
+            'box_y': 0.2,
+            'box_w': 0.4,
+            'box_h': 0.4,
+          }
+        ];
+
+        final initialMedia = [
+          {
+            'observation_id': obsId,
+            'bucket': 'public-photos',
+            'storage_path': '$obsId/thumb-uuid.webp',
+            'public_url': 'https://lendqcjihusqkmxansbl.supabase.co/storage/v1/object/public/public-photos/$obsId/thumb-uuid.webp',
+            'media_type': 'thumbnail',
+          }
+        ];
+
+        await tester.pumpWidget(
+          MaterialApp(
+            home: Scaffold(
+              body: SizedBox(
+                height: 400,
+                child: DashboardMap(
+                  repository: memoryRepo,
+                  initialObservations: initialObs,
+                  initialLocations: initialLocs,
+                  initialDetections: initialDets,
+                  initialMediaFiles: initialMedia,
+                ),
+              ),
+            ),
+          ),
+        );
+
+        await tester.pump();
+        await tester.pump(const Duration(milliseconds: 200));
+
+        // Find and tap Pin
+        final pinFinder = find.byKey(const ValueKey('pin_36.8065_10.1815'));
+        expect(pinFinder, findsOneWidget);
+        await tester.tap(pinFinder);
+        await tester.pump();
+        await tester.pump(const Duration(milliseconds: 100));
+
+        // Assert public thumbnail container and public preview badge are displayed
+        expect(find.byKey(const ValueKey('public_thumbnail_container')), findsOneWidget);
+        expect(find.text('Public preview (cropped to the damage)'), findsOneWidget);
+        expect(find.text('Photo not public'), findsNothing);
       },
     );
   });

@@ -121,7 +121,9 @@ export async function fetchObservations() {
 
     const mediaMap = new Map();
     (mediaData || []).forEach((m) => {
-      if (!mediaMap.has(m.observation_id)) {
+      const existing = mediaMap.get(m.observation_id);
+      // Prioritize full-resolution original from observation-images for authority dashboard
+      if (!existing || (m.bucket === 'observation-images' && m.media_type === 'image')) {
         mediaMap.set(m.observation_id, m);
       }
     });

@@ -8,6 +8,7 @@ import '../../inference/preprocessing.dart';
 import '../../models/observation.dart';
 import '../../services/image_compressor.dart';
 import '../../services/observation_repository.dart';
+import '../../services/thumbnail_service.dart';
 
 class ApiClient implements ObservationSyncClient {
   ApiClient();
@@ -244,6 +245,30 @@ class ApiClient implements ObservationSyncClient {
         debugPrint('[ApiClient] Image upload or media_files record error: $e');
         rethrow;
       }
+
+      // 4b. Public Blurred Thumbnail Step (Option A: Crop-and-Blur Path)
+      // Only executes after the existing full-resolution sync step succeeds.
+      // Skips when there are no detections or when toggle is OFF.
+      cancelToken?.throwIfCancelled();
+      final shouldUpload = await ThumbnailService.shouldUploadPublicThumbnail(
+        detections: obs.detections,
+      );
+      if (shouldUpload) {
+        final originalBytes = await imageFile.readAsBytes();
+        final thumbBytes = await ThumbnailService.createDetectionCropThumbnail(
+          originalBytes: originalBytes,
+          detections: obs.detections,
+        );
+        if (thumbBytes != null && thumbBytes.lengthInBytes <= ThumbnailService.maxFileSizeBytes) {
+          // Failure or cancellation here bubbles up to SyncCoordinator
+          // ensuring a failed/cancelled upload never leaves observation marked synced.
+          await uploadPublicThumbnail(
+            observationId: obs.id,
+            thumbnailBytes: thumbBytes,
+            cancelToken: cancelToken,
+          );
+        }
+      }
     }
 
     cancelToken?.throwIfCancelled();
@@ -258,5 +283,77 @@ class ApiClient implements ObservationSyncClient {
       },
       cancelToken: cancelToken,
     );
+  }
+
+  /// Uploads a public cropped & blurred thumbnail to bucket `public-photos`.
+  /// Order:
+  ///   1. Plain insert (upsert: false) to storage at `<observation_id>/<uuid>.webp`.
+  ///   2. Check cancellation (on cancel, just stop; orphan file with no media_files row is harmless).
+  ///   3. Plain insert into `media_files` with `bucket='public-photos', media_type='thumbnail', is_demo=false`.
+  /// Treats 409 conflict as success.
+  Future<String?> uploadPublicThumbnail({
+    required String observationId,
+    required Uint8List thumbnailBytes,
+    String mimeType = 'image/webp',
+    SyncCancelToken? cancelToken,
+  }) async {
+    cancelToken?.throwIfCancelled();
+
+    final client = Supabase.instance.client;
+    final storagePath = '$observationId/${_uuid.v4()}.webp';
+
+    // 1. Plain upload to public-photos storage (upsert: false)
+    try {
+      await client.storage
+          .from(SupabaseCfg.publicPhotosBucket)
+          .uploadBinary(
+            storagePath,
+            thumbnailBytes,
+            fileOptions: FileOptions(
+              contentType: mimeType,
+              upsert: false,
+            ),
+          );
+    } on StorageException catch (e) {
+      if (e.statusCode == '409' ||
+          e.message.toLowerCase().contains('already exists') ||
+          e.message.toLowerCase().contains('duplicate')) {
+        debugPrint('[ApiClient] public-photos 409 treated as success: $storagePath');
+      } else {
+        debugPrint('[ApiClient] public-photos storage upload failed: ${e.message}');
+        rethrow;
+      }
+    } catch (e) {
+      debugPrint('[ApiClient] public-photos storage upload failed: $e');
+      rethrow;
+    }
+
+    // Cancellation check immediately after storage upload:
+    // Phone has no delete permissions; on cancel, just stop (orphan storage object is harmless without media_files row)
+    cancelToken?.throwIfCancelled();
+
+    final publicUrl = client.storage
+        .from(SupabaseCfg.publicPhotosBucket)
+        .getPublicUrl(storagePath);
+
+    // 2. Insert media_files row (plain insert, 409 treated as success)
+    await _safeInsert(
+      SupabaseCfg.tableMediaFiles,
+      {
+        "id": _uuid.v4(),
+        "observation_id": observationId,
+        "bucket": SupabaseCfg.publicPhotosBucket,
+        "storage_path": storagePath,
+        "public_url": publicUrl,
+        "media_type": "thumbnail",
+        "mime_type": mimeType,
+        "file_size_bytes": thumbnailBytes.lengthInBytes,
+        "uploaded_at": DateTime.now().toUtc().toIso8601String(),
+        "is_demo": false,
+      },
+      cancelToken: cancelToken,
+    );
+
+    return publicUrl;
   }
 }

@@ -1,6 +1,7 @@
 import 'dart:io';
 import 'dart:typed_data';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:image/image.dart' as img;
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:tariqmap/core/supabase_config.dart';
 import 'package:tariqmap/models/observation.dart';
@@ -126,6 +127,60 @@ void main() {
       expect(thumb, isNotNull);
       expect(thumb!.lengthInBytes, lessThanOrEqualTo(ThumbnailService.maxFileSizeBytes),
           reason: 'Thumbnail must be under 250 KB');
+    });
+
+    test('enforces minimum crop of at least 40% of shorter side and max aspect ratio 2.5:1', () async {
+      final testImageFile = File('test/goldens/images/Czech_000010.jpg');
+      final originalBytes = await testImageFile.readAsBytes();
+
+      // Detection box with extreme aspect ratio: width=0.3, height=0.02 (ratio = 15:1)
+      final detections = [
+        const Detection(
+          agent: 'road_damage',
+          classCode: 'D10',
+          confidence: 0.90,
+          box: BoundingBox(x: 0.35, y: 0.5, width: 0.3, height: 0.02),
+        ),
+      ];
+
+      final thumb = await ThumbnailService.createDetectionCropThumbnail(
+        originalBytes: originalBytes,
+        detections: detections,
+      );
+
+      expect(thumb, isNotNull);
+      // Decoded crop must be at least 40% of 600 = 240 px in both W and H
+      final decoded = img.decodeImage(thumb!)!;
+      expect(decoded.width, greaterThanOrEqualTo(240));
+      expect(decoded.height, greaterThanOrEqualTo(240));
+      // Aspect ratio must be at most 2.5:1
+      expect(decoded.width / decoded.height, lessThanOrEqualTo(2.5));
+      expect(decoded.height / decoded.width, lessThanOrEqualTo(2.5));
+    });
+
+    test('generates thumbnail with minimum crop when box area is below 0.5%', () async {
+      final testImageFile = File('test/goldens/images/Czech_000010.jpg');
+      final originalBytes = await testImageFile.readAsBytes();
+
+      // Tiny box: 0.03 x 0.03 -> area = 0.0009 = 0.09% of image (< 0.5%)
+      final detections = [
+        const Detection(
+          agent: 'road_damage',
+          classCode: 'D00',
+          confidence: 0.92,
+          box: BoundingBox(x: 0.5, y: 0.5, width: 0.03, height: 0.03),
+        ),
+      ];
+
+      final thumb = await ThumbnailService.createDetectionCropThumbnail(
+        originalBytes: originalBytes,
+        detections: detections,
+      );
+
+      expect(thumb, isNotNull, reason: 'Small box < 0.5% area must still generate thumbnail');
+      final decoded = img.decodeImage(thumb!)!;
+      expect(decoded.width, equals(240), reason: 'Minimum crop is 40% of 600 = 240');
+      expect(decoded.height, equals(240), reason: 'Minimum crop is 40% of 600 = 240');
     });
   });
 

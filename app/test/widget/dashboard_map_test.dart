@@ -292,5 +292,173 @@ void main() {
         expect(find.text('Photo not public'), findsNothing);
       },
     );
+
+    testWidgets(
+      'observation with zero detections is shown as "No anomaly detected" and sheet title is "No Anomaly Detected"',
+      (tester) async {
+        const obsId = 'zero-det-obs-1';
+
+        final initialObs = [
+          {
+            'id': obsId,
+            'capture_id': 'cap-zero-1',
+            'anomaly_type': null,
+            'priority_score': 0.0,
+            'priority_label': 'LOW',
+            'status': 'unconfirmed',
+            'created_at': '2026-10-15T10:00:00Z',
+          }
+        ];
+
+        final initialLocs = [
+          {
+            'observation_id': obsId,
+            'latitude': 36.8065,
+            'longitude': 10.1815,
+            'accuracy_meters': 5.0,
+          }
+        ];
+
+        final initialDets = <Map<String, dynamic>>[]; // zero detections
+
+        await tester.pumpWidget(
+          MaterialApp(
+            home: Scaffold(
+              body: SizedBox(
+                height: 400,
+                child: DashboardMap(
+                  repository: memoryRepo,
+                  initialObservations: initialObs,
+                  initialLocations: initialLocs,
+                  initialDetections: initialDets,
+                ),
+              ),
+            ),
+          ),
+        );
+
+        await tester.pump();
+        await tester.pump(const Duration(milliseconds: 200));
+
+        final pinFinder = find.byKey(const ValueKey('pin_36.8065_10.1815'));
+        expect(pinFinder, findsOneWidget);
+
+        // Tap Pin
+        await tester.tap(pinFinder);
+        await tester.pump();
+        await tester.pump(const Duration(milliseconds: 200));
+
+        // Sheet title must NOT say "1 Anomaly Record"
+        expect(find.text('No Anomaly Detected'), findsOneWidget);
+        expect(find.text('1 Anomaly Record'), findsNothing);
+        expect(find.text('1 Anomaly Records'), findsNothing);
+
+        // Observation card must display "No anomaly detected" and NONE pill
+        expect(find.text('No anomaly detected'), findsOneWidget);
+        expect(find.text('NONE'), findsOneWidget);
+        expect(find.text('None'), findsWidgets); // CONFIDENCE and PRIORITY should show None
+      },
+    );
+
+    testWidgets(
+      'mixed cluster with 1 anomaly and 1 zero-detection observation keeps zero-detection out of the count in sheet title',
+      (tester) async {
+        const obsWithDamage = 'obs-damage-1';
+        const obsZeroDet = 'obs-zero-2';
+
+        final initialObs = [
+          {
+            'id': obsWithDamage,
+            'capture_id': 'cap-1',
+            'anomaly_type': 'D40',
+            'priority_score': 55.0,
+            'priority_label': 'HIGH',
+            'status': 'unconfirmed',
+            'created_at': '2026-10-15T11:00:00Z',
+          },
+          {
+            'id': obsZeroDet,
+            'capture_id': 'cap-2',
+            'anomaly_type': null,
+            'priority_score': 0.0,
+            'priority_label': 'LOW',
+            'status': 'unconfirmed',
+            'created_at': '2026-10-15T11:05:00Z',
+          },
+        ];
+
+        // Same location so they cluster together
+        final initialLocs = [
+          {
+            'observation_id': obsWithDamage,
+            'latitude': 36.8065,
+            'longitude': 10.1815,
+            'accuracy_meters': 3.0,
+          },
+          {
+            'observation_id': obsZeroDet,
+            'latitude': 36.8065,
+            'longitude': 10.1815,
+            'accuracy_meters': 3.0,
+          },
+        ];
+
+        final initialDets = [
+          {
+            'observation_id': obsWithDamage,
+            'class_code': 'D40',
+            'confidence': 0.72,
+            'box_x': 0.1,
+            'box_y': 0.1,
+            'box_w': 0.2,
+            'box_h': 0.2,
+          },
+          // obsZeroDet has no detections in initialDets
+        ];
+
+        await tester.pumpWidget(
+          MaterialApp(
+            home: Scaffold(
+              body: SizedBox(
+                height: 400,
+                child: DashboardMap(
+                  repository: memoryRepo,
+                  initialObservations: initialObs,
+                  initialLocations: initialLocs,
+                  initialDetections: initialDets,
+                ),
+              ),
+            ),
+          ),
+        );
+
+        await tester.pump();
+        await tester.pump(const Duration(milliseconds: 200));
+
+        final pinFinder = find.byKey(const ValueKey('pin_36.8065_10.1815'));
+        expect(pinFinder, findsOneWidget);
+
+        // Tap Pin
+        await tester.tap(pinFinder);
+        await tester.pump();
+        await tester.pump(const Duration(milliseconds: 200));
+
+        // Sheet title must count only the 1 anomaly record, not 2
+        expect(find.text('1 Anomaly Record'), findsOneWidget);
+        expect(find.text('2 Anomaly Records'), findsNothing);
+
+        // First card (with anomaly) is visible at the top
+        expect(find.text('Pothole'), findsOneWidget);
+        expect(find.text('D40'), findsOneWidget);
+
+        // Scroll sheet ListView to bring the zero-detection observation card into view
+        await tester.drag(find.byType(ListView), const Offset(0, -400));
+        await tester.pumpAndSettle();
+
+        expect(find.text('No anomaly detected'), findsOneWidget);
+        expect(find.text('NONE'), findsOneWidget);
+      },
+    );
   });
 }
+

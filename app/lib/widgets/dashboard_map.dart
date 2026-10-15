@@ -139,18 +139,21 @@ class _DashboardMapState extends State<DashboardMap> {
         final gridKey = '${lat.toStringAsFixed(4)}_${lng.toStringAsFixed(4)}';
 
         final dets = detMap[obsId] ?? [];
-        String dominantClass = 'D40';
+        final bool hasAnomaly = dets.isNotEmpty ||
+            (obs['anomaly_type'] != null &&
+                TariqMapConstants.allCodes.contains(obs['anomaly_type']));
+
+        String dominantClass = 'NONE';
         double highestConfidence = 0.0;
 
         if (dets.isNotEmpty) {
           dets.sort((a, b) =>
               ((b['confidence'] as num?) ?? 0).compareTo((a['confidence'] as num?) ?? 0));
-          dominantClass = dets.first['class_code']?.toString() ?? 'D40';
+          dominantClass = dets.first['class_code']?.toString() ?? 'NONE';
           highestConfidence = ((dets.first['confidence'] as num?) ?? 0).toDouble();
-        } else if (TariqMapConstants.allCodes.contains(obs['anomaly_type'])) {
+        } else if (obs['anomaly_type'] != null &&
+            TariqMapConstants.allCodes.contains(obs['anomaly_type'])) {
           dominantClass = obs['anomaly_type'] as String;
-        } else if (TariqMapConstants.allCodes.contains(obs['priority_label'])) {
-          dominantClass = obs['priority_label'] as String;
         }
 
         final media = mediaMap[obsId];
@@ -172,6 +175,7 @@ class _DashboardMapState extends State<DashboardMap> {
           'latitude': lat,
           'longitude': lng,
           'accuracy_meters': loc['accuracy_meters'],
+          'has_anomaly': hasAnomaly,
           'dominant_class': dominantClass,
           'highest_confidence': highestConfidence,
           'detections': dets,
@@ -179,14 +183,20 @@ class _DashboardMapState extends State<DashboardMap> {
         };
 
         if (clusters.containsKey(gridKey)) {
-          clusters[gridKey]!.count++;
-          clusters[gridKey]!.observations.add(enrichedObs);
+          final c = clusters[gridKey]!;
+          c.observations.add(enrichedObs);
+          if (hasAnomaly) {
+            c.count++;
+            if (c.dominantClass == 'NONE') {
+              c.dominantClass = dominantClass;
+            }
+          }
         } else {
           clusters[gridKey] = _Cluster(
             lat: lat,
             lng: lng,
             dominantClass: dominantClass,
-            count: 1,
+            count: hasAnomaly ? 1 : 0,
             observations: [enrichedObs],
           );
         }
@@ -219,16 +229,23 @@ class _DashboardMapState extends State<DashboardMap> {
   }
 
   Widget _buildMarkerWidget(_Cluster cluster) {
-    final color = AppColors.forClassCode(cluster.dominantClass);
+    final color = cluster.dominantClass == 'NONE'
+        ? Colors.grey.shade600
+        : AppColors.forClassCode(cluster.dominantClass);
     final icon = switch (cluster.dominantClass) {
       'D00' || 'D10' => Icons.timeline,
       'D20' => Icons.grid_4x4,
       'D40' => Icons.radio_button_unchecked,
+      'NONE' => Icons.check_circle_outline,
       _ => Icons.warning_amber_rounded,
     };
 
+    final label = cluster.dominantClass == 'NONE'
+        ? 'Map pin (No anomaly detected)'
+        : 'Map pin ${cluster.dominantClass} (${cluster.count})';
+
     return Semantics(
-      label: 'Map pin ${cluster.dominantClass} (${cluster.count})',
+      label: label,
       button: true,
       child: MouseRegion(
         cursor: SystemMouseCursors.click,
@@ -430,7 +447,7 @@ class _DashboardMapState extends State<DashboardMap> {
 class _Cluster {
   final double lat;
   final double lng;
-  final String dominantClass;
+  String dominantClass;
   int count;
   final List<Map<String, dynamic>> observations;
 
@@ -454,7 +471,9 @@ class _ClusterDetailsSheet extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final title = '${cluster.count} Anomaly Record${cluster.count > 1 ? 's' : ''}';
+    final title = cluster.count == 0
+        ? 'No Anomaly Detected'
+        : '${cluster.count} Anomaly Record${cluster.count > 1 ? 's' : ''}';
 
     return Container(
       height: MediaQuery.of(context).size.height * 0.78,
@@ -526,9 +545,20 @@ class _ObservationCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final obsId = obs['id']?.toString() ?? '';
-    final classCode = obs['dominant_class']?.toString() ?? 'D40';
-    final classLabel = TariqMapConstants.labelFor(classCode);
-    final color = AppColors.forClassCode(classCode);
+    final hasAnomaly = (obs['has_anomaly'] as bool?) ??
+        ((obs['detections'] as List?)?.isNotEmpty ?? false) ||
+        (obs['anomaly_type'] != null &&
+            TariqMapConstants.allCodes.contains(obs['anomaly_type']));
+
+    final classCode = hasAnomaly
+        ? (obs['dominant_class']?.toString() ?? 'D40')
+        : 'NONE';
+    final classLabel = hasAnomaly
+        ? TariqMapConstants.labelFor(classCode)
+        : 'No anomaly detected';
+    final color = hasAnomaly
+        ? AppColors.forClassCode(classCode)
+        : Colors.grey.shade600;
 
     final priorityScore = (obs['priority_score'] as num?)?.toDouble() ?? 0.0;
     final priorityLabel = obs['priority_label']?.toString() ??
@@ -589,7 +619,7 @@ class _ObservationCard extends StatelessWidget {
                         borderRadius: BorderRadius.circular(6),
                       ),
                       child: Text(
-                        classCode,
+                        hasAnomaly ? classCode : 'NONE',
                         style: const TextStyle(
                           color: Colors.white,
                           fontWeight: FontWeight.bold,
@@ -638,16 +668,18 @@ class _ObservationCard extends StatelessWidget {
                     Expanded(
                       child: _buildMetricTile(
                         label: 'CONFIDENCE',
-                        value: confidenceText,
-                        valueColor: AppColors.teal,
+                        value: hasAnomaly ? confidenceText : 'None',
+                        valueColor: hasAnomaly ? AppColors.teal : Colors.grey.shade700,
                       ),
                     ),
                     const SizedBox(width: 12),
                     Expanded(
                       child: _buildMetricTile(
                         label: 'PRIORITY',
-                        value: '${priorityScore.toStringAsFixed(0)} ($priorityLabel)',
-                        valueColor: color,
+                        value: hasAnomaly
+                            ? '${priorityScore.toStringAsFixed(0)} ($priorityLabel)'
+                            : 'None',
+                        valueColor: hasAnomaly ? color : Colors.grey.shade700,
                       ),
                     ),
                   ],

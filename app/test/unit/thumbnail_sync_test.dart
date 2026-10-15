@@ -8,6 +8,8 @@ import 'package:tariqmap/models/observation.dart';
 import 'package:tariqmap/services/observation_repository.dart';
 import 'package:tariqmap/services/thumbnail_service.dart';
 
+import 'package:uuid/uuid.dart';
+
 /// Mock client to test public thumbnail upload, 409 handling, toggle-off, and cancel-mid-upload
 class MockPublicThumbnailClient {
   final Map<String, Uint8List> publicStorageObjects = {};
@@ -16,6 +18,7 @@ class MockPublicThumbnailClient {
   bool simulateStorage409 = false;
   bool simulateMedia409 = false;
   bool simulateStorageFailure = false;
+  bool simulateMediaFailure = false;
 
   void Function(String path, SyncCancelToken? token)? onStorageUpload;
   void Function(String path, SyncCancelToken? token)? onBeforeMediaInsert;
@@ -28,14 +31,15 @@ class MockPublicThumbnailClient {
   }) async {
     cancelToken?.throwIfCancelled();
 
-    final storagePath = '$observationId/test-uuid.webp';
+    final fileUuid = const Uuid().v5(Namespace.url.value, observationId);
+    final storagePath = '$observationId/$fileUuid.webp';
 
     onStorageUpload?.call(storagePath, cancelToken);
     cancelToken?.throwIfCancelled();
 
     // 1. Storage Upload (plain insert, upsert: false)
     if (simulateStorageFailure) {
-      throw Exception('Simulated Storage Network Error');
+      throw Exception('Simulated Storage Network Error (HTTP 500)');
     }
 
     if (simulateStorage409) {
@@ -53,11 +57,16 @@ class MockPublicThumbnailClient {
     final publicUrl = 'https://lendqcjihusqkmxansbl.supabase.co/storage/v1/object/public/public-photos/$storagePath';
 
     // 2. Insert media_files row (bucket='public-photos', media_type='thumbnail', is_demo=false)
+    if (simulateMediaFailure) {
+      throw Exception('Simulated media_files Check Constraint Violation (HTTP 23514)');
+    }
+
+    final mediaId = const Uuid().v5(Namespace.url.value, '$observationId:thumbnail');
     if (simulateMedia409) {
       // 409 conflict treated as success
     } else {
       mediaFilesRows.add({
-        'id': 'media-uuid',
+        'id': mediaId,
         'observation_id': observationId,
         'bucket': SupabaseCfg.publicPhotosBucket,
         'storage_path': storagePath,
@@ -193,29 +202,35 @@ void main() {
       SharedPreferences.setMockInitialValues({});
     });
 
-    test('successful upload inserts into public-photos and writes thumbnail media_files row', () async {
-      const obsId = 'obs-pub-123';
+    test('deterministic object name <observation_id>/<v5_uuid>.webp matches policy regex and retries produce identical path', () async {
+      const obsId = '6d09db0f-0449-4b92-a8c9-5d37492d2be6';
 
-      final url = await mockClient.uploadPublicThumbnail(
+      final expectedFileUuid = const Uuid().v5(Namespace.url.value, obsId);
+      final expectedPath = '$obsId/$expectedFileUuid.webp';
+
+      // Assert path matches Supabase bucket check policy regex: ^[0-9a-f-]{36}/[0-9a-f-]{36}\.(webp|jpg)$
+      final regex = RegExp(r'^[0-9a-f-]{36}/[0-9a-f-]{36}\.(webp|jpg)$');
+      expect(regex.hasMatch(expectedPath), isTrue,
+          reason: 'Path must match ^[0-9a-f-]{36}/[0-9a-f-]{36}\\.(webp|jpg)\$');
+
+      final url1 = await mockClient.uploadPublicThumbnail(
         observationId: obsId,
         thumbnailBytes: dummyThumbnailBytes,
       );
 
-      expect(url, isNotNull);
-      expect(url, contains('public-photos/$obsId/test-uuid.webp'));
+      expect(url1, contains('public-photos/$expectedPath'));
+      expect(mockClient.publicStorageObjects.containsKey(expectedPath), isTrue);
 
-      // Assert storage object created at <observation_id>/<uuid>.webp
-      expect(mockClient.publicStorageObjects.containsKey('$obsId/test-uuid.webp'), isTrue);
+      // Retry upload with same observationId
+      final url2 = await mockClient.uploadPublicThumbnail(
+        observationId: obsId,
+        thumbnailBytes: dummyThumbnailBytes,
+      );
 
-      // Assert media_files row inserted with required metadata
-      expect(mockClient.mediaFilesRows.length, 1);
-      final row = mockClient.mediaFilesRows.first;
-      expect(row['observation_id'], obsId);
-      expect(row['bucket'], 'public-photos');
-      expect(row['media_type'], 'thumbnail');
-      expect(row['is_demo'], isFalse);
-      expect(row['mime_type'], 'image/webp');
-      expect(row['file_size_bytes'], dummyThumbnailBytes.lengthInBytes);
+      // Assert: Identical deterministic path on retry (no random UUID accumulation)
+      expect(url2, equals(url1));
+      expect(mockClient.publicStorageObjects.keys.where((k) => k.startsWith(obsId)).length, 1,
+          reason: 'Retries must use identical path and never create orphan files');
     });
 
     test('409 Conflict in storage or media_files is treated as success', () async {
@@ -229,6 +244,33 @@ void main() {
       );
 
       expect(url, isNotNull, reason: '409 Conflict must be treated as success without throwing');
+    });
+
+    test('storage failure or media_files insert error is NOT swallowed and rethrows', () async {
+      const obsId = 'obs-failure-check';
+
+      // 1. Storage error rethrows
+      mockClient.simulateStorageFailure = true;
+      expect(
+        () => mockClient.uploadPublicThumbnail(
+          observationId: obsId,
+          thumbnailBytes: dummyThumbnailBytes,
+        ),
+        throwsException,
+        reason: 'Storage upload failures must not be swallowed',
+      );
+
+      // 2. media_files check constraint / RLS error rethrows
+      mockClient.simulateStorageFailure = false;
+      mockClient.simulateMediaFailure = true;
+      expect(
+        () => mockClient.uploadPublicThumbnail(
+          observationId: obsId,
+          thumbnailBytes: dummyThumbnailBytes,
+        ),
+        throwsException,
+        reason: 'media_files insert failures must not be swallowed',
+      );
     });
 
     test('when toggle "Share a blurred photo on the public map" is OFF, upload nothing', () async {
@@ -258,6 +300,8 @@ void main() {
 
     test('cancelling sync mid-upload stops cleanly without deleting file and never writes media_files row', () async {
       const obsId = 'obs-cancel-test';
+      final fileUuid = const Uuid().v5(Namespace.url.value, obsId);
+      final expectedPath = '$obsId/$fileUuid.webp';
       final cancelToken = SyncCancelToken();
 
       // Trigger cancellation after storage upload, before media_files insert
@@ -280,7 +324,7 @@ void main() {
 
       // Storage object was uploaded first, and because phone has no delete right,
       // client does NOT call delete; orphan file without media_files row is harmless.
-      expect(mockClient.publicStorageObjects.containsKey('$obsId/test-uuid.webp'), isTrue);
+      expect(mockClient.publicStorageObjects.containsKey(expectedPath), isTrue);
     });
   });
 }

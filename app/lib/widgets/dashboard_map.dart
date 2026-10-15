@@ -80,7 +80,8 @@ class _DashboardMapState extends State<DashboardMap> {
         final client = Supabase.instance.client;
         obsData = await client
             .from('observations')
-            .select('id, capture_id, anomaly_type, priority_score, priority_label, status, created_at, captured_at');
+            .select('id, capture_id, anomaly_type, priority_score, priority_label, status, created_at, captured_at')
+            .neq('status', 'rejected');
         locData = await client
             .from('locations')
             .select('observation_id, latitude, longitude, accuracy_meters');

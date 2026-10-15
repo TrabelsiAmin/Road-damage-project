@@ -19,8 +19,9 @@ export function haversineDistanceMeters(lat1, lon1, lat2, lon2) {
 const CLASS_SEVERITY_ORDER = { D40: 4, D20: 3, D10: 2, D00: 1 };
 
 /**
- * Metric spatial clustering (radius-based DBSCAN pass matching PostGIS ST_ClusterDBSCAN).
- * Groups observations within radiusMeters (default 20m) and filters accuracy_meters <= 25.
+ * Test & Reference Helper: Metric spatial clustering (radius-based DBSCAN pass matching PostGIS ST_ClusterDBSCAN).
+ * Production single source of truth is the Supabase RPC public.get_clusters().
+ * This client function is retained as a test helper and algorithmic reference.
  *
  * @param {Array} observations - List of observation objects
  * @param {number} radiusMeters - Grouping radius in meters (default 20m)

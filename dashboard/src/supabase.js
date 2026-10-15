@@ -137,6 +137,24 @@ export async function fetchMediaFilesForObservations(obsIds) {
 }
 
 /**
+ * Fetches server-calculated clusters via public.get_clusters() RPC.
+ * Server is the single source of truth (DBSCAN 20m, accuracy <= 25m, status <> 'rejected').
+ */
+export async function fetchServerClusters(epsMeters = 20, minPoints = 1) {
+  const { data, error } = await supabase.rpc('get_clusters', {
+    eps_meters: epsMeters,
+    min_points: minPoints,
+  });
+
+  if (error) {
+    console.error('[Supabase] get_clusters RPC failed:', error);
+    throw error;
+  }
+
+  return data || [];
+}
+
+/**
  * Loads observations with locations, detections, and media files.
  */
 export async function fetchObservations() {

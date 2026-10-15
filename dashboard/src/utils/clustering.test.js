@@ -1,5 +1,9 @@
 import { describe, it, expect } from 'vitest';
-import { clusterObservations } from './clustering.js';
+import {
+  clusterObservations,
+  haversineDistanceMeters,
+  calculateRoadHealthScore,
+} from './clustering.js';
 
 describe('Clustering - Rejection and GPS Filtering', () => {
   it('excludes observations with status = rejected', () => {
@@ -62,4 +66,26 @@ describe('Clustering - Rejection and GPS Filtering', () => {
     const clusters = clusterObservations(obsList, 20, 25);
     expect(clusters.length).toBe(0);
   });
+
+  it('calculates accurate Haversine distance in meters', () => {
+    // 36.8065, 10.1815 (Tunis) to roughly ~111m north (0.001 deg latitude ~ 111m)
+    const dist = haversineDistanceMeters(36.8065, 10.1815, 36.8075, 10.1815);
+    expect(dist).toBeGreaterThan(110);
+    expect(dist).toBeLessThan(113);
+
+    // Same point returns 0
+    expect(haversineDistanceMeters(36.8065, 10.1815, 36.8065, 10.1815)).toBe(0);
+  });
+
+  it('calculates road health score with D40/D20 penalties', () => {
+    expect(calculateRoadHealthScore([])).toBe(100);
+
+    const severeClusters = [
+      { dominantClass: 'D40', count: 3 }, // 8 * 3 = 24 penalty
+      { dominantClass: 'D20', count: 2 }, // 5 * 2 = 10 penalty
+    ];
+    // 100 - 34 = 66
+    expect(calculateRoadHealthScore(severeClusters)).toBe(66);
+  });
 });
+

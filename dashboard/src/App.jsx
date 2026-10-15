@@ -19,9 +19,10 @@ import {
   getSignedMediaUrl,
   getPublicMediaUrl,
   fetchMediaFilesForObservations,
+  fetchServerClusters,
   supabase,
 } from './supabase';
-import { clusterObservations, calculateRoadHealthScore } from './utils/clustering';
+import { haversineDistanceMeters, calculateRoadHealthScore } from './utils/clustering';
 import { calculatePriorityScore, PRIORITY_CONFIG } from './utils/priorityScoring';
 import validationMetricsData from './data/validation_metrics.json';
 import {
@@ -276,6 +277,7 @@ function ReportImageThumbnail({ obs, clusterMedia, isAuthority, onOpenLightbox }
 
 export default function App() {
   const [observations, setObservations] = useState([]);
+  const [serverClusters, setServerClusters] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [lang, setLang] = useState('fr');
@@ -369,12 +371,16 @@ export default function App() {
     };
   }, []);
 
-  // ── 1. Fetch Observations from Supabase ────────────────────────────────────
+  // ── 1. Fetch Observations & Server Clusters from Supabase ────────────────────
   const loadData = useCallback(async () => {
     setLoading(true);
     try {
-      const data = await fetchObservations();
-      setObservations(data);
+      const [obsData, clusterData] = await Promise.all([
+        fetchObservations(),
+        fetchServerClusters(20, 1),
+      ]);
+      setObservations(obsData || []);
+      setServerClusters(clusterData || []);
     } catch (err) {
       setError(err.message || 'Error fetching data from Supabase');
     } finally {
@@ -410,17 +416,7 @@ export default function App() {
     };
   }, [selectedCluster?.id, isAuthorityUser, dataVersion]);
 
-  // Keep selectedCluster members synced with latest observations on dataVersion bump
-  useEffect(() => {
-    if (!selectedCluster) return;
-    const currentMemberIds = new Set(selectedCluster.members.map((m) => m.id));
-    const updatedMembers = observations.filter((o) => currentMemberIds.has(o.id));
-    if (updatedMembers.length > 0) {
-      setSelectedCluster((prev) => prev ? { ...prev, members: updatedMembers } : null);
-    }
-  }, [observations]);
-
-  // ── 2. Partition Observations: Active vs Rejected ─────────────────────────
+  // ── 2. Partition Observations: Active vs Rejected & Excluded Counts ────────
   const activeObservations = useMemo(() => {
     return observations.filter((o) => o.status !== 'rejected');
   }, [observations]);
@@ -429,14 +425,80 @@ export default function App() {
     return observations.filter((o) => o.status === 'rejected');
   }, [observations]);
 
-  // Metric Distance Clustering (20m radius, accuracy <= 25m) on active observations
+  // Count of observations excluded from the map & clusters because accuracy > 25m
+  const accuracyExcludedCount = useMemo(() => {
+    return observations.filter(
+      (o) => typeof o.accuracy_meters === 'number' && o.accuracy_meters > 25
+    ).length;
+  }, [observations]);
+
+  // Server Clusters (public.get_clusters() is the single source of truth)
+  // Each cluster's member reports are matched by location & radius (<= 30m covers 20m DBSCAN eps)
+  // and must satisfy the same filters (accuracy <= 25m, status <> 'rejected')
   const clusters = useMemo(() => {
-    return clusterObservations(activeObservations, 20, 25);
-  }, [activeObservations]);
+    const validObs = observations.filter(
+      (o) => o.status !== 'rejected' && (o.accuracy_meters == null || o.accuracy_meters <= 25)
+    );
+
+    return serverClusters.map((sc) => {
+      // Find reports of this cluster by distance to centroid (<= 30m)
+      const members = validObs.filter(
+        (o) =>
+          haversineDistanceMeters(
+            sc.centroid_lat,
+            sc.centroid_lng,
+            o.latitude,
+            o.longitude
+          ) <= 30
+      );
+
+      // Dominant status hierarchy from status_counts or members:
+      // status_counts has { unconfirmed, confirmed, in_progress, repaired, rejected }
+      const scCounts = sc.status_counts || {};
+      const count = Number(sc.report_count);
+      let dominantStatus = 'unconfirmed';
+      if (scCounts.repaired > 0 && scCounts.repaired === count) {
+        dominantStatus = 'repaired';
+      } else if (scCounts.confirmed > 0 || scCounts.in_progress > 0) {
+        dominantStatus = 'confirmed';
+      } else if (scCounts.repaired > 0) {
+        dominantStatus = 'repaired';
+      }
+
+      const score = Number(sc.max_priority_score || 0);
+      const priorityLabel =
+        score >= PRIORITY_CONFIG.highThreshold
+          ? 'HIGH'
+          : score < PRIORITY_CONFIG.lowThreshold
+          ? 'LOW'
+          : 'MEDIUM';
+
+      return {
+        id: sc.cluster_id,
+        cluster_id: sc.cluster_id,
+        latitude: sc.centroid_lat,
+        longitude: sc.centroid_lng,
+        count,
+        dominantClass: sc.worst_class || 'D40',
+        maxPriorityScore: score,
+        priorityLabel,
+        oldestDate: sc.first_seen,
+        newestDate: sc.last_seen,
+        status: dominantStatus,
+        statusCounts: scCounts,
+        members,
+        realCount: Number(sc.real_count || 0),
+        demoCount: Number(sc.demo_count || 0),
+      };
+    });
+  }, [serverClusters, observations]);
 
   const hasDemoData = useMemo(() => {
-    return activeObservations.some((o) => o.is_demo);
-  }, [activeObservations]);
+    return (
+      serverClusters.some((c) => Number(c.demo_count || 0) > 0) ||
+      activeObservations.some((o) => o.is_demo)
+    );
+  }, [serverClusters, activeObservations]);
 
   // ── 3. Filtered Clusters for Display ───────────────────────────────────────
   const filteredClusters = useMemo(() => {
@@ -1048,7 +1110,7 @@ export default function App() {
             </select>
           </div>
 
-          {/* Map Legend */}
+          {/* Map Legend & GPS Accuracy Note */}
           <div className="map-legend">
             <span style={{ fontSize: '0.72rem', fontWeight: 800, color: 'var(--text-muted)' }}>
               LÉGENDE CARTE (COULEUR = PRIORITÉ • TAILLE = SÉVÉRITÉ)
@@ -1066,6 +1128,9 @@ export default function App() {
                 <span style={{ width: '12px', height: '12px', borderRadius: '50%', background: PRIORITY_PIN_COLORS.LOW, display: 'inline-block' }} />
                 <span>LOW (&lt;35)</span>
               </div>
+            </div>
+            <div style={{ marginTop: '8px', paddingTop: '6px', borderTop: '1px solid var(--border-subtle)', fontSize: '0.70rem', color: 'var(--text-dim)', lineHeight: 1.3 }}>
+              <span>Positions avec précision &gt; 25 m non affichées ({accuracyExcludedCount} signalements exclus)</span>
             </div>
           </div>
         </div>
@@ -1410,7 +1475,7 @@ export default function App() {
                   )}
                 </div>
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '6px', maxHeight: '340px', overflowY: 'auto' }}>
-                  {filteredClusters.slice(0, 15).map((c, i) => (
+                  {filteredClusters.map((c, i) => (
                     <div
                       key={c.id}
                       className="cluster-list-row"

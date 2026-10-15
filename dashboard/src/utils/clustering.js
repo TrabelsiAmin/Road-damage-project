@@ -27,11 +27,12 @@ const CLASS_SEVERITY_ORDER = { D40: 4, D20: 3, D10: 2, D00: 1 };
  * @param {number} maxAccuracy - Skip points with GPS inaccuracy worse than this (default 25m)
  */
 export function clusterObservations(observations = [], radiusMeters = 20, maxAccuracy = 25) {
-  // 1. Filter out observations with poor GPS quality or zero coordinates
+  // 1. Filter out observations with poor GPS quality, zero coordinates, or status 'rejected'
   const valid = observations.filter((obs) => {
     if (!obs || typeof obs.latitude !== 'number' || typeof obs.longitude !== 'number') return false;
     if (obs.latitude === 0 && obs.longitude === 0) return false;
     if (typeof obs.accuracy_meters === 'number' && obs.accuracy_meters > maxAccuracy) return false;
+    if (obs.status === 'rejected') return false;
     return true;
   });
 

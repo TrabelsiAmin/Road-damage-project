@@ -10,6 +10,7 @@ import {
 import {
   fetchObservations,
   updateObservationStatus,
+  updateMultipleObservationsStatus,
   signIn,
   signOut,
   getCurrentUser,
@@ -48,6 +49,10 @@ import {
   Clock,
   ArrowRight,
   Lock,
+  XCircle,
+  Trash2,
+  RotateCcw,
+  Info,
 } from 'lucide-react';
 
 // Priority Colors for Leaflet pins (v2: HIGH, MEDIUM, LOW)
@@ -308,8 +313,16 @@ export default function App() {
   // RHI Tooltip
   const [showRhiTooltip, setShowRhiTooltip] = useState(false);
 
-  // Active Sidebar Tab
-  const [activeTab, setActiveTab] = useState('clusters'); // 'clusters' | 'metrics'
+  // Active Sidebar View Tab ('clusters' | 'rejected')
+  const [activeSidebarTab, setActiveSidebarTab] = useState('clusters');
+
+  // Reject Confirmation Modals
+  const [rejectReportModal, setRejectReportModal] = useState(null); // observation to reject
+  const [rejectClusterModal, setRejectClusterModal] = useState(null); // cluster to reject
+
+  // Undo Toast state
+  const [undoState, setUndoState] = useState(null); // { message, previousStatuses }
+  const undoTimerRef = useRef(null);
 
   const mapRef = useRef(null);
   const mapInstanceRef = useRef(null);
@@ -407,14 +420,23 @@ export default function App() {
     }
   }, [observations]);
 
-  // ── 2. Metric Distance Clustering (20m radius, accuracy <= 25m) ────────────
-  const clusters = useMemo(() => {
-    return clusterObservations(observations, 20, 25);
+  // ── 2. Partition Observations: Active vs Rejected ─────────────────────────
+  const activeObservations = useMemo(() => {
+    return observations.filter((o) => o.status !== 'rejected');
   }, [observations]);
 
-  const hasDemoData = useMemo(() => {
-    return observations.some((o) => o.is_demo);
+  const rejectedObservations = useMemo(() => {
+    return observations.filter((o) => o.status === 'rejected');
   }, [observations]);
+
+  // Metric Distance Clustering (20m radius, accuracy <= 25m) on active observations
+  const clusters = useMemo(() => {
+    return clusterObservations(activeObservations, 20, 25);
+  }, [activeObservations]);
+
+  const hasDemoData = useMemo(() => {
+    return activeObservations.some((o) => o.is_demo);
+  }, [activeObservations]);
 
   // ── 3. Filtered Clusters for Display ───────────────────────────────────────
   const filteredClusters = useMemo(() => {
@@ -539,11 +561,15 @@ export default function App() {
     }
   }, [filteredClusters]);
 
-  // Keep selectedCluster in sync with updated observations
+  // Keep selectedCluster in sync with updated observations; close panel if cluster becomes empty
   useEffect(() => {
     if (!selectedCluster) return;
     const fresh = clusters.find((c) => c.id === selectedCluster.id);
-    if (fresh) setSelectedCluster(fresh);
+    if (fresh && fresh.members && fresh.members.length > 0) {
+      setSelectedCluster(fresh);
+    } else {
+      setSelectedCluster(null);
+    }
   }, [clusters]);
 
   // ── 6. Status Workflow Handler (unconfirmed → confirmed → repaired) ────────
@@ -566,10 +592,138 @@ export default function App() {
         prev.map((o) => (o.id === obsId ? { ...o, status: newStatus } : o))
       );
       setStatusConfirmModal(null);
+      setDataVersion((v) => v + 1);
     } catch (err) {
       alert(`Erreur de mise à jour: ${err.message}`);
     } finally {
       setStatusUpdating(false);
+    }
+  }
+
+  // ── 6b. Reject Report Workflow (single report soft delete) ──────────────────
+  function promptRejectReport(obs) {
+    if (!isAuthorityUser) {
+      setShowLoginModal(true);
+      return;
+    }
+    setRejectReportModal(obs);
+  }
+
+  async function executeRejectReport() {
+    if (!rejectReportModal) return;
+    const obs = rejectReportModal;
+    const prevStatus = obs.status;
+    setRejectReportModal(null);
+
+    try {
+      await updateObservationStatus(obs.id, 'rejected');
+
+      // Update local state immediately
+      setObservations((prev) =>
+        prev.map((o) => (o.id === obs.id ? { ...o, status: 'rejected' } : o))
+      );
+
+      // Trigger 8-second Undo toast
+      showUndoToast(
+        `Signalement #${obs.id.slice(0, 8)} rejeté (pas d'anomalie)`,
+        [{ id: obs.id, previousStatus: prevStatus }]
+      );
+
+      setDataVersion((v) => v + 1);
+    } catch (err) {
+      alert(`Erreur lors du rejet du signalement : ${err.message}`);
+    }
+  }
+
+  // ── 6c. Reject Entire Cluster Workflow (batch soft delete with id=in.(...)) ─
+  function promptRejectCluster(cluster) {
+    if (!isAuthorityUser) {
+      setShowLoginModal(true);
+      return;
+    }
+    setRejectClusterModal(cluster);
+  }
+
+  async function executeRejectCluster() {
+    if (!rejectClusterModal) return;
+    const cluster = rejectClusterModal;
+    const members = cluster.members || [];
+    const ids = members.map((m) => m.id);
+    const previousStatuses = members.map((m) => ({ id: m.id, previousStatus: m.status }));
+    setRejectClusterModal(null);
+
+    try {
+      await updateMultipleObservationsStatus(ids, 'rejected');
+
+      // Update local state immediately
+      const idSet = new Set(ids);
+      setObservations((prev) =>
+        prev.map((o) => (idSet.has(o.id) ? { ...o, status: 'rejected' } : o))
+      );
+
+      // Close the open cluster panel
+      setSelectedCluster(null);
+
+      // Trigger 8-second Undo toast
+      showUndoToast(
+        `Cluster rejeté (${ids.length} signalements)`,
+        previousStatuses
+      );
+
+      setDataVersion((v) => v + 1);
+    } catch (err) {
+      alert(`Erreur lors du rejet du cluster : ${err.message}`);
+    }
+  }
+
+  // ── 6d. Undo Reject Handler (restores previous status) ───────────────────────
+  function showUndoToast(message, previousStatuses) {
+    if (undoTimerRef.current) clearTimeout(undoTimerRef.current);
+    setUndoState({ message, previousStatuses });
+    undoTimerRef.current = setTimeout(() => {
+      setUndoState(null);
+    }, 8000);
+  }
+
+  async function handleUndoReject() {
+    if (!undoState || !undoState.previousStatuses) return;
+    if (undoTimerRef.current) clearTimeout(undoTimerRef.current);
+    const items = undoState.previousStatuses;
+    setUndoState(null);
+
+    try {
+      const groups = {};
+      items.forEach(({ id, previousStatus }) => {
+        const st = previousStatus || 'unconfirmed';
+        if (!groups[st]) groups[st] = [];
+        groups[st].push(id);
+      });
+
+      for (const [status, ids] of Object.entries(groups)) {
+        if (ids.length === 1) {
+          await updateObservationStatus(ids[0], status);
+        } else {
+          await updateMultipleObservationsStatus(ids, status);
+        }
+      }
+
+      setDataVersion((v) => v + 1);
+    } catch (err) {
+      alert(`Erreur lors de l'annulation du rejet : ${err.message}`);
+    }
+  }
+
+  // ── 6e. Restore Single Report from 'Rejetés' view ───────────────────────────
+  async function handleRestoreReport(obsId) {
+    if (!isAuthorityUser) return;
+    try {
+      await updateObservationStatus(obsId, 'unconfirmed');
+      setObservations((prev) =>
+        prev.map((o) => (o.id === obsId ? { ...o, status: 'unconfirmed' } : o))
+      );
+      setDataVersion((v) => v + 1);
+    } catch (err) {
+      alert(`Erreur lors de la restauration : ${err.message}`);
     }
   }
 
@@ -818,6 +972,23 @@ export default function App() {
                 {kpis.statusCounts.repaired}
               </strong>
             </div>
+            {isAuthorityUser && (
+              <div
+                className={`kpi-pill kpi-pill-actionable ${activeSidebarTab === 'rejected' ? 'active' : ''}`}
+                onClick={() => {
+                  setActiveSidebarTab(activeSidebarTab === 'rejected' ? 'clusters' : 'rejected');
+                  setSelectedCluster(null);
+                  setIsSidebarCollapsed(false);
+                }}
+                title="Afficher les signalements rejetés (exclus de la carte)"
+              >
+                <span className="dot" style={{ background: '#EF4444' }} />
+                <span className="label">Rejetés</span>
+                <strong className="val mono" style={{ color: '#EF4444' }}>
+                  {rejectedObservations.length}
+                </strong>
+              </div>
+            )}
           </div>
         </div>
       </section>
@@ -901,7 +1072,115 @@ export default function App() {
 
         {/* Right Side Panel: Cluster Details & Report List */}
         <aside className="sidebar">
-          {selectedCluster ? (
+          {activeSidebarTab === 'rejected' && isAuthorityUser ? (
+            <div className="rejected-view">
+              <div className="rejected-header">
+                <div>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                    <span style={{ width: '8px', height: '8px', borderRadius: '50%', background: '#EF4444' }} />
+                    <h2 style={{ fontSize: '1rem', fontWeight: 800 }}>Signalements rejetés</h2>
+                  </div>
+                  <p style={{ fontSize: '0.74rem', color: 'var(--text-muted)', marginTop: '4px' }}>
+                    {rejectedObservations.length} signalement{rejectedObservations.length > 1 ? 's' : ''} exclu{rejectedObservations.length > 1 ? 's' : ''} de la carte publique
+                  </p>
+                </div>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
+                  <button
+                    className="icon-btn"
+                    onClick={() => setIsSidebarCollapsed(true)}
+                    title="Masquer le panneau"
+                  >
+                    <ChevronRight size={18} />
+                  </button>
+                  <button
+                    className="icon-btn"
+                    onClick={() => setActiveSidebarTab('clusters')}
+                    title="Retour aux clusters"
+                  >
+                    <X size={16} />
+                  </button>
+                </div>
+              </div>
+
+              {rejectedObservations.length === 0 ? (
+                <div className="panel-empty-state" style={{ height: '240px' }}>
+                  <CheckCircle2 size={32} color="var(--color-success)" style={{ opacity: 0.6 }} />
+                  <h4 style={{ fontSize: '0.9rem', fontWeight: 700, marginTop: '8px' }}>
+                    Aucun signalement rejeté
+                  </h4>
+                  <p style={{ fontSize: '0.75rem', color: 'var(--text-muted)', textAlign: 'center', maxWidth: '240px', marginTop: '4px' }}>
+                    Tous les signalements enregistrés sont actifs sur le réseau.
+                  </p>
+                </div>
+              ) : (
+                <div className="report-items-list" style={{ overflowY: 'auto' }}>
+                  {rejectedObservations.map((obs, idx) => {
+                    const det = obs.detections?.[0];
+                    const classCode = obs.anomaly_type || det?.class_code || 'D40';
+
+                    return (
+                      <div key={obs.id} className="report-card" style={{ borderColor: 'rgba(239, 68, 68, 0.3)' }}>
+                        <div style={{ display: 'flex', gap: '14px', alignItems: 'flex-start' }}>
+                          <ReportImageThumbnail
+                            obs={obs}
+                            clusterMedia={clusterMediaMap[obs.id]}
+                            isAuthority={isAuthorityUser}
+                            onOpenLightbox={(url, title, badge) =>
+                              setLightboxImage({ url, title, badge })
+                            }
+                          />
+
+                          <div style={{ flex: 1, minWidth: 0 }}>
+                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: '6px' }}>
+                              <div style={{ display: 'flex', alignItems: 'center', gap: '6px', flexWrap: 'wrap' }}>
+                                <span style={{ fontWeight: 700, fontSize: '0.82rem', color: DAMAGE_CLASSES[classCode]?.color }}>
+                                  #{idx + 1} {classCode} ({DAMAGE_CLASSES[classCode]?.fr})
+                                </span>
+                                {obs.is_demo ? (
+                                  <span className="badge badge-demo">DEMO</span>
+                                ) : (
+                                  <span className="badge badge-real">RÉEL</span>
+                                )}
+                              </div>
+                              <span className="badge" style={{ fontSize: '0.65rem', background: 'rgba(239, 68, 68, 0.15)', color: '#f87171', border: '1px solid rgba(239, 68, 68, 0.3)' }}>
+                                Rejeté
+                              </span>
+                            </div>
+
+                            <div style={{ display: 'flex', gap: '12px', fontSize: '0.72rem', color: 'var(--text-muted)', marginTop: '4px' }}>
+                              <div>
+                                <span style={{ color: 'var(--text-dim)' }}>ID: </span>
+                                <span className="mono">{obs.id.slice(0, 8)}</span>
+                              </div>
+                              <div>
+                                <span style={{ color: 'var(--text-dim)' }}>Score: </span>
+                                <strong className="mono">{formatScore(obs.priority_score)}</strong>
+                              </div>
+                            </div>
+
+                            <div style={{ fontSize: '0.72rem', color: 'var(--text-muted)', marginTop: '4px' }}>
+                              {new Date(obs.created_at).toLocaleString()}
+                            </div>
+
+                            <div style={{ marginTop: '8px' }}>
+                              <button
+                                className="btn-status btn-restore"
+                                onClick={() => handleRestoreReport(obs.id)}
+                                title="Restaurer comme non confirmé"
+                              >
+                                <RotateCcw size={12} />
+                                <span>Restaurer</span>
+                              </button>
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+          ) : selectedCluster ? (
             <div className="cluster-detail-panel">
               {/* Cluster Header */}
               <div className="panel-header">
@@ -922,6 +1201,17 @@ export default function App() {
                   <p className="mono" style={{ fontSize: '0.74rem', color: 'var(--text-dim)', marginTop: '4px' }}>
                     {selectedCluster.latitude.toFixed(6)}, {selectedCluster.longitude.toFixed(6)}
                   </p>
+                  {isAuthorityUser && (
+                    <button
+                      className="btn-danger-subtle"
+                      onClick={() => promptRejectCluster(selectedCluster)}
+                      title="Rejeter tous les signalements de ce cluster (pas d'anomalie)"
+                      style={{ marginTop: '8px' }}
+                    >
+                      <Trash2 size={13} />
+                      <span>Rejeter tout le cluster</span>
+                    </button>
+                  )}
                 </div>
                 <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
                   <button
@@ -1042,7 +1332,7 @@ export default function App() {
 
                             {/* Authority Status Workflow Actions */}
                             {isAuthorityUser && (
-                              <div style={{ display: 'flex', gap: '6px', marginTop: '8px' }}>
+                              <div style={{ display: 'flex', gap: '6px', marginTop: '8px', flexWrap: 'wrap' }}>
                                 {obs.status === 'unconfirmed' && (
                                   <button
                                     className="btn-status btn-confirm"
@@ -1066,6 +1356,14 @@ export default function App() {
                                     <CheckCircle2 size={12} /> Réparé & Validé
                                   </span>
                                 )}
+                                <button
+                                  className="btn-status btn-reject"
+                                  onClick={() => promptRejectReport(obs)}
+                                  title="Rejeter ce signalement (pas d'anomalie)"
+                                >
+                                  <XCircle size={12} />
+                                  <span>Rejeter (pas d'anomalie)</span>
+                                </button>
                               </div>
                             )}
                           </div>
@@ -1097,10 +1395,21 @@ export default function App() {
 
               {/* Cluster Ranked List in Empty State */}
               <div style={{ width: '100%', marginTop: '16px' }}>
-                <span style={{ fontSize: '0.72rem', fontWeight: 800, color: 'var(--text-dim)', textTransform: 'uppercase' }}>
-                  Top clusters prioritaires ({filteredClusters.length})
-                </span>
-                <div style={{ display: 'flex', flexDirection: 'column', gap: '6px', marginTop: '8px', maxHeight: '340px', overflowY: 'auto' }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
+                  <span style={{ fontSize: '0.72rem', fontWeight: 800, color: 'var(--text-dim)', textTransform: 'uppercase' }}>
+                    Top clusters prioritaires ({filteredClusters.length})
+                  </span>
+                  {isAuthorityUser && rejectedObservations.length > 0 && (
+                    <button
+                      className="btn-status btn-reject"
+                      style={{ fontSize: '0.68rem', padding: '2px 8px' }}
+                      onClick={() => setActiveSidebarTab('rejected')}
+                    >
+                      <span>Rejetés ({rejectedObservations.length})</span>
+                    </button>
+                  )}
+                </div>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '6px', maxHeight: '340px', overflowY: 'auto' }}>
                   {filteredClusters.slice(0, 15).map((c, i) => (
                     <div
                       key={c.id}
@@ -1315,6 +1624,131 @@ export default function App() {
               </form>
             </div>
           </div>
+        </div>
+      )}
+
+      {/* ── Reject Single Report Modal ────────────────────────────────────── */}
+      {rejectReportModal && (
+        <div className="modal-overlay" onClick={() => setRejectReportModal(null)}>
+          <div className="modal-card" style={{ maxWidth: '440px' }} onClick={(e) => e.stopPropagation()}>
+            <div style={{ padding: '24px' }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '14px' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                  <AlertTriangle size={20} color="#EF4444" />
+                  <h3 style={{ fontSize: '1.05rem', fontWeight: 800, color: 'var(--text-main)' }}>
+                    Rejeter le signalement
+                  </h3>
+                </div>
+                <X size={18} style={{ cursor: 'pointer' }} onClick={() => setRejectReportModal(null)} />
+              </div>
+
+              <p style={{ fontSize: '0.84rem', color: 'var(--text-muted)', lineHeight: 1.5, marginBottom: '16px' }}>
+                Ce signalement sera qualifié comme « sans anomalie » (soft-delete). Il sera retiré de la carte publique, des clusters géodésiques et des compteurs de voirie.
+              </p>
+
+              <div style={{ padding: '12px', background: 'rgba(255,255,255,0.03)', border: '1px solid var(--border-subtle)', borderRadius: 'var(--radius-sm)', marginBottom: '20px' }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                  <span style={{ fontWeight: 700, fontSize: '0.82rem' }}>
+                    #{rejectReportModal.id.slice(0, 8)} • {rejectReportModal.anomaly_type || 'Anomalie'}
+                  </span>
+                  {rejectReportModal.is_demo ? (
+                    <span className="badge badge-demo">DEMO</span>
+                  ) : (
+                    <span className="badge badge-real">RÉEL</span>
+                  )}
+                </div>
+                <div style={{ fontSize: '0.75rem', color: 'var(--text-dim)', marginTop: '4px' }}>
+                  Score calculé : {formatScore(rejectReportModal.priority_score)} • Statut actuel : {rejectReportModal.status}
+                </div>
+              </div>
+
+              <div style={{ display: 'flex', gap: '10px', justifyContent: 'flex-end' }}>
+                <button className="btn btn-secondary" onClick={() => setRejectReportModal(null)}>
+                  Annuler
+                </button>
+                <button
+                  className="btn btn-primary"
+                  style={{ background: '#EF4444', borderColor: '#EF4444' }}
+                  onClick={executeRejectReport}
+                >
+                  Confirmer le rejet
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ── Reject Entire Cluster Modal ────────────────────────────────────── */}
+      {rejectClusterModal && (() => {
+        const members = rejectClusterModal.members || [];
+        const realCount = members.filter((m) => !m.is_demo).length;
+        const demoCount = members.filter((m) => m.is_demo).length;
+
+        return (
+          <div className="modal-overlay" onClick={() => setRejectClusterModal(null)}>
+            <div className="modal-card" style={{ maxWidth: '460px' }} onClick={(e) => e.stopPropagation()}>
+              <div style={{ padding: '24px' }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '14px' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                    <Trash2 size={20} color="#EF4444" />
+                    <h3 style={{ fontSize: '1.05rem', fontWeight: 800, color: 'var(--text-main)' }}>
+                      Rejeter tout le cluster
+                    </h3>
+                  </div>
+                  <X size={18} style={{ cursor: 'pointer' }} onClick={() => setRejectClusterModal(null)} />
+                </div>
+
+                <p style={{ fontSize: '0.84rem', color: 'var(--text-muted)', lineHeight: 1.5, marginBottom: '16px' }}>
+                  Cette action appliquera le statut <code>rejected</code> à l'ensemble des signalements du cluster.
+                </p>
+
+                <div style={{ padding: '12px', background: 'rgba(239, 68, 68, 0.08)', border: '1px solid rgba(239, 68, 68, 0.3)', borderRadius: 'var(--radius-sm)', marginBottom: '20px' }}>
+                  <div style={{ fontWeight: 700, fontSize: '0.85rem', color: '#f87171', marginBottom: '6px' }}>
+                    {members.length} signalement{members.length > 1 ? 's' : ''} au total
+                  </div>
+                  <div style={{ display: 'flex', gap: '12px', fontSize: '0.78rem' }}>
+                    <span>
+                      Réels : <strong style={{ color: '#10B981' }}>{realCount}</strong>
+                    </span>
+                    <span>
+                      Démo : <strong style={{ color: '#F59E0B' }}>{demoCount}</strong>
+                    </span>
+                  </div>
+                  <div style={{ fontSize: '0.72rem', color: 'var(--text-dim)', marginTop: '6px' }}>
+                    Coordonnées : {rejectClusterModal.latitude.toFixed(6)}, {rejectClusterModal.longitude.toFixed(6)}
+                  </div>
+                </div>
+
+                <div style={{ display: 'flex', gap: '10px', justifyContent: 'flex-end' }}>
+                  <button className="btn btn-secondary" onClick={() => setRejectClusterModal(null)}>
+                    Annuler
+                  </button>
+                  <button
+                    className="btn btn-primary"
+                    style={{ background: '#EF4444', borderColor: '#EF4444' }}
+                    onClick={executeRejectCluster}
+                  >
+                    Rejeter tout le cluster
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+        );
+      })()}
+
+      {/* ── Undo Reject Toast (8s notification) ────────────────────────────── */}
+      {undoState && (
+        <div className="toast-undo">
+          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+            <Info size={16} color="#3B82F6" />
+            <span>{undoState.message}</span>
+          </div>
+          <button className="btn-undo" onClick={handleUndoReject}>
+            <RotateCcw size={13} />
+            <span>Annuler</span>
+          </button>
         </div>
       )}
 

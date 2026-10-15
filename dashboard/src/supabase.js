@@ -2,9 +2,9 @@ import { createClient } from '@supabase/supabase-js';
 
 // Read from Vite environment or fall back to staging/default
 const SUPABASE_URL =
-  import.meta.env.VITE_SUPABASE_URL || 'https://lendqcjihusqkmxansbl.supabase.co';
+  import.meta.env?.VITE_SUPABASE_URL || 'https://lendqcjihusqkmxansbl.supabase.co';
 const SUPABASE_ANON_KEY =
-  import.meta.env.VITE_SUPABASE_ANON_KEY ||
+  import.meta.env?.VITE_SUPABASE_ANON_KEY ||
   'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImxlbmRxY2ppaHVzcWtteGFuc2JsIiwicm9sZSI6ImFub24iLCJpYXQiOjE3OTAyODA3ODYsImV4cCI6MjEwNTg1Njc4Nn0.F1FS2HZNf7qEbTx14WBSAOHeCWTGsA5OMZghgw_YNNs';
 
 export const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
@@ -217,15 +217,39 @@ export async function fetchObservations() {
 }
 
 /**
- * Updates status of an observation (requires authenticated authority operator).
+ * Updates status of a single observation (requires authenticated authority operator).
+ * Strictly verifies that exactly 1 row was updated under RLS.
  */
 export async function updateObservationStatus(id, newStatus) {
   const { data, error } = await supabase
     .from('observations')
     .update({ status: newStatus })
     .eq('id', id)
-    .select('id, status, assigned_contractor, budget_estimate_tnd');
+    .select('id, status');
 
   if (error) throw error;
+  if (!data || data.length !== 1) {
+    throw new Error('Échec de la mise à jour (0 ligne modifiée). Vérifiez les permissions RLS d\'autorité.');
+  }
+  return data[0];
+}
+
+/**
+ * Updates status of multiple observations in a single query with id=in.(...).
+ * Strictly verifies that the returned row count matches the requested IDs count.
+ */
+export async function updateMultipleObservationsStatus(ids, newStatus) {
+  if (!ids || ids.length === 0) return [];
+  const { data, error } = await supabase
+    .from('observations')
+    .update({ status: newStatus })
+    .in('id', ids)
+    .select('id, status');
+
+  if (error) throw error;
+  if (!data || data.length !== ids.length) {
+    throw new Error(`Échec de la mise à jour par lot : ${data?.length || 0}/${ids.length} lignes modifiées.`);
+  }
   return data;
 }
+

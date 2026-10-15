@@ -1062,6 +1062,134 @@ h1, h2, h3, h4 {
   background: rgba(16, 185, 129, 0.35);
 }
 
+.btn-reject {
+  background: rgba(239, 68, 68, 0.15);
+  color: #f87171;
+  border: 1px solid rgba(239, 68, 68, 0.4);
+}
+
+.btn-reject:hover {
+  background: rgba(239, 68, 68, 0.3);
+  color: #fff;
+}
+
+.btn-restore {
+  background: rgba(59, 130, 246, 0.2);
+  color: #60a5fa;
+  border: 1px solid rgba(59, 130, 246, 0.4);
+}
+
+.btn-restore:hover {
+  background: rgba(59, 130, 246, 0.35);
+  color: #fff;
+}
+
+.btn-danger-subtle {
+  background: rgba(239, 68, 68, 0.12);
+  color: #f87171;
+  border: 1px solid rgba(239, 68, 68, 0.3);
+  border-radius: var(--radius-sm);
+  font-size: 0.74rem;
+  font-weight: 700;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 12px;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.btn-danger-subtle:hover {
+  background: rgba(239, 68, 68, 0.25);
+  border-color: #ef4444;
+  color: #fff;
+}
+
+/* ── KPI Pill Actionable ──────────────────────────────────────────────────── */
+.kpi-pill-actionable {
+  transition: all 0.15s ease;
+  user-select: none;
+}
+
+.kpi-pill-actionable:hover {
+  background: rgba(255, 255, 255, 0.08);
+}
+
+.kpi-pill-actionable.active {
+  background: rgba(239, 68, 68, 0.2);
+  border-color: rgba(239, 68, 68, 0.5);
+}
+
+/* ── Undo Toast ───────────────────────────────────────────────────────────── */
+.toast-undo {
+  position: fixed;
+  bottom: 24px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 4000;
+  background: rgba(17, 24, 39, 0.96);
+  backdrop-filter: blur(12px);
+  border: 1px solid var(--border-subtle);
+  box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.6);
+  padding: 10px 18px;
+  border-radius: var(--radius-md);
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  color: var(--text-main);
+  font-size: 0.85rem;
+  font-weight: 600;
+  animation: slideUp 0.25s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.btn-undo {
+  background: var(--color-primary);
+  color: #fff;
+  border: none;
+  border-radius: var(--radius-sm);
+  padding: 4px 10px;
+  font-size: 0.76rem;
+  font-weight: 700;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  transition: all 0.15s ease;
+}
+
+.btn-undo:hover {
+  filter: brightness(1.15);
+}
+
+@keyframes slideUp {
+  from {
+    opacity: 0;
+    transform: translate(-50%, 20px);
+  }
+  to {
+    opacity: 1;
+    transform: translate(-50%, 0);
+  }
+}
+
+/* ── Rejected Reports View ────────────────────────────────────────────────── */
+.rejected-view {
+  padding: 18px;
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+}
+
+.rejected-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  margin-bottom: 12px;
+  padding-bottom: 12px;
+  border-bottom: 1px solid var(--border-subtle);
+}
+
+
 /* ── Panel Empty State & Ranked List ──────────────────────────────────────── */
 .panel-empty-state {
   padding: 24px 16px;

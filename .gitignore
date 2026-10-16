@@ -8,7 +8,6 @@ env/
 .streamlit/secrets.toml
 
 # Données et index générés
-data/
 vector_db/
 index.faiss
 chunks.pkl

@@ -1,0 +1,448 @@
+# DOC_ID: BENJELLOUN-EPA-routes
+# SOURCE: 751556830-Co__u__rs-Ro__u__tes-E__PA-Chap__ititre-1-Et-2-BEN__JELL__OUN-Co__pie_watermark.pdf
+# TITRE: Cours Routes, filière Génie Civil, École Polytechnique d'Agadir (diapositives, chapitres 1 et 2)
+# AUTEUR: M. Ali Benjelloun, ingénieur routier sénior, chef de projet au LPEE Agadir-Guelmim
+# EDITEUR: École Polytechnique d'Agadir (support de cours)
+# DATE: année académique 2023/2024
+# LANGUE: fr
+# TYPE: diapositives de cours (une page = une diapositive)
+# CONTEXTE: Maroc
+# LICENCE: à vérifier (copie avec filigrane issue d'un site de partage)
+# FIABILITE: moyenne (auteur identifié, support pédagogique concis)
+# ROLE_RAG: contexte et vocabulaire seulement (structure de chaussée, réseau routier au Maroc) ; pas une source sur les dégradations
+# PERIMETRE: dimensionnement des corps de chaussée, terrassements, conception géométrique, assainissement ; très peu de contenu sur les dégradations
+# RELATION: aucune relation connue avec les autres documents du corpus
+# PAGES: 50 pages conservées (marqueurs [p. 1] à [p. 61]) sur 62 avant nettoyage
+# FORMAT_PAGES: marqueur [p. N] = numéro de page attribué par l'extraction (identique au numéro de page PDF pour FHWA, Cours, Benjelloun et Arya ; à vérifier pour le MTQ) ; les numéros manquants correspondent à des pages retirées (vides ou hors contenu)
+# EXTRACTION: PyMuPDF page par page, OCR Tesseract si couche texte illisible ; nettoyage Unicode, recollage des lignes, pages vides retirées
+# NETTOYAGE: 12 pages quasi vides, pieds de page répétés (« Chapitre 4 : Corps de chaussée » x30) et puces corrompues retirés
+# NOTE: tableaux/figures non reconstruits ; texte non reformulé ; le nom de fichier indique « chapitres 1 et 2 » mais les pieds de page d'origine mentionnaient « Chapitre 4 : Corps de chaussée » : périmètre réel à confirmer
+# A_FAIRE: pied de page « Types, fonctionnement et comportement des chaussées » répété 10 fois ; 14 pages de moins de 200 caractères ; décider d'exclure du RAG pathologie
+
+[p. 1]
+Cours Routes pour la filière Génie Civil de l'Ecole Polytechnique d'Agadir Année Académique : 2023/2024 Animé par :
+M.BENJELLOUN Ali
+Ingénieur routier sénior-Chef de projet du LPEE Agadir-Guelmim
+
+[p. 2]
+Dimensionnement des Corps de chaussées
+PLAN
+Terrassements routiers et essais au
+Laboratoires
+Conception géométrique, Assainissement et Drainage
+Rappel, Introduction, généralités et terminologie
+
+[p. 3]
+- Contenu du chapitre :
+- Définitions et Généralités
+- Réseau routier au Maroc
+- Eléments constitutifs
+- Cycle de vie d'une route (conception exploitation)
+Chapitre 1 : Introduction et généralités
+
+[p. 4]
+- Les routes sont des infrastructures de transports essentielles à tous les formes de développement d'un pays ou d'une région du monde.
+- la qualité des infrastructures routières ont un impact positif direct sur plusieurs volets, entre autres :
+- Croissance économique
+- Échanges culturels
+- Sécurité et souveraineté des états sur leurs territoires
+Définitions et Généralités
+
+[p. 5]
+- Le réseau routier marocain assure 90% des déplacements des personnes et 75% du transport de marchandises.
+- Le Ministère de l'Equipement et de l'Eau gère un linéaire de 57 334 km de routes dont 45 240 km revêtu.
+Réseau routier au Maroc
+
+[p. 6]
+Réseau routier au Maroc
+- Le réseau routier géré par le M.E.E est subdivisé en :
+- Routes nationales (relie deux pôles économiques),
+- Routes régionales ((relie les routes nationales, et lie entre les régions),
+- Routes provinciales (assure les liaisons entre les communes).
+
+[p. 7]
+Densité du réseau routier :
+- Densité spatiale : elle correspond au linéaire total des infrastructures routières rapporté à la superficie du territoire. Au Maroc, cette densité était de 6.38 Km/100 Km² en 2020 (réseau classé revêtu uniquement);
+- Densité sociale : elle correspond au linéaire total des infrastructures routières rapporté au nombre d'habitants. Au Maroc, cette densité était de 1.26 Km/1000 hab (réseau classé revêtu uniquement).
+Réseau routier au Maroc
+
+[p. 8]
+Réseau routier au Maroc
+Evolution de la densité spatiale du réseau classé revêtu entre
+2012 et 2020
+Province
+Densité spatiale du réseau routier revêtu (Km/100Km²)
+2012 2020
+Inezgane Ait Melloul 25.18 34.71
+Agadir Ida-Outanane 19.25 21.52
+Chtouka Ait Baha 18.03 19.78
+Essaouira 12.22 17.70
+Tiznit 13.04 16.35
+Sidi Ifni 12.70 14.90
+Taroudant 8.33 11.12
+Midelt 6.65 8.45
+Guelmim 5.56 6.73
+Ouarzazate 4.88 6.59
+National 5.63 6.38
+Tinghir 4.11 5.46
+Zagora 2.46 3.72
+Errachidia 2.76 3.05
+Tata 2.66 2.95
+Figuig 2.32 2.89
+Assa-Zag 1.62 2.16 0.00 5.00 10.00 15.00 20.00 25.00 30.00 35.00 40.00
+
+[p. 9]
+Réseau routier au Maroc
+Evolution de la densité sociale du réseau classé revêtu entre 2012 et 2020 0.00 2.00 4.00 6.00 8.00 10.00 12.00 14.00 Assa-Zag Figuig Tata Sidi Ifni Tiznit Guelmim Midelt Total Z.Oas Zagora Ouarzazate Essaouira Total ZOA Tinghir Taroudant Total Z.Arg Errachidia Chtouka Ait Baha National Agadir Ida-Outanane Inezgane Ait Melloul 2012 2020 Province Densité sociale du réseau routier revêtu (Km/1000 hab)
+Evolution 2012-
+2020 (%)
+2012 2020
+Assa-Zag 6.83 11.98 75%
+Figuig 6.06 7.36 21%
+Tata 5.86 6.82 16%
+Sidi Ifni 4.36 4.14
+-5%
+Tiznit 3.17 4.13 30%
+Guelmim 3.67 3.81 4%
+Midelt 2.93 3.55 21%
+Zagora 1.79 2.60 45%
+Ouarzazate 2.09 2.58 23%
+Essaouira 1.78 2.57 45%
+Tinghir 1.82 2.19 20%
+Taroudant 1.61 2.08 29%
+Errachidia 1.69 1.94 15%
+Chtouka Ait Baha 1.78 1.65
+-7%
+National 1.22 1.26 4%
+Agadir Ida-Outanane 0.81 0.77
+-6%
+Inezgane Ait Melloul 0.14 0.16 12%
+
+[p. 15]
+Eléments constitutifs
+Chaussée
+Voie
+Voie
+
+[p. 16]
+Eléments constitutifs
+Talus remblai
+Voie lente
+Voie rapide
+TPC
+Descentes d'eau
+
+[p. 18]
+Cycle de vie d'une route (conception exploitation)
+Programmation par le département concerné
+•Choix de la zone du projet (en fonction des besoins de la population, programmes de l'Etat…)
+•Programmation budgétaire
+Etude
+•Etude géotechnique et dimensionnement du corps de chaussée
+•Etude de définition : Topographie – hydrologie – estimation grossière •Projet d'exécution : définition de la ligne rouge – quantités – estimation précise Exécution •Adaptation éventuelle du PE •Réalisation des travaux •Etablissement des plans définitifs Exploitation •Entretien périodique •Comptage du trafic
+
+[p. 19]
+Chapitre 2 : Dimensionnement des corps de chaussée
+Contenu du chapitre :
+- Types, fonctionnement et comportement des chaussées;
+- Trafic;
+- Portance;
+- Environnement et climat;
+- Calcul par le Catalogue Marocain de Chaussées;
+- Calcul par ALIZé-LCPC;
+- Pathologies des chaussées;
+
+[p. 20]
+- Définition de la chaussée et objectifs :
+
+[p. 21]
+- Comportement d'un sol sous charge roulante :
+- Le poids du véhicule est transmis au sol, sous forme de pressions, par l'intermédiaire des pneumatiques.
+- Si le sol n'est pas assez porteur, le pneu comprime le sol et il se forme une ornière
+
+[p. 22]
+Si le sol est porteur, il se passe deux choses imperceptibles mais qu'il faut bien comprendre :
+- Le sol s'affaisse sous le pneu. C'est la déformation totale: Wt.
+- Lorsque la roue s'éloigne, le sol remonte mais pas totalement: il reste une déformation résiduelle: Wr.
+La différence d = Wt - Wr s'appelle la « déflexion ».
+Types, fonctionnement et comportement des chaussées
+
+[p. 23]
+Types, fonctionnement et comportement des chaussées
+- La déflexion « d » est proportionnelle à la charge appliquée. Elle est pratiquement constante si l'on répète l'application de cette charge des milliers de fois.
+- L'orniérage est la déformation résiduelle « Wr » qui s'accroît au fur et à mesure des passages des véhicules et proportionnellement à leur charges.
+
+[p. 24]
+Types, fonctionnement et comportement des chaussées
+Que se passe-t-il si on interpose entre le sol et la roue une couche granulaire non liée ?
+- Dans une couche granulaire non liée, les grains constitutifs restent indépendants les uns des autres. Ce sont donc des matériaux à module faible compris entre 100 et 500 MPa.
+- Par conséquent, sous l'action d'une charge, cette couche travaille principalement en compression, c'est-à-dire qu'elle transmet au sol sous-jacent la totalité de la charge en la répartissant d'une façon non uniforme.
+Chapitre 4 : Corps de chaussée
+
+[p. 25]
+Types, fonctionnement et comportement des chaussées
+Considérons une charge p sur une bille.
+Celle-ci va transmettre p/2 à chacune des deux billes de la couche sous-jacente.
+Sur les trois billes de la 3e rangée, il y aura successivement :
+p/4, 2 p/4, p/4
+
+[p. 26]
+Types, fonctionnement et comportement des chaussées
+Pour dimensionner une couche granulaire, c'est-à-dire définir son épaisseur, il faut que la pression verticale maximale transmise au sol sous-jacent soit inférieure à la portance du sol.
+Celle-ci est, en règle générale, appréciée par l'essai CBR.
+- Sous l'effet de passages répétés de charges, la couche granulaire se comporte comme un sol :
+a) elle a une déflexion,
+b) elle a donc une déformation résiduelle qui augmente en fonction des passages répétés des charges et finit par provoquer de l'orniérage.
+Sous l'action d'une charge, une couche granulaire non liée travaille principalement en compression. La pression la plus élevée se situe à la verticale de la charge.
+
+[p. 27]
+Graves Non Traitées
+Les graves non traitées sont des matériaux granulaires à granulométrie continue avec un diamètre maximal de grains compris entre 14 et 31,5 mm, et contenant une faible quantité de fines non plastiques (4 à 10 %).
+
+[p. 28]
+Matériaux pour couches d'assise
+Les graves non traitées (GNT) :
+- GNF : Grave non traitée pour couche de fondation.
+( GNF1 – GNF2 – GNF3 ).
+- GN :
+Grave non traitée pour couche de base.
+( GNA – GNB – GNC – GND ).
+
+[p. 29]
+- Matériaux routiers de base :
+- Graves Non Traitées (GNT):
+- mélange à granularité continue de cailloux, de graviers et de sable, avec généralement une certaine proportion de particules plus fines. Les GNT sont issues du concassage de matériaux dits « bruts » d'origine ballastières ou roche massive.
+
+[p. 30]
+Généralités sur les enrobés
+Enrobés bitumineux
+Un enrobé bitumineux est un mélange à chaud ou froid de
+Granulats
+Bitumes Purs ou modifiés
+D'éventuels additifs (Dopes, fibres…)
+D'éventuels Fillers
+Les enrobés sont utilisés
+Couches de roulement
+Couches de liaison
+Couches de base
+Couche de reprofilage
+Définitions
+
+[p. 31]
+Généralités sur les enrobés : Granulats, liants et Enrobés bitumineux Enrobés bitumineux Granulats Liants hydrocarbonés Rappel Les granulats sont des matériaux granulaires de dimensions n'excédant pas 125 mm. Ils sont désignés par leur plus petite et plus grande dimensions d et D, l'intervalle d/D étant appelé classe granulaire les sables, où d = 0 et D ≤ 2 mm ;
+les gravillons d ≥2 et 2 < D ≤ 45 mm ;
+les graves, où d = 0 et 2 < D ≤ 45 mm.
+passants au travers du tamis de 0,063 mm.
+Les Fines
+Les granulats les plus couramment utilisés dans les mélanges bitumineux ont une masse volumique réelle comprise entre 2 et 3 Mg/m3 Familles des Granulats Trois grandes familles de granulats, destinés pour les mélanges bitumineux, sont définies selon la norme NF-P 18-545 Norme des Granulats : NF-P 18-545
+
+[p. 32]
+Généralités sur les enrobés : Granulats, liants et Enrobés bitumineux Enrobés bitumineux Granulats Liants hydrocarbonés Caractéristiques intrinsèques Caractéristiques de Fabrications
+- La Granularité: importante pour la stabilité du mélange
+- La Forme : compactage, stabilité et orniérage
+- La propreté: durabilité et stabilité.
+- L'angularité : stabilité, orniérage et adhérence
+Liées aux modalités d'élaboration
+Dépendent surtout de la nature et de la qualité de gisement
+- La résistance à l'usure (Micro Deval)
+- La résistance à la fragmentation (Los Angeles)
+- Le coefficient de polissage accéléré (CPA)
+Les Granulats doivent être conformes aux spécifications du marché (CPS, CCTP) ou, à défaut, aux normes produits et aux dispositions complémentaires de la norme NF-P 18-545 Caractéristiques des Granulats
+
+[p. 33]
+Généralités sur les enrobés : Granulats, liants et Enrobés bitumineux Enrobés bitumineux Granulats Liants hydrocarbonés Enrobés normalisés:
+Directive des enrobés à chaud de la
+DRCR
+-G.B.B (0/25 et 0/20)
+-B.B (0/10 et 0/14)
+Norme
+Produits:
+
+[p. 34]
+Généralités sur les enrobés : Granulats, liants et Enrobés bitumineux Enrobés bitumineux Granulats Liants hydrocarbonés
+- Liant = colle (assemblage de matériaux solides )
+- Hydrocarboné : le produit renferme principalement des atomes de Carbone et d'Hydrogène.
+Bitume :
+Matériau issu , généralement , de l'industrie de raffinage du pétrole.
+Sa consistance varie de liquide lorsqu'il est chaud à solide cassant lorsqu'il est froid.
+Il est utilisé comme liant en raison de son aptitude à assurer la cohésion du mélange granulaire.
+
+[p. 35]
+al a all tad | eee eT 0 f@ee me wwe ses eee es ee See eee eeeeseesaesaeen,
+
+bowen ase a eeweass ee beesaaneassssesuani
+
+lacecareememsnceemrminemsmyeimememaminemsermemerms Pita eRe Eee ereoeenecl
+
+© © ©
+
+)
+| Bitume, jer Cli nk dae yen casigues £8 ~ 68 ~ 68s.) |
+)
+——) ome rt
+— = i}
+Butume
+Enyobts de > i hauwtey per formancey
+(EME-BBME
+: — BBM-
+BBTM...)
+SONIVERSIAPOLIS | ECoLe P
+
+Université Internationale d'Agadir POLYTEGHMNIGUE els ayIgal! Suools D'AGADIR
+
+[p. 36]
+Considérons maintenant une couche granulaire traitée, donc liée, et reposant sur le sol. Si on applique une charge P à cette couche, la transmission de la charge au sol ne se fait pas de la même façon que dans le cas d'une couche granulaire non liée.
+L'existence des liaisons entre les grains et leur multiplicité modifient la transmission de la charge. La couche liée forme ainsi une « dalle ». L'effet de répartition de la charge sur le sol support est alors très important.
+Les contraintes de compression qui sont transmises au sol sont, dans ce cas, relativement faibles.
+
+[p. 37]
+- Matériaux routiers de base :
+- Mélange traités au liants hydrauliques :
+- Il s'agit de matériaux granulaires mélangés avec du ciment ou du LHR.
+- Cela inclut les béton utilisés comme couches de roulement ainsi que les graves améliorées ou valorisées au ciment.
+- Insertion d'une couche traitée:
+- Mais, l'amortissement très élevé des contraintes verticales dues aux charges est compensé par l'apparition, au sein de la couche traitée, de contraintes de compression et surtout de traction à la partie inférieure.
+
+[p. 38]
+Mélange traités au liants hydrauliques :
+
+[p. 39]
+- Rappel
+- Une structure de chaussée est un ensemble de couches superposées de matériaux reposant sur la plate-forme support de chaussée, destinées à répartir sur le sol naturel les efforts dus à la circulation des véhicules.
+- (NF P 98-086)
+
+[p. 41]
+Types, fonctionnement et comportement des chaussées
+Types de chaussées:
+En fonction du type des matériaux utilisés dans le corps de chaussée, nous distinguons les structures suivantes :
+- structures souples : structures comportant une couverture en matériaux bitumineux d'épaisseur inférieure ou égale à 0,15 m, reposant sur une ou plusieurs couches de matériaux granulaires non traités
+
+[p. 42]
+Types, fonctionnement et comportement des chaussées
+Types de chaussées:
+- structures bitumineuses épaisses : structures composées d'une couche de surface et d'une couche de base en matériaux bitumineux ; la couche de fondation peut être en matériaux bitumineux ou en grave non traitée.
+L'épaisseur totale de matériaux bitumineux est supérieure à 0,15 m
+
+[p. 43]
+Types, fonctionnement et comportement des chaussées
+Types de chaussées:
+- structures semi-rigide:
+Elles comportent une couche de surface bitumineuse reposant sur une assise en matériaux traités aux liants hydrauliques disposés en une couche (base) ou deux couches (base et fondation).
+
+[p. 44]
+Types, fonctionnement et comportement des chaussées
+Types de chaussées:
+- structures rigide: Une chaussée rigide est constituée d'un revêtement en béton de ciment vibré ou fluide.
+En règle générale, une chaussée en béton comporte, à partir du sol support, les couches suivantes :
+- une couche de forme,
+- une couche de fondation,
+- une couche de roulement en béton de ciment.
+(Dans la chaussée rigide, la couche de surface et la couche de base sont confondues)
+
+[p. 46]
+Types, fonctionnement et comportement des chaussées
+
+[p. 47]
+Trafic
+Le poids des véhicules est transmis à la chaussée, sous forme de pressions, par l'intermédiaire des pneumatiques.
+Pour une automobile, cette pression est de l'ordre de 0,1 MPa (soit 1 Kg/cm2). Mais, elle est de l'ordre de 0,7 Mpa sous une roue de camion.
+
+[p. 48]
+Trafic
+Les matériaux situés sous les roues subissent des efforts très différents lorsque passe une voiture ou lorsque passe un camion. Seul ce dernier est pris en compte pour déterminer les classes de trafic.
+La méthode de dimensionnement ne prend en compte que les poids lourds définis dans la norme NM 13.1.218 dont le poids total autorisé en charge (PTAC) est supérieur ou égal à 35 kN (3,5 tonnes).
+
+[p. 49]
+Trafic
+Le trafic constitue un élément essentiel du dimensionnement des chaussées. Il correspond à un nombre de passages de véhicules sur une période déterminée.
+
+[p. 50]
+Trafic
+Calcul du trafic:
+- Méthode simplifiée :
+La détermination de la classe de trafic est obtenu au moyen du tableau ci-dessous, issu du Catalogue Marocain de Chaussées :
+Nombre journalier moyen de PL > 8T dans les 2 sens
+0 à 5
+5 à 50
+50 à 125
+125 à 250
+250 à 325
+325 à 450
+Classe
+TPL1
+TPL2
+TPL3
+TPL4
+TPL5
+TPL6
+
+[p. 51]
+- Calcul du trafic:
+- Méthode simplifiée :
+
+[p. 52]
+Méthode simplifiée :
+Nombre journalier moyen de PL > 8T dans les 2 sens
+0 à 5
+5 à 50
+50 à 125
+125 à 250
+250 à 325
+325 à 450
+Classe
+TPL1
+TPL2
+TPL3
+TPL4
+TPL5
+TPL6
+
+[p. 53]
+Trafic
+Calcul du trafic:
+- Méthode détaillée :
+
+[p. 54]
+Trafic
+La valeur du NEEC13t ainsi calculée est comparée aux valeurs du tableau cidessous pour obtenir la classe du trafic (limites supérieures )
+
+[p. 55]
+Trafic
+L'agressivité de l'essieu centre de classe est donnée par :
+𝐴= 𝐾∗
+𝑃
+130 𝐾𝑁
+𝛼
+P : Poids de l'essieu,
+K : coefficient dépendant de la géométrie des essieux et la structure de chaussée;
+𝛼: coefficient dépendant de la nature des matériaux.
+
+[p. 58]
+ONIVERSIAPOLIS | ECOLE
+Université Intemationale d'Agadir POLYTECHNIQUE
+Lo G.gsd! Goola D'4GA01FR
+
+[p. 60]
+a de I'agressivité du trafig¢==' |
+Pendant cing jours de comptage, une station de pesage a dénombré le passage de 805 poids lourds représentant :
+
+> 1854 essieux simples.
+> 436 essieux élémentaires en tandem.
+> 168 essieux élémentaires en tridem.
+
+la répartition des charges par essieux est donnée dans le tableau suivant :
+
+ONIVERSIAPOLIS | coe www.4geniecivil.com
+
+Université Internationale dAgadir ess 4uJigsd! doco! 1
+
+O'4GADIR:
+
+[p. 61]
+Trafic
+Le CAM est calculé par :
+𝐶𝐴𝑀= 𝐴1 + 𝐴2 + 𝐴3
+𝑁𝑃𝐿
+NPL : Nombre de poids lourds sur la période de comptage.
+(Une méthode dérivée consiste à considérer tous les essieux comme étant simples)
+Dans le cas où on ne dispose pas d'histogrammes d'essieux, on peut utiliser les valeurs du CAM proposés par la norme NM 13.1.218:

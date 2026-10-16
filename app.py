@@ -8,7 +8,7 @@ import streamlit as st
 # CONFIGURATION
 # ============================================================
 
-DEFAULT_API_URL = "https://76a7-136-66-199-225.ngrok-free.app/ask"
+DEFAULT_API_URL = "https://89f3-8-228-8-28.ngrok-free.app/ask"
 
 SUGGESTIONS = [
     "Qu'est-ce qu'une fissure longitudinale et quelles sont ses caractéristiques ?",

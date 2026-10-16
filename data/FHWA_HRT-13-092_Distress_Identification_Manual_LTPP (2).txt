@@ -1,0 +1,2578 @@
+# DOC_ID: FHWA-HRT-13-092
+# SOURCE: 13092.pdf
+# TITRE: Distress Identification Manual for the Long-Term Pavement Performance Program (Fifth Revised Edition, FHWA-HRT-13-092)
+# AUTEUR: Federal Highway Administration (FHWA), U.S. Department of Transportation
+# EDITEUR: FHWA, Turner-Fairbank Highway Research Center
+# DATE: mai 2014 (« Revised May 2014 »)
+# LANGUE: en
+# TYPE: manuel officiel
+# CONTEXTE: États-Unis, programme LTPP
+# LICENCE: publication du gouvernement fédéral américain ; conditions de réutilisation à vérifier
+# FIABILITE: haute (source officielle)
+# ROLE_RAG: référence principale (EN) : définitions, niveaux de sévérité (low/moderate/high) et mesure des dégradations
+# PERIMETRE: PERTINENT : p.15-46 (chaussées souples ACP, 15 fiches ACP 1 à 15) + p.99-100 (glossaire). HORS PERIMETRE chaussées souples : p.1-14 liminaires, p.47-98 béton (JCP p.47-72, CRCP p.73-98), p.101-146 annexes (méthode de relevé, faultmeter, profils ; p.101-106 optionnelles)
+# RELATION: le manuel MTQ (2002) en est une adaptation partielle : contenu redondant entre les deux
+# PAGES: 107 pages conservées (marqueurs [p. 1] à [p. 146]) sur 146 avant nettoyage
+# FORMAT_PAGES: marqueur [p. N] = numéro de page attribué par l'extraction (identique au numéro de page PDF pour FHWA, Cours, Benjelloun et Arya ; à vérifier pour le MTQ) ; les numéros manquants correspondent à des pages retirées (vides ou hors contenu)
+# EXTRACTION: PyMuPDF page par page, OCR Tesseract si couche texte illisible ; nettoyage Unicode, recollage des lignes, pages vides retirées
+# NETTOYAGE: 22 pages vides, table des matières (p.5) et formulaires de relevé (p.121-136) retirés ; gabarits « __ __ __ » supprimés ; lignes recollées
+# NOTE: tableaux/figures non reconstruits ; texte non reformulé
+# A_FAIRE: appliquer le périmètre (environ 80 % du texte conservé est hors chaussées souples) ; retirer l'en-tête courant éclaté (ASPHALT / CONCRETE / SURFACES, 35 occurrences) ; corriger « sharpangled » en « sharp-angled »
+
+[p. 1]
+DISTRESS
+IDENTIFICATION
+MANUAL
+for the
+Long-Term Pavement
+Performance Program
+PUBLICATION NO. FHWA-HRT-13-092 Revised May 2014
+
+[p. 2]
+The Long-Term Pavement Performance (LTPP) program has provided a wide variety of benefits related to field data collection equipment and procedures. It is estimated that 90 percent of State highway agencies use LTPP data collection equipment or test methods.
+Numerous LTPP data collection procedures have been adopted by the American Association of State Highway and Transportation Officials (AASHTO) and industry, with the most widely implemented being this Distress Identification Manual for the Long-Term Pavement Performance Program (DIM) with thousands of requests for copies of the DIM being fulfilled.
+First issued in 1987, the DIM was developed to provide a consistent, uniform basis for collecting pavement distress data for the LTPP program. It has now been updated to this 5th edition.
+The DIM provides a common language for describing cracks, potholes, rutting, spalling, and other pavement distresses being monitored by the LTPP program. Highway agencies at all levels of government can and are using the DIM to standardize pavement condition data collection, produce consistent pavement condition ratings, and train their pavement managers in data collection procedures. Implementation of the DIM enables highway agencies to collect data on roads without spending valuable resources developing their own nomenclature, definitions, severity levels, and measurement methods. It also allows a common understanding among practitioners of the definition of pavement distress features.
+The manual is divided into three sections, each focusing on a particular type of pavement:
+(1) asphalt concrete-surfaced, (2) jointed portland cement concrete (PCC), and (3) continuously reinforced PCC. Each distress is clearly labeled, described, and illustrated.
+
+Jorge E. Pagán-Ortiz
+
+Director, Office of Infrastructure
+
+Research and Development
+Notice
+This document is disseminated under the sponsorship of the U.S. Department of Transportation in the interest of information exchange. The U.S. Government assumes no liability for its contents or use thereof. This report does not constitute a standard, specification, or regulation.
+The U.S. Government does not endorse products or manufacturers. Trade and manufacturers' names appear in this report only because they are considered essential to the object of the document.
+Quality Assurance Statement
+The Federal Highway Administration (FHWA) provides high-quality information to serve Government, industry, and the public in a manner that promotes public understanding.
+Standards and policies are used to ensure and maximize the quality, objectivity, utility, and integrity of its information. FHWA periodically reviews quality issues and adjusts its programs and processes to ensure continuous quality improvement.
+Foreword
+
+[p. 3]
+1. Report No.
+FHWA-HRT-13-092
+2. Government Accession No.
+3. Recipient's Catalog No.
+4. Title and Subtitle
+Distress Identification Manual for the Long-Term Pavement Performance Program (Fifth Revised Edition)
+5. Report Date
+May 2014
+6. Performing Organization Code
+7. Author(s)
+John S. Miller and William Y. Bellinger
+8. Performing Organization Report No.
+9. Performing Organization Name and Address
+Office of Infrastructure Research and Development
+Federal Highway Administration
+6300 Georgetown Pike
+McLean, VA 22101-2296
+10. Work Unit No. (TRAIS)
+11. Contract or Grant No.
+12. Sponsoring Agency Name and Address
+Office of Infrastructure Research and Development
+Federal Highway Administration
+6300 Georgetown Pike
+McLean, VA 22101-2296
+13. Type of Report and Period Covered
+Manual
+14. Sponsoring Agency Code
+15. Supplementary Notes
+The Technical Consultant was Aramis López.
+16. Abstract
+Accurate, consistent, and repeatable distress evaluation surveys can be performed by using the Distress Identification Manual for the Long-Term Pavement Performance Program. Color photographs and drawings illustrate the distresses found in three basic pavement types: asphalt concrete-surfaced, jointed (plain and reinforced) portland cement concrete, and continuously reinforced concrete. Drawings of the distress types provide a reference to assess their severity. Methods for measuring the size of distresses and for assigning severity levels are given. The manual also describes how to conduct the distress survey and measure cracks in the pavement. Sample forms for recording and reporting the data are included. The manual also tells how to calibrate and operate fault measurement devices.
+17. Key Word
+Distress, LTPP, Pavement, Cracking, Rutting, Faulting
+18. Distribution Statement
+Unlimited
+19. Security Classif. (of this report)
+Unclassified
+20. Security Classif. (of this page)
+Unclassified
+21. No. of Pages
+142
+22. Price
+Form DOT F 1700.7 (8-72)
+Reproduction of completed pages authorized i
+
+[p. 6]
+iv
+A. Cracking / 61
+1. Durability Cracking (“D” Cracking)
+2. Longitudinal Cracking
+3. Transverse Cracking
+B. Surface Defects / 67
+4. Map Cracking and Scaling
+4a. Map Cracking 4b. Scaling
+5. Polished Aggregate
+6. Popouts
+C. Miscellaneous Distresses / 71
+7. Blowups
+8. Transverse Construction Joint
+
+Deterioration
+9. Lane-to-Shoulder Dropoff
+10. Lane-to-Shoulder Separation
+11. Patch/Patch Deterioration
+12. Punchouts
+13. Spalling of Longitudinal Joints
+14. Water Bleeding and Pumping
+15. Longitudinal Joint Seal Damage
+DISTRESSES FOR PAVEMENTS WITH CONTINUOUSLY REINFORCED
+CONCRETE SURFACES / 59
+GLOSSARY / 85
+MANUAL FOR DISTRESS SURVEYS / 87
+MANUAL FOR FAULTMETER MEASUREMENTS / 123
+PROFILE MEASUREMENTS / 129
+3
+A
+B
+C
+
+[p. 7]
+List of Figures v
+FIGURE 1
+Measuring Crack Width in ACPs / 3
+FIGURE 2
+Effect on Severity Level of Block Cracking due to Associated Random Cracking / 3
+FIGURE 3
+Distress Type ACP 1—Fatigue Cracking / 4
+FIGURE 4
+Distress Type ACP 1—Chicken Wire/
+Alligator Pattern Cracking Typical in Fatigue
+Cracking / 5
+FIGURE 5
+Distress Type ACP 1—Low Severity Fatigue
+Cracking / 5
+FIGURE 6
+Distress Type ACP 1—Moderate Severity
+Fatigue Cracking / 5
+FIGURE 7
+Distress Type ACP 1—High Severity Fatigue
+Cracking with Spalled Interconnected
+Cracks / 5
+FIGURE 8
+Distress Type ACP 2—Block Cracking / 6
+FIGURE 9
+Distress Type ACP 2—Block Cracking with
+Fatigue Cracking in the Wheel Paths / 6
+FIGURE 10
+Distress Type ACP 2—High Severity Block
+Cracking / 6
+FIGURE 11
+Distress Type ACP 3—Edge Cracking / 7
+FIGURE 12
+Distress Type ACP 3—Low Severity Edge
+Cracking / 7
+FIGURE 13
+Distress Type ACP 4—Longitudinal
+Cracking / 8
+FIGURE 14
+Distress Type ACP 4a—Moderate Severity
+Longitudinal Cracking in the Wheel Path / 9
+FIGURE 15
+Distress Type ACP 4b—High Severity Longitudinal Cracking not in the Wheel Path / 9
+FIGURE 16
+Distress Type ACP 5—Reflection Cracking at Joints / 10
+FIGURE 17
+Distress Type ACP 5—High Severity
+Reflection Cracking at Joints / 11
+FIGURE 18
+Distress Type ACP 6—Transverse Cracking
+ACPs / 12
+FIGURE 19
+Distress Type ACP 6—Low Severity
+Transverse Cracking / 13
+FIGURE 20
+Distress Type ACP 6—Moderate Severity
+Transverse Cracking / 13
+FIGURE 21
+Distress Type ACP 6—High Severity
+Transverse Cracking / 13
+FIGURE 22
+Distress Type ACP 7—Patch/Patch
+Deterioration / 16
+FIGURE 23
+Distress Type ACP 7—Low Severity Patch / 17
+FIGURE 24
+Distress Type ACP 7—Low Severity Patch / 17
+FIGURE 25
+Distress Type ACP 7—High Severity Patch / 17
+FIGURE 26
+Distress Type ACP 8—Potholes / 18
+FIGURE 27
+Distress Type ACP 8—Low Severity Pothole / 19
+FIGURE 28
+Distress Type ACP 8—Moderate Severity
+Pothole / 19
+FIGURE 29
+Distress Type ACP 8—Moderate Severity
+Pothole, Close-up View / 19
+
+[p. 8]
+vi
+FIGURE 30
+Distress Type ACP 8—High Severity
+Pothole, Close-up View / 19
+FIGURE 31
+Distress Type ACP 9—Rutting / 22
+FIGURE 32
+Distress Type ACP 9—Rutting / 22
+FIGURE 33
+Distress Type ACP 9—Standing Water in
+Ruts / 22
+FIGURE 34
+Distress Type ACP 10—Shoving / 23
+FIGURE 35
+Distress Type ACP 10—Shoving in
+Pavement Surface / 23
+FIGURE 36
+Distress Type ACP 11—Discoloration / 26
+FIGURE 37
+Distress Type ACP 11—Loss of Texture / 26
+FIGURE 38
+Distress Type ACP 11—Aggregate
+Obscured / 26
+FIGURE 39
+Distress Type ACP 12—Polished Aggregate / 27
+FIGURE 40
+Distress Type ACP 13—Loss of Fine
+Aggregate / 28
+FIGURE 41
+Distress Type ACP 13—Loss of Fine and
+Some Coarse Aggregate / 28
+FIGURE 42
+Distress Type ACP 13—Loss of Coarse
+Aggregate / 28
+FIGURE 43
+Distress Type ACP 14—Lane-to-Shoulder
+Dropoff / 30
+FIGURE 44
+Distress Type ACP 14—Lane-to-Shoulder
+Dropoff / 30
+FIGURE 45
+Distress Type ACP 15—Water Bleeding and
+Pumping / 31
+FIGURE 46
+Distress Type ACP 15—Fine Material Left on
+Surface by Water Bleeding and Pumping / 31
+FIGURE 47
+Measuring Widths of Spalls and Cracks in
+JCP / 35
+FIGURE 48
+Distress Type JCP 1—Corner Breaks/ 36
+FIGURE 49
+Distress Type JCP 1—Low Severity Corner
+Break / 36
+FIGURE 50
+Distress Type JCP 1—Moderate Severity
+Corner Break / 36
+FIGURE 51
+Distress Type JCP 2—“D” Cracking / 37
+FIGURE 52
+Distress Type JCP 2—Moderate Severity “D”
+Cracking with Well-Defined Pattern / 37
+FIGURE 53
+Distress Type JCP 2—High Severity “D”
+Cracking with Loose and Missing Material / 37
+FIGURE 54
+Distress Type JCP 3—Longitudinal Cracking / 38
+FIGURE 55
+Distress Type JCP 3—Low Severity
+Longitudinal Cracking / 39
+FIGURE 56
+Distress Type JCP 3—Moderate Severity
+Longitudinal Cracking / 39
+FIGURE 57
+Distress Type JCP 3—High Severity
+Longitudinal Cracking / 39
+FIGURE 58
+Distress Type JCP 4—Transverse Cracking / 40
+FIGURE 59
+Distress Type JCP 4—Moderate Severity
+Transverse Cracking / 41
+FIGURE 60
+Distress Type JCP 4—High Severity
+Transverse Cracking / 41
+
+[p. 9]
+vii
+FIGURE 61
+Distress Type JCP 5—Low Severity Joint
+Seal Damage / 44
+FIGURE 62
+Distress Type JCP 5—Moderate Severity
+Joint Seal Damage / 44
+FIGURE 63
+Distress Type JCP 6—Spalling of
+Longitudinal Joints / 45
+FIGURE 64
+Distress Type JCP 6—Low Severity Spalling of Longitudinal Joint / 45
+FIGURE 65
+Distress Type JCP 6—High Severity Spalling of Longitudinal Joint / 45
+FIGURE 66
+Distress Type JCP 7—Spalling of Transverse
+Joints / 46
+FIGURE 67
+Distress Type JCP 7—Moderate Severity
+Spalling of Transverse Joint, Far View / 46
+FIGURE 68
+Distress Type JCP 7—Moderate Severity
+Spalling of Transverse Joint, Close-up
+View / 46
+FIGURE 69
+Distress Type JCP 8a—Map Cracking / 48
+FIGURE 70
+Distress Type JCP 8b—Scaling / 48
+FIGURE 71
+Distress Type JCP 8b—Scaling, Close-up
+View / 48
+FIGURE 72
+Distress Type JCP 9—Polished Aggregate
+/ 49
+FIGURE 73
+Distress Type JCP 10—Popouts / 50
+FIGURE 74
+Distress Type JCP 10—A Popout / 50
+FIGURE 75
+Distress Type JCP 11—Blowups / 52
+FIGURE 76
+Distress Type JCP 11—A Blowup / 52
+FIGURE 77
+Distress Type JCP 12—Faulting of
+Transverse Joints and Cracks / 53
+FIGURE 78
+Distress Type JCP 12—Faulting of
+Transverse Cracks / 53
+FIGURE 79
+Distress Type JCP 13—Lane-to-Shoulder
+Dropoff / 54
+FIGURE 80
+Distress Type JCP 13—Lane-to-Shoulder
+Dropoff / 54
+FIGURE 81
+Distress Type JCP 14—Lane-to-Shoulder
+Separation / 55
+FIGURE 82
+Distress Type JCP 14—Poorly Sealed Laneto-Shoulder Separation / 55
+FIGURE 83
+Distress Type JCP 14—Well-Sealed Lane-to-
+Shoulder Separation / 55
+FIGURE 84
+Distress Type JCP 15—Patch/Patch
+Deterioration / 56
+FIGURE 85
+Distress Type JCP 15—Small, Low Severity
+AC Patch / 56
+FIGURE 86
+Distress Type JCP 15—Large, Low Severity
+AC Patch / 57
+FIGURE 87
+Distress Type JCP 15—Large, High Severity
+AC Patch / 57
+FIGURE 88
+Distress Type JCP 15—Large, Low Severity
+PCC Patch / 57
+FIGURE 89
+Distress Type JCP 16—Water Bleeding and
+Pumping / 58
+FIGURE 90
+Distress Type CRCP 1—“D” Cracking / 62
+
+[p. 10]
+viii
+FIGURE 91
+Distress Type CRCP 1—Moderate Severity “D” Cracking at Transverse Crack / 62
+FIGURE 92
+Distress Type CRCP 1—High Severity “D”
+Cracking at Longitudinal Joint / 62
+FIGURE 93
+Distress Type CRCP 2—Longitudinal
+Cracking / 63
+FIGURE 94
+Distress Type CRCP 2—Low Severity
+Longitudinal Cracking / 63
+FIGURE 95
+Distress Type CRCP 2—High Severity
+Longitudinal Cracking / 63
+FIGURE 96
+Distress Type CRCP 3—Transverse Cracking
+/ 64
+FIGURE 97
+Distress Type CRCP 3—Transverse Cracking
+Pattern / 64
+FIGURE 98
+Distress Type CRCP 3—Low Severity
+Transverse Cracking / 65
+FIGURE 99
+Distress Type CRCP 3—Moderate Severity
+Transverse Cracking / 65
+FIGURE 100
+Distress Type CRCP 3—High Severity
+Transverse Cracking / 65
+FIGURE 101
+Distress Type CRCP 4a—Map Cracking
+Attributable to Alkali-Silica Reactivity / 68
+FIGURE 102
+Distress Type CRCP 4b—Scaling / 68
+FIGURE 103
+Distress Type CRCP 5—Polished Aggregate
+/ 69
+FIGURE 104
+Distress Type CRCP 6—Popouts / 70
+FIGURE 105
+Distress Type CRCP 6—Popouts / 70
+FIGURE 106
+Distress Type CRCP 7—Blowups / 72
+FIGURE 107
+Distress Type CRCP 7—A Blowup / 72
+FIGURE 108
+Distress Type CRCP 7—Close-up View of a
+Blowup / 72
+FIGURE 109
+Distress Type CRCP 7—Exposed Steel in a
+Blowup / 72
+FIGURE 110
+Distress Type CRCP 8—Transverse
+Construction Joint Deterioration / 73
+FIGURE 111
+Distress Type CRCP 8—Low Severity
+Transverse Construction Joint Deterioration
+/ 73
+FIGURE 112
+Distress Type CRCP 8—Moderate Severity
+Transverse Construction Joint Deterioration
+/ 73
+FIGURE 113
+Distress Type CRCP 8—Low Severity
+Transverse Construction Joint Deterioration
+/ 73
+FIGURE 114
+Distress Type CRCP 9—Lane-to-Shoulder
+Dropoff / 74
+FIGURE 115
+Distress Type CRCP 9—Lane-to-Shoulder
+Dropoff / 74
+FIGURE 116
+Distress Type CRCP 10—Lane-to-Shoulder
+Separation / 75
+FIGURE 117
+Distress Type CRCP 10—Close-up View of a Lane-to-Shoulder Separation / 75
+FIGURE 118
+Distress Type CRCP 11—Patch/Patch
+Deterioration / 76
+FIGURE 119
+Distress Type CRCP 11—Small, Low
+Severity AC Patch / 76
+
+[p. 11]
+ix
+FIGURE 120
+Distress Type CRCP 11—Low Severity AC
+Patch / 77
+FIGURE 121
+Distress Type CRCP 11—Moderate Severity
+AC Patch / 77
+FIGURE 122
+Distress Type CRCP 11—Low Severity PCC
+Patch / 77
+FIGURE 123
+Distress Type CRCP 12—Punchouts / 78
+FIGURE 124
+Distress Type CRCP 12—Low Severity
+Punchout / 78
+FIGURE 125
+Distress Type CRCP 12—Moderate Severity
+Punchouts / 79
+FIGURE 126
+Distress Type CRCP 12—High Severity
+Punchouts / 79
+FIGURE 127
+Distress Type CRCP 13—Spalling of
+Longitudinal Joints / 80
+FIGURE 128
+Distress Type CRCP 13—Close-up View of Low Severity Spalling of a Longitudinal Joint / 81
+FIGURE 129
+Distress Type CRCP 13—Low Severity
+Spalling of a Longitudinal Joint / 81
+FIGURE 130
+Distress Type CRCP 13—Moderate Severity
+Spalling of a Longitudinal Joint / 81
+FIGURE 131
+Distress Type CRCP 14—Water Bleeding and Pumping / 82
+FIGURE 132
+Distress Type CRCP 14—Close-up View of
+Water Bleeding and Pumping / 82
+FIGURE 133
+Distress Type CRCP 15—Longitudinal Joint
+Seal Damage / 83
+APPENDIX A
+FIGURE 134
+Test Section Limits for Surveys—Asphalt
+Surface / 89
+FIGURE 135
+Test Section Limits for Surveys—Concrete
+Surface / 89
+FIGURE 136
+Locating Wheel Paths in ACP / 91
+FIGURE 137
+Distress Map Symbols for ACPs / 92
+FIGURE 138
+Example Map of First 30.5 m of ACP
+Section / 92
+FIGURE 139
+Distress Map Symbols for JCPs / 94
+FIGURE 140
+Example Map of First 30.5 m of a JCP
+Section / 95
+FIGURE 141
+Distress Map Symbols for CRCPs / 97
+FIGURE 142
+Example Map of First 30.5 m of a CRCP
+Section / 98
+APPENDIX B
+FIGURE 143
+The Georgia Faultmeter in Use / 124
+LIST OF TABLES
+TABLE 1
+ACP Distress Types / 1
+TABLE 2
+JCP Distress Types / 33
+TABLE 3
+CRCP Distress Types / 59
+
+[p. 13]
+Preface xi
+The Strategic Highway Research Program (SHRP) was created as a 5-year program. The goals of SHRP's Long-Term Pavement Performance (LTPP) Program, however, required additional years of research. To meet these goals, LTPP was transferred from SHRP to the Federal Highway Administration (FHWA) of the U.S. Department of Transportation on July 1, 1992, in accordance with the mandate of the Intermodal Surface Transportation Efficiency Act of 1991.
+The first SHRP Distress Identification Manual for the Long-Term Pavement Performance Studies (DIM)
+(1987) was authored by Kurt D. Smith, Michael I. Darter, Kathleen T. Hall, and J. Brent Rauhut. Support for that work was provided by FHWA under Contract No. DTFH6185-C-0095 as part of a transition plan to support planned implementation of LTPP monitoring, pending SHRP funding authorization by Congress.
+A second DIM version (1990) was developed by Karen Benson, Humberto Castedo, and Dimitrios G. Goulias, with guidance and support from W. R. Hudson. Support for the revision work was provided by SHRP as a part of Contract No. SHRP-87-P001.
+Third and fourth versions were developed by John S. Miller, Richard Ben Rogers, and Gonzalo R. Rada, with guidance and support from William Yeadon Bellinger of FHWA. Guidance was also provided by the SHRP Distress Identification Manual Expert Task Group.
+Valuable information, materials, and technical support were provided by the National Association of Australian State Road Authorities; Ontario Ministry of Transportation and Communications; American Public Works Association; the Asphalt Institute; the Kentucky Transportation Cabinet; the Michigan Department of Transportation; the Mississippi State Highway Department; the Missouri Highway and Transportation Department; the North Carolina Department of Transportation; the Pennsylvania Department of Transportation;
+the Texas Department of Transportation; and the Washington State Department of Transportation.
+This fifth version is the result of many years of practical experience using the previous versions. It incorporates refinements, changes, and LTPP directives that have occurred over time.
+GUIDANCE TO LTPP USERS
+Please follow the guidelines in appendix A (“Manual for Distress Surveys”) to ensure the data collected will be comparable to other LTPP data. Sample data collection sheets are included in the appendix. As you evaluate a section of roadway, keep the manual handy to determine the type and severity of distress, and find the definition and illustration that best matches the pavement section being surveyed.
+Appendix B describes how to use the Georgia digital faultmeter.
+For more assistance in the identification of pavement distress, contact FHWA's LTPP program.
+
+[p. 14]
+xii
+GUIDANCE TO OTHER USERS
+As a pavement distress dictionary, this manual will improve communications within the pavement community by fostering more uniform and consistent definitions of pavement distress. Highway agencies, airports, parking facilities, and others with significant investment in pavements will benefit from adopting a standard distress language.
+Colleges and universities will use this manual in highway engineering courses. It also serves as a valuable training tool for highway agencies. Now when a distress is labeled “high severity fatigue cracking,” for example, it is clear exactly what is meant. Repairs can be planned and executed more efficiently, saving the highway agency crew time and money.
+Although not specifically designed as a pavement management tool, the Distress Identification Manual can play an important role in a State's pavement management program by ridding reports of inconsistencies and variations caused by a lack of standardized terminology.
+Most pavement management programs do not need to collect data at the level of detail and precision required for the LTPP program, nor are the severity levels used in the manual necessarily appropriate for all pavement management situations. Thus, you may choose to modify the procedures (but not the definitions) contained in the manual to meet your specific needs, taking into account the desired level of detail, accuracy and timeliness of information, available resources, and predominant types of distress within the study area.
+
+[p. 15]
+DISTRESSES
+FOR
+PAVEMENTS
+WITH
+ASPHALT
+CONCRETE
+SURFACES
+1
+This section covers asphalt concrete-surfaced pavements (ACP), including ACP overlays on either asphalt concrete (AC) or portland cement concrete (PCC) pavements. Each of the distresses has been grouped into one of the following categories:
+A. Cracking.
+B. Patching and potholes.
+C. Surface deformation.
+D. Surface defects.
+E. Miscellaneous distresses.
+Table 1 summarizes the various types of distress and unit of measurement. Some distresses also have defined severity levels.
+TABLE 1. ACP Distress Types.
+DISTRESS TYPE
+UNIT OF MEASURE
+DEFINED
+SEVERITY
+LEVELS?
+A. Cracking / 3
+
+1. Fatigue cracking
+Square meters
+Yes
+
+2. Block cracking
+Square meters
+Yes
+
+3. Edge cracking
+Meters
+Yes
+
+4. Longitudinal cracking
+
+4a. Wheel path longitudinal cracking
+Meters
+Yes
+
+4b. Non-wheel path longitudinal cracking
+Meters
+Yes
+
+5. Reflection cracking at joints
+Not measured
+N/A
+
+6. Transverse cracking
+Number, meters
+Yes
+B. Patching and Potholes / 15
+
+7. Patch/patch deterioration
+Number, square meters
+Yes
+
+8. Potholes
+Number, square meters
+Yes
+C. Surface Deformation / 21
+
+9. Rutting
+Millimeters
+No
+
+10. Shoving
+Number, square meters
+No
+D. Surface Defects / 25
+
+11. Bleeding
+Square meters
+No
+
+12. Polished aggregate
+Square meters
+No
+
+13. Raveling
+Square meters
+No
+E. Miscellaneous Distresses / 29
+
+14. Lane-to-shoulder dropoff
+Not measured
+N/A
+
+15. Water bleeding and pumping
+Number, meters
+No
+
+[p. 17]
+A
+Cracking 3
+This section includes the following distresses:
+
+1. Fatigue cracking.
+
+2. Block cracking.
+
+3. Edge cracking.
+
+4. Longitudinal cracking.
+
+4a. Wheel path longitudinal cracking.
+
+4b. Non-wheel path longitudinal cracking.
+
+5. Reflection cracking at joints.
+
+6. Transverse cracking.
+Measurement of crack width is illustrated in figure 1. Figure 2 depicts the effect on severity level of a crack, in this case block cracking, due to associated random cracking.
+Figure 1
+Measuring Crack Width in ACPs.
+Figure 2
+Effect on Severity Level of Block Cracking due to Associated Random Cracking.
+
+[p. 18]
+ASPHALT
+CONCRETE
+SURFACES
+1
+FATIGUE CRACKING
+Description
+Occurs in areas subjected to repeated traffic loadings (wheel paths). Can be a series of interconnected cracks in early stages of development. Develops into many-sided, sharpangled pieces, usually less than 0.3 m on the longest side, characteristically with a chicken wire/alligator pattern in later stages.
+Must have a quantifiable area.
+Severity Levels
+LOW
+An area of cracks with no or only a few connecting cracks; cracks are not spalled or sealed; and pumping is not evident.
+MODERATE
+An area of interconnected cracks forming a complete pattern; cracks may be slightly spalled; cracks may be sealed; and pumping is not evident.
+HIGH
+An area of moderately or severely spalled interconnected cracks forming a complete pattern; pieces may move when subjected to traffic; cracks may be sealed; and pumping may be evident.
+How to Measure
+Record affected area at each severity level in square meters. If different severity levels existing within an area cannot be distinguished, rate the entire area at the highest severity present. Where fatigue and edge cracking exist and overlap in the same area, both should be rated.
+Note: An area of short closely spaced (< 0.3 m) transverse cracks in the wheel path should be recorded as fatigue cracking.
+Figure 3
+Distress Type ACP 1—Fatigue Cracking.
+
+[p. 19]
+Cracking
+Figure 4
+Distress Type ACP 1—Chicken Wire/
+Alligator Pattern Cracking Typical in
+Fatigue Cracking.
+Figure 5
+Distress Type ACP 1—Low Severity
+Fatigue Cracking.
+Figure 6
+Distress Type ACP 1—Moderate Severity
+Fatigue Cracking.
+Figure 7
+Distress Type ACP 1—High Severity
+Fatigue Cracking with Spalled
+Interconnected Cracks.
+
+[p. 20]
+BLOCK CRACKING
+Description
+A pattern of cracks that divides the pavement into approximately rectangular pieces.
+Rectangular blocks range in size from approximately 0.1 to 10 m2.
+Severity Levels
+LOW
+Cracks with a mean width ≤ 6 mm or sealed cracks with sealant material in good condition and with a width that cannot be determined.
+MODERATE
+Cracks with a mean width > 6 mm and ≤ 19 mm or any crack with a mean width ≤ 19 mm and adjacent low severity random cracking. Random cracking should be considered adjacent when it is within 0.3 m of the primary distress.
+HIGH
+Cracks with a mean width > 19 mm or any crack with a mean width ≤ 19 mm and adjacent moderate to high severity random cracking. Random cracking should be considered adjacent when it is within 0.3 m of the primary distress.
+How to Measure
+Record the affected area at each severity level in square meters. If fatigue cracking exists within the block cracking area, the area of block cracking is reduced by the area of fatigue cracking. Longitudinal boundary cracks in a block cracking area are not rated separately.
+An occurrence should be at least 15 m long before rating as block cracking. Where block and edge cracking exist and overlap, both should be rated.
+6
+ASPHALT
+CONCRETE
+SURFACES
+2
+Figure 8
+Distress Type ACP 2—Block Cracking.
+Figure 9
+Distress Type ACP 2—Block Cracking with Fatigue Cracking in the Wheel Paths.
+Figure 10
+Distress Type ACP 2—High Severity
+Block Cracking.
+
+[p. 21]
+Cracking
+EDGE CRACKING
+Description
+Applies only to pavements with unpaved shoulders. Crescent-shaped cracks or fairly continuous cracks which intersect the pavement edge and are located within 0.6 m of the pavement edge adjacent to the shoulder. Includes longitudinal cracks outside of the wheel path and within 0.6 m of the pavement edge.
+Severity Levels
+LOW
+Cracks with no breakup or loss of material.
+MODERATE
+Cracks with some breakup and loss of material for up to 10 percent of the length of the affected portion of the pavement.
+HIGH
+Cracks with considerable breakup and loss of material for more than 10 percent of the length of the affected portion of the pavement.
+How to Measure
+Record length in meters of pavement edge affected at each severity level. The combined quantity of edge cracking cannot exceed the length of the section. Where edge cracking and fatigue or block cracking exist and overlap in the same area, both should be rated.
+Figure 11
+Distress Type ACP 3—Edge Cracking.
+Figure 12
+Distress Type ACP 3—Low Severity Edge Cracking.
+
+[p. 22]
+ASPHALT
+CONCRETE
+SURFACES
+4
+LONGITUDINAL CRACKING
+Description
+Cracks predominantly parallel to pavement centerline. Location within the lane (wheel path versus non-wheel path) is significant.
+Severity levels
+LOW
+A crack with a mean width ≤ 6 mm or a sealed crack with sealant material in good condition and with a width that cannot be determined.
+MODERATE
+Any crack with a mean width > 6 mm and ≤ 19 mm or any crack with a mean width ≤ 19 mm and adjacent low severity random cracking. Random cracking should be considered adjacent when it is within 0.3 m of the primary distress.
+HIGH
+Any crack with a mean width > 19 mm or any crack with a mean width ≤ 19 mm and adjacent moderate to high severity random cracking. Random cracking should be considered adjacent when it is within 0.3 m of the primary distress.
+Figure 13
+Distress Type ACP 4—Longitudinal Cracking.
+
+[p. 23]
+Cracking
+How to Measure
+Record separately.
+4A. WHEEL PATH LONGITUDINAL CRACKING
+Record the length in meters of longitudinal cracking within the defined wheel paths at each severity level.
+Record the length in meters of longitudinal cracking with sealant in good condition at each severity level. Sealant is not considered to be in good condition unless at least 1 m of continuous sealant in good condition is present. In cases where a crack is less than 1 m in length, the sealant must be present and in good condition over the entire length of the crack. Any wheel path longitudinal crack that has associated random cracking or meanders and has a quantifiable area is rated as fatigue cracking.
+4B. NON-WHEEL PATH LONGITUDINAL CRACKING
+Record the length in meters of longitudinal cracking not located in the defined wheel paths at each severity level.
+Record the length in meters of longitudinal cracking with sealant in good condition at each severity level. Sealant is not considered to be in good condition unless at least 1 m of continuous sealant in good condition is present.
+Figure 14
+Distress Type ACP 4a—Moderate Severity Longitudinal Cracking in the Wheel Path.
+Figure 15
+Distress Type ACP 4b—High Severity Longitudinal Cracking not in the Wheel Path.
+
+[p. 24]
+ASPHALT
+CONCRETE
+SURFACES
+5
+REFLECTION CRACKING AT JOINTS
+Description
+Cracks in AC overlay surfaces that occur over joints in concrete pavements.
+Note: The slab dimensions beneath the AC surface must be known to identify reflection cracks at joints.
+Severity Levels
+LOW
+An unsealed crack with a mean width ≤ 6 mm or a sealed crack with sealant material in good condition and with a width that cannot be determined.
+MODERATE
+Any crack with a mean width > 6 mm and ≤ 19 mm or any crack with a mean width ≤19 mm and adjacent low severity random cracking.
+HIGH
+Any crack with a mean width > 19 mm or any crack with a mean width ≤ 19 mm and adjacent moderate to high severity random cracking.
+Figure 16
+Distress Type ACP 5—Reflection Cracking at Joints.
+
+[p. 25]
+Cracking
+How to Measure
+Recorded as longitudinal cracking (ACP 4) or transverse cracking (ACP 6) on LTPP surveys.
+Figure 17
+Distress Type ACP 5—High Severity Reflection Cracking at Joints.
+
+[p. 26]
+ASPHALT
+CONCRETE
+SURFACES
+6
+TRANSVERSE CRACKING
+Description
+Cracks that are predominantly perpendicular to pavement centerline.
+Severity Levels
+LOW
+An unsealed crack with a mean width ≤ 6 mm or a sealed crack with sealant material in good condition and with a width that cannot be determined.
+MODERATE
+Any crack with a mean width > 6 mm and ≤ 19 mm or any crack with a mean width ≤ 19 mm and adjacent low severity random cracking. Random cracking should be considered adjacent when it is within 0.3 m of the primary distress.
+HIGH
+Any crack with a mean width > 19 mm or any crack with a mean width ≤ 19 mm and adjacent moderate to high severity random cracking. Random cracking should be considered adjacent when it is within 0.3 m of the primary distress.
+Figure 18
+Distress Type ACP 6—Transverse Cracking ACPs.
+
+[p. 27]
+Cracking
+How to Measure
+Record the number and length (in meters) of transverse cracks at each severity level. Rate the entire transverse crack at the highest severity level present for at least 10 percent of the total length of the crack.
+Also record length (in meters) of transverse cracks with sealant in good condition at each severity level.
+Note: The length recorded is the total length of the well-sealed crack and is assigned to the severity level of the crack. Record only when the sealant is in good condition for at least 90 percent of the length of the crack.
+If the transverse crack extends through an area of fatigue cracking, the length of the crack within the fatigue area is not counted. The crack is treated as a single transverse crack but at a reduced length. Transverse saw cuts on a “saw and seal” treated AC test section are rated as transverse cracks.
+Cracks less than 0.3 m in length are not recorded.
+Figure 19
+Distress Type ACP 6—Low Severity
+Transverse Cracking.
+Figure 20
+Distress Type ACP 6—Moderate Severity Transverse
+Cracking.
+Figure 21
+Distress Type ACP 6—High Severity Transverse
+Cracking.
+
+[p. 29]
+B
+Patching and
+Potholes 15
+This section includes the following distresses:
+
+7. Patch/patch deterioration.
+
+8. Potholes.
+
+[p. 30]
+ASPHALT
+CONCRETE
+SURFACES
+7
+PATCH/PATCH DETERIORATION
+Description
+Portion of pavement surface greater than or equal to 0.1 m2 that has been removed and replaced or additional material applied to the pavement after original construction.
+Severity Levels
+LOW
+Patch has, at most, low severity distress of any type including rutting < 6 mm. Pumping is not evident, and there is no loss of patching material.
+MODERATE
+Patch has moderate severity distress of any type or rutting from 6 to 12 mm; pumping is not evident.
+HIGH
+Patch has high severity distress of any type including rutting > 12 mm, or the patch has additional different patch material within it. Pumping may be evident.
+How to Measure
+Record the number of patches and square meters of affected surface area at each severity level. Surface patches are limited to those with patching material that contain aggregate.
+If a surface patch has worn away, revealing an underlying distress, or if the underlying distress has reflected through the surface patch and the distress' existence can be verified on prior surveys, then also rate the distress. Any new distress in the original pavement layer in the patched area should also be rated. Distresses in the patched area affect the severity level of the patch. Patches with no distress are rated low severity. Applications of sealant without aggregate are not to be recorded as patches. These should be drawn on the map sheets and recorded on the distress survey sheets as distress type 16 Other provided that they exceed 0.1 m2.
+Note: Any distress in the boundary of the patch is included in rating the patch. Rutting (settlement) may be at the perimeter or interior of the patch.
+Figure 22
+Distress Type ACP 7—Patch/Patch Deterioration.
+
+[p. 31]
+Patching and
+Potholes
+Figure 23
+Distress Type ACP 7—Low Severity Patch.
+Figure 24
+Distress Type ACP 7—Low Severity Patch.
+Figure 25
+Distress Type ACP 7—High Severity Patch.
+
+[p. 32]
+ASPHALT
+CONCRETE
+SURFACES
+8
+POTHOLES
+Description
+Bowl-shaped holes of various sizes in the pavement surface. Minimum plan dimension is 150 mm. Circular potholes should have a minimum diameter of 150 mm. A 150-mmdiameter circle should fit inside irregular-shaped potholes.
+Severity Levels
+LOW
+< 25 mm deep.
+MODERATE
+25 to 50 mm deep.
+HIGH
+> 50 mm deep.
+How to Measure
+Record the number of potholes and square meters of affected area at each severity level.
+Pothole depth is the maximum depth below pavement surface. If a pothole occurs within an area of fatigue cracking, the area of fatigue cracking is reduced by the area of the pothole. The minimum area for a pothole is about 0.02 m². The actual plan dimensions and the actual area of the pothole shall be recorded on the distress map sheets. Potholes not meeting minimum plan dimension are to be drawn on the distress map sheets and commented on but not included in the measurement summaries.
+Figure 26
+Distress Type ACP 8—Potholes.
+
+[p. 33]
+Patching and
+Potholes
+Figure 27
+Distress Type ACP 8—Low Severity Pothole.
+Figure 28
+Distress Type ACP 8—Moderate
+Severity Pothole.
+Figure 29
+Distress Type ACP 8—Moderate Severity Pothole, Close-up View.
+Figure 30
+Distress Type ACP 8—High Severity Pothole, Close-up View.
+
+[p. 35]
+C
+Surface
+Deformation 21
+This section includes the following types of surface deformations:
+
+9. Rutting.
+
+10. Shoving.
+
+[p. 36]
+ASPHALT
+CONCRETE
+SURFACES
+9
+RUTTING
+Description
+A longitudinal surface depression in the wheel path. It may have associated transverse displacement.
+Severity Levels
+Not applicable. Severity levels could be defined by categorizing the measurements taken.
+A record of the measurements taken is much more desirable because it is more accurate and repeatable than are severity levels.
+How to Measure
+Specific Pavement Studies (SPS)-3 only. Record the maximum rut depth to the nearest millimeter at 15.25-m intervals for each wheel path, as measured with a 1.2-m straight edge.
+All other LTPP sections: Transverse profile is measured with a Dipstick® profiler at 15.25-m intervals.
+Figure 31
+Distress Type ACP 9—Rutting.
+Figure 32
+Distress Type ACP 9—Rutting.
+Figure 33
+Distress Type ACP 9—Standing Water in Ruts.
+
+[p. 37]
+Surface
+Deformation
+SHOVING
+Description
+A longitudinal displacement of a localized area of the pavement surface. It is generally caused by braking or accelerating vehicles and is usually located on hills or curves or at intersections. It may have associated vertical displacement.
+Severity Levels
+Not applicable. However, severity levels can be defined by the relative effect of shoving on ride quality.
+How to Measure
+Record the number of occurrences and square meters of affected surface area.
+Figure 34
+Distress Type ACP 10—Shoving.
+Figure 35
+Distress Type ACP 10—Shoving in Pavement Surface.
+
+[p. 39]
+D
+Surface Defects 25
+This section includes the following types of surface defects:
+
+11. Bleeding.
+
+12. Polished aggregate.
+
+13. Raveling.
+Note: Surface defects can coexist with cracking distresses.
+
+[p. 40]
+BLEEDING
+Description
+Excess bituminous binder occurring on the pavement surface, usually found in the wheel paths. May range from a surface discolored relative to the remainder of the pavement, to a surface that is losing surface texture because of excess asphalt, to a condition where the aggregate may be obscured by excess asphalt possibly with a shiny, glass-like, reflective surface that may be tacky to the touch.
+Severity Levels
+Not applicable. The presence of bleeding indicates potential mixture-related performance problems. Extent is sufficient to monitor any progression.
+How to Measure
+Record square meters of surface area that are affected.
+Note: Preventative maintenance treatments (i.e., slurry seals, chip seals, fog seals, etc.)
+exhibit bleeding characteristics at times. These occurrences should be noted but not rated as bleeding.
+26
+ASPHALT
+CONCRETE
+SURFACES
+11
+Figure 36
+Distress Type ACP 11—Discoloration.
+Figure 37
+Distress Type ACP 11—Loss of Texture.
+Figure 38
+Distress Type ACP 11— Aggregate
+Obscured.
+
+[p. 41]
+Surface Defects
+POLISHED AGGREGATE
+Description
+Surface binder worn away to expose coarse aggregate.
+Severity Levels
+Not applicable. However, the degree of polishing may be reflected in a reduction of surface friction.
+How to Measure
+Record square meters of the affected surface area. Polished aggregate should not be rated on test sections that have received a preventive maintenance treatment that has covered the original pavement surface.
+Figure 39
+Distress Type ACP 12—Polished Aggregate.
+
+[p. 42]
+ASPHALT
+CONCRETE
+SURFACES
+13
+RAVELING
+Description
+Wearing away of the pavement surface caused by the dislodging of aggregate particles and loss of asphalt binder. Raveling ranges from loss of fines to loss of some coarse aggregate and ultimately to a very rough and pitted surface with obvious loss of aggregate.
+Severity Levels
+Not applicable. The presence of raveling indicates potential mixture-related performance problems. Extent is sufficient to monitor any progression.
+How to Measure
+Record square meters of the affected surface. Raveling should not be rated on chip seals.
+Figure 40
+Distress Type ACP 13—Loss of Fine Aggregate.
+Figure 41
+Distress Type ACP 13—Loss of Fine and Some
+Coarse Aggregate.
+Figure 42
+Distress Type ACP 13—Loss of Coarse Aggregate.
+
+[p. 43]
+E
+Miscellaneous
+Distresses 29
+This section includes the following distresses:
+
+14. Lane-to-shoulder dropoff.
+
+15. Water bleeding and pumping.
+
+[p. 44]
+ASPHALT
+CONCRETE
+SURFACES
+14
+LANE-TO-SHOULDER DROPOFF
+Description
+Difference in elevation between the traveled surface and the outside shoulder.
+Typically occurs when the outside shoulder settles as a result of pavement layer material differences.
+Severity Level
+Not applicable. Severity levels could be defined by categorizing the measurements taken.
+A record of the measurements taken is much more desirable, however, because it is more accurate and repeatable than severity levels.
+How to Measure
+Not recorded in LTPP surveys, but should be noted.
+Figure 43
+Distress Type ACP 14—Lane-to-Shoulder Dropoff.
+Figure 44
+Distress Type ACP 14—Lane-to-Shoulder Dropoff.
+
+[p. 45]
+Miscellaneous
+Distresses 15
+WATER BLEEDING AND PUMPING
+Description
+Seeping or ejection of water from beneath the pavement through cracks. In some cases, it is detectable by deposits of fine material left on the pavement surface, which were eroded (pumped) from the support layers and have stained the surface.
+Severity Levels
+Not applicable. Severity levels are not used because the amount and degree of water bleeding and pumping changes with varying moisture conditions.
+How to Measure
+Record the number of occurrences of water bleeding and pumping and the length of affected pavement, with a minimum length of 1 m.
+Note: Water bleeding and pumping is measured longitudinally along the length of the test section. The combined length of water bleeding and pumping cannot exceed the length of the test section.
+Figure 45
+Distress Type ACP 15—Water Bleeding and Pumping.
+Figure 46
+Distress Type ACP 15—Fine Material Left on Surface by Water Bleeding and Pumping.
+
+[p. 47]
+DISTRESSES
+FOR
+PAVEMENTS
+WITH
+JOINTED
+PORTLAND
+CEMENT
+CONCRETE
+SURFACES
+This section covers jointed (plain and reinforced) portland cement concrete-surfaced pavements (JCP), including jointed concrete overlays on PCC pavements. Each of the distresses has been grouped into one of the following categories:
+A. Cracking.
+B. Joint deficiencies.
+C. Surface defects.
+D. Miscellaneous distresses.
+Table 2 summarizes the various types of distress and unit of measurement. Some distresses also have defined severity levels.
+TABLE 2. JCP Distress Types.
+DISTRESS TYPE
+UNIT OF MEASURE
+DEFINED
+SEVERITY
+LEVELS?
+A. Cracking / 35
+
+1. Corner breaks
+Number
+Yes
+
+2. Durability cracking (“D” cracking)
+Number of slabs, square meters
+Yes
+
+3. Longitudinal cracking
+Meters
+Yes
+
+4. Transverse cracking
+Number, meters
+Yes
+B. Joint Deficiencies / 43
+
+5. Joint seal damage
+
+5a. Transverse joint seal damage
+Number
+Yes
+
+5b. Longitudinal joint seal damage
+Number, meters
+No
+
+6. Spalling of longitudinal joints
+Meters
+Yes
+
+7. Spalling of transverse joints
+Number, meters
+Yes
+C. Surface Defects / 47
+
+8. Map cracking and scaling
+
+8a. Map cracking
+Number, square meters
+No
+
+8b. Scaling
+Number, square meters
+No
+
+9. Polished aggregate
+Square meters
+No
+
+10. Popouts
+Not measured
+N/A
+D. Miscellaneous Distress / 51
+
+11. Blowups
+Number
+No
+
+12. Faulting of transverse joints and cracks
+Millimeters
+No
+
+13. Lane-to-shoulder dropoff
+Millimeters
+No
+
+14. Lane-to-shoulder separation
+Millimeters
+No
+
+15. Patch/patch deterioration
+Number, square meters
+Yes
+
+16. Water bleeding and pumping
+Number, meters
+No
+
+[p. 49]
+A
+Cracking 35
+This section includes the following types of distresses:
+
+1. Corner breaks.
+
+2. Durability cracking (“D” cracking).
+
+3. Longitudinal cracking.
+
+4. Transverse cracking.
+Figure 47 illustrates the proper measurement of crack width and width of spalling for cracks and joints.
+Figure 47
+Measuring Widths of Spalls and Cracks in JCP.
+
+[p. 50]
+JOINTED
+PORTLAND
+CEMENT
+CONCRETE
+SURFACES
+1
+CORNER BREAKS
+Description
+A portion of the slab is separated by a crack, which intersects the adjacent transverse and longitudinal joints, describing approximately a 45-degree angle with the direction of traffic. The length of the sides is from 0.3 m to half the width of the slab on each side of the corner.
+Severity Levels
+LOW
+The crack is not spalled for more than 10 percent of the length of the crack. There is no measurable faulting, and the corner piece is not broken into two or more pieces and has no loss of material and no patching.
+MODERATE
+The crack is spalled at low severity for more than 10 percent of its total length or faulting of the crack or joint is < 13 mm and the corner piece is not broken into two or more pieces.
+HIGH
+The crack is spalled at moderate to high severity for more than 10 percent of its total length or faulting of the crack or joint is ≥ 13 mm, or the corner piece is broken into two or more pieces or contains patch material.
+How to Measure
+Record the number of corner breaks at each severity level. Corner breaks that have been repaired by completely removing all broken pieces and replacing them with patching material (rigid or flexible) should be rated as a patch. If the boundaries of the corner break are visible, then also rate it as a high severity corner break. Note: This does not affect the way patches are rated. All patches meeting the size criteria are rated.
+Figure 48
+Distress Type JCP 1—Corner Breaks.
+Figure 49
+Distress Type JCP 1—Low Severity
+Corner Break.
+Figure 50
+Distress Type JCP 1—Moderate Severity
+Corner Break.
+
+[p. 51]
+Cracking 2
+DURABILITY CRACKING (“D” CRACKING)
+Description
+Closely spaced crescent-shaped hairline cracking pattern.
+Occurs adjacent to joints, cracks, or free edges and initiates in slab corners. Dark coloring of the cracking pattern and surrounding area.
+How to Measure
+Record the number of slabs with “D” cracking and square meters of area affected at each severity level. The slab and affected area severity rating is based on the highest severity level present for at least 10 percent of the area affected.
+Severity Levels
+LOW “D” cracks are tight, with no loose or missing pieces, and no patching is in the affected area.
+MODERATE
+“D” cracks are well-defined, and some small pieces are loose or have been displaced.
+HIGH
+“D” cracking has a well-developed pattern, with a significant amount of loose or missing material. Displaced pieces up to 0.1 m2 may have been patched.
+Figure 51
+Distress Type JCP 2— “D” Cracking.
+Figure 52
+Distress Type JCP 2—Moderate Severity “D” Cracking with Well-Defined Pattern.
+Figure 53
+Distress Type JCP 2—
+High Severity “D”
+Cracking with Loose and Missing Material.
+
+[p. 52]
+JOINTED
+PORTLAND
+CEMENT
+CONCRETE
+SURFACES
+LONGITUDINAL CRACKING
+Description
+Cracks that are predominantly parallel to the pavement centerline.
+Severity Levels
+LOW
+Crack widths < 3 mm with no spalling and no measurable faulting or well-sealed cracks with a width that cannot be determined.
+MODERATE
+Crack widths ≥ 3 mm and < 13 mm; or with spalling < 75 mm; or faulting up to 13 mm.
+HIGH
+Crack widths ≥ 13 mm; or with spalling ≥ 75 mm; or faulting ≥ 13 mm.
+3
+Figure 54
+Distress Type JCP 3—Longitudinal Cracking.
+
+[p. 53]
+Cracking
+How to Measure
+Record the length in meters of longitudinal cracking at each severity level. Also record the length in meters of longitudinal cracking with sealant in good condition at each severity level. Sealant is not considered to be in good condition unless at least 1 m of continuous sealant in good condition is present. In cases where a crack is less than 1 m long, the sealant must be present and in good condition over the entire length of the crack. When a crack is within 0.3 m of a joint for only a portion of its length, it should be recorded as a spall only for that portion so long as that portion is at least 0.3 m long.
+The portion of the crack that is greater than 0.3 m from the joint should be recorded as a longitudinal crack.
+Figure 55
+Distress Type JCP 3—Low Severity Longitudinal Cracking.
+Figure 56
+Distress Type JCP 3—Moderate Severity Longitudinal Cracking.
+Figure 57
+Distress Type JCP 3—High Severity Longitudinal Cracking.
+
+[p. 54]
+JOINTED
+PORTLAND
+CEMENT
+CONCRETE
+SURFACES
+4
+TRANSVERSE CRACKING
+Description
+Cracks that are predominantly perpendicular to the pavement centerline.
+Severity Levels
+LOW
+Crack widths < 3 mm with no spalling and no measurable faulting or cracks that are well-sealed with an undetermined width.
+MODERATE
+Crack widths ≥ 3 mm and < 6 mm; or with spalling < 75 mm; or faulting up to 6 mm.
+HIGH
+Crack widths ≥ 6 mm; or with spalling ≥ 75 mm; or faulting ≥ 6 mm.
+Figure 58
+Distress Type JCP 4—Transverse Cracking.
+
+[p. 55]
+Cracking
+How to Measure
+Record the number and length of transverse cracks at each severity level. Rate the total length of the transverse crack at the highest severity level present for at least 10 percent of the length of the crack.
+Also record the length of the transverse cracking at each severity level with sealant in good condition. The total length of the well-sealed crack is assigned to the severity level of the crack. Record only when the sealant is in good condition for at least 90 percent of the length of the crack. When a crack is within 0.3 m of a joint for only a portion of its length, it should be recorded as a spall only for that portion so long as that portion is at least 0.3 m long. The portion of the crack that is greater than 0.3 m from the joint should be recorded as a transverse crack.
+Figure 59
+Distress Type JCP 4—Moderate Severity Transverse Cracking.
+Figure 60
+Distress Type JCP 4—High Severity Transverse Cracking.
+
+[p. 57]
+B
+Joint Deficiencies 43
+This section includes the following types of distresses:
+
+5. Joint seal damage.
+
+5a. Transverse joint seal damage.
+
+5b. Longitudinal joint seal damage.
+
+6. Spalling of longitudinal joints.
+
+7. Spalling of transverse joints.
+
+[p. 58]
+JOINTED
+PORTLAND
+CEMENT
+CONCRETE
+SURFACES
+5
+JOINT SEAL DAMAGE
+Description
+Joint seal damage is any condition that enables incompressible materials or a significant amount of water to infiltrate the joint from the surface. Typical types of joint seal damage include extrusion, hardening, adhesive failure (bonding), cohesive failure (splitting), complete loss of sealant, intrusion of foreign material into the joint or grass or weed growth in the joint.
+5A. TRANSVERSE JOINT SEAL DAMAGE
+Severity Levels
+LOW
+Joint seal damage exists in less than 10 percent of the joint.
+MODERATE
+Joint seal damage exists in 10 to 50 percent of the joint.
+HIGH
+Joint seal damage exists over more than 50 percent of the joint.
+How to Measure
+Indicate whether the transverse joints have been sealed (yes or no). If yes, record the number of sealed transverse joints at each severity level. Any joint seal with no apparent damage is considered to be low severity.
+Note: That portion of a joint with spot patching in good condition (i.e., no defects) is considered well sealed. Patches are rated separately.
+5B. LONGITUDINAL JOINT SEAL DAMAGE
+Severity Levels
+None.
+How to Measure
+Record the number of longitudinal joints that are sealed (0, 1, 2). Record the total length of sealed longitudinal joints with joint seal damage. Individual occurrences are recorded only when at least 1 m long.
+Note: That portion of a joint with spot patching in good condition (i.e., no defects) is considered well sealed. Patches are rated separately.
+Figure 61
+Distress Type JCP 5—Low Severity
+Joint Seal Damage.
+Figure 62
+Distress Type JCP 5—Moderate
+Severity Joint Seal Damage.
+
+[p. 59]
+Joint Deficiencies 6
+SPALLING OF LONGITUDINAL JOINTS
+Description
+Cracking, breaking, chipping, or fraying of slab edge within 0.3 m from the face of the longitudinal joint.
+Severity Levels
+LOW
+Spalls < 75 mm wide measured to the face of the joint with loss of material and no patching or spalls with no loss of material and no patching.
+MODERATE
+Spalls 75 to 150 mm wide measured to the face of the joint with loss of material.
+HIGH
+Spalls > 150 mm wide measured to the face of the joint with loss of material or spalls broken into two or more pieces or spalls containing patch material.
+How to Measure
+Record the length of longitudinal joint affected at each severity level. Only record spalls that have a length of 0.1 m or more. Spalls that have been repaired by completely removing all broken pieces and replacing them with patching material (rigid or flexible)
+should be rated as a patch. If the boundaries of the spall are visible, then also rate as a high severity spall. When a crack is within 0.3 m of a joint for only a portion of its length, it should be recorded as a spall only for that portion so long as that portion is at least 0.3 m long. The portion of the crack that is greater than 0.3 m from the joint should be recorded as a longitudinal or transverse crack as appropriate.
+Figure 63
+Distress Type JCP 6—Spalling of Longitudinal Joints.
+Figure 64
+Distress Type JCP 6—Low Severity
+Spalling of Longitudinal Joint.
+Figure 65
+Distress Type JCP 6—High Severity
+Spalling of Longitudinal Joint.
+
+[p. 60]
+JOINTED
+PORTLAND
+CEMENT
+CONCRETE
+SURFACES
+7
+SPALLING OF TRANSVERSE JOINTS
+Description
+Cracking, breaking, chipping, or fraying of slab edges within 0.3 m from the face of the transverse joint.
+Severity Levels
+LOW
+Spalls < 75 mm wide measured to the face of the joint with loss of material and no patching or spalls with no loss of material and no patching.
+MODERATE
+Spalls 75 to 150 mm wide measured to the face of the joint with loss of material.
+HIGH
+Spalls > 150 mm wide measured to the face of the joint with loss of material, or spalls broken into two or more pieces, or spalls containing patch material.
+How to Measure
+Record the number of affected transverse joints at each severity level. A joint is affected only if the total length of spalling is 10 percent or more of the length of the joint. Rate the entire transverse joint at the highest severity level present for at least 10 percent of the total length of the spalling. Record length in meters of the spalled portion of the joint at the assigned severity level for the joint. Spalls that have been repaired by completely removing all broken pieces and replacing them with patching material (ridgid or flexible) should be rated as a patch. If the boundaries of the spall are visible, then also rate as a high severity spall. When a crack is within 0.3 m of a joint for only a portion of its length, it should be recorded as a spall only for that portion, so long as that portion is at least 0.3 m long. The portion of the crack that is greater than 0.3 m from the joint should be recorded as a longitudinal or transverse crack as appropriate.
+Figure 66
+Distress Type JCP 7—Spalling of Transverse Joints.
+Figure 67
+Distress Type JCP 7—Moderate Severity
+Spalling of Transverse Joint, Far View.
+Figure 68
+Distress Type JCP 7—Moderate Severity
+Spalling of Transverse Joint, Close-up View.
+
+[p. 61]
+C
+Surface Defects 47
+This section includes the following types of distresses:
+
+8. Map cracking and scaling.
+
+8a. Map cracking.
+
+8b. Scaling.
+
+9. Polished aggregate.
+
+10. Popouts.
+
+[p. 62]
+JOINTED
+PORTLAND
+CEMENT
+CONCRETE
+SURFACES
+8
+MAP CRACKING AND SCALING
+8A. MAP CRACKING
+Description
+A series of cracks that extend only into the upper surface of the slab. Larger cracks are frequently oriented in the longitudinal direction of the pavement and are interconnected by finer transverse or random cracks.
+Severity Levels
+Not applicable.
+How to Measure
+Record the number of occurrences and the square meters of affected area.
+8B. SCALING
+Description
+Scaling is the deterioration of the upper concrete slab surface, normally 3 to
+13 mm, and may occur anywhere over
+the pavement.
+Severity Levels
+Not applicable.
+How to Measure
+Record the number of occurrences and the square meters of affected area.
+Figure 69
+Distress Type JCP 8a—Map Cracking.
+Figure 70
+Distress Type JCP 8b—Scaling.
+Figure 71
+Distress Type JCP 8b—Scaling, Close-up View.
+
+[p. 63]
+Surface Defects 9
+POLISHED AGGREGATE
+Description
+Surface mortar and texturing worn away to expose coarse aggregate.
+Severity Levels
+Not applicable. However, the degree of polishing may be reflected in a reduction of surface friction.
+How to Measure
+Record the square meters of affected surface area.
+Note: Diamond grinding also removes the surface mortar and texturing. However, this condition should not be recorded as polished aggregate. Instead, it should be noted by a comment.
+Figure 72
+Distress Type JCP 9—Polished Aggregate.
+
+[p. 64]
+JOINTED
+PORTLAND
+CEMENT
+CONCRETE
+SURFACES
+10
+POPOUTS
+Description
+Small pieces of pavement broken loose from the surface, normally ranging in diameter from 25 to 100 mm and in depth from 13 to 50 mm.
+Severity Levels
+Not applicable. However, severity levels can be defined in relation to the intensity of Popouts as measured below.
+How to Measure
+Not recorded in LTPP surveys, but should be noted.
+Figure 73
+Distress Type JCP 10—Popouts.
+Figure 74
+Distress Type JCP 10—A Popout.
+
+[p. 65]
+D
+Miscellaneous
+Distresses 51
+This section includes the following distresses:
+
+11. Blowups.
+
+12. Faulting of transverse joints and cracks.
+
+13. Lane-to-shoulder dropoff.
+
+14. Lane-to-shoulder separation.
+
+15. Patch/patch deterioration.
+
+16. Water bleeding and pumping.
+
+[p. 66]
+JOINTED
+PORTLAND
+CEMENT
+CONCRETE
+SURFACES
+BLOWUPS
+Description
+Localized upward movement of the pavement surface at transverse joints or cracks, often accompanied by shattering of the concrete in that area.
+Severity Levels
+Not applicable. However, severity levels can be defined by the relative effect of a blowup on ride quality and safety.
+How to Measure
+Record the number of blowups.
+11
+Figure 75
+Distress Type JCP 11—Blowups.
+Figure 76
+Distress Type JCP 11—A Blowup.
+
+[p. 67]
+Miscellaneous
+Distresses 12
+FAULTING OF TRANSVERSE JOINTS AND CRACKS
+Description
+Difference in elevation across a joint or crack.
+Severity Level
+Not applicable. Severity levels could be defined by categorizing the measurements taken.
+A complete record of the measurements taken is much more desirable, however, because it is more accurate and repeatable than severity levels.
+How to Measure
+Record, to the nearest millimeter: 0.3 and 0.75 m from the outside slab edge (approximately the outer wheel path). For a widened lane, the wheel path location will be 0.75 m from the outside lane edge stripe. If the approach slab is higher than the departure slab, record faulting as positive; if the approach slab is lower, record faulting as negative.
+Faulting on PCC pavements is to be measured using an FHWA-modified Georgia faultmeter. A representative reading from three distinct measurements at each location is to be used and recorded on sheet 6.
+When anomalies such as patching, spalling, and corner breaks are encountered, the faultmeter should be offset to avoid the anomaly. The maximum offset is 0.3 m. A null value should be recorded and entered into the database when the surveyor is unable to take a measurement due to an anomaly.
+Surveyors must ensure that they have a working faultmeter with fully charged batteries prior to beginning a survey on a jointed PCC test section. Complete faulting measurements and survey sheet 6 at the beginning of the distress survey to ensure that this data is collected.
+Point distance measurements entered on sheet 6 for joints and transverse cracks should be consistent between surveys of the same test section to an accuracy of less than 0.5 m. Evaluate newly observed distresses and point distance differences for previously identified distresses of 0.5 m and greater with a metric tape measure.
+Figure 77
+Distress Type JCP 12—Faulting of Transverse Joints and Cracks.
+Figure 78
+Distress Type JCP 12—
+Faulting of Transverse
+Cracks.
+
+[p. 68]
+JOINTED
+PORTLAND
+CEMENT
+CONCRETE
+SURFACES
+13
+LANE-TO-SHOULDER DROPOFF
+Description
+Difference in elevation between the edge of slab and outside shoulder; typically occurs when the outside shoulder settles.
+Severity Levels
+Not applicable. Severity levels can be defined by categorizing the measurements taken. A complete record of the measurements taken is much more desirable, however, because it is more accurate and repeatable than severity levels.
+How to Measure
+Measure at the longitudinal construction joint between the lane edge and the shoulder.
+Record to the nearest millimeter at 15.25-m intervals along the lane-to-shoulder joint.
+If the traveled surface is lower than the shoulder, record as a negative value.
+Figure 79
+Distress Type JCP 13—Lane-to-Shoulder Dropoff.
+Figure 80
+Distress Type JCP 13— Lane-to-Shoulder Dropoff.
+
+[p. 69]
+Miscellaneous
+Distresses 14
+LANE-TO-SHOULDER SEPARATION
+Description
+Widening of the joint between the edge of the slab and the shoulder.
+Severity Levels
+Not applicable. Severity levels can be defined by categorizing the measurements taken. A complete record of the measurements taken is much more desirable, however, because it is more accurate and repeatable than severity levels.
+How to Measure
+Record to the nearest millimeter at intervals of 15.25 m along the lane-to-shoulder joint.
+Indicate whether the joint is well-sealed (yes or no) at each location.
+Note: A null value should be recorded and entered into the database when the surveyor is unable to take a measurement due to an anomaly such as sealant or patch material.
+Figure 81
+Distress Type JCP 14—Lane-to-Shoulder Separation.
+Figure 82
+Distress Type JCP 14—Poorly Sealed
+Lane-to-Shoulder Separation.
+Figure 83
+Distress Type JCP 14—Well-Sealed
+Lane-to-Shoulder Separation.
+
+[p. 70]
+JOINTED
+PORTLAND
+CEMENT
+CONCRETE
+SURFACES
+15
+PATCH/PATCH DETERIORATION
+Description
+A portion (greater than or equal to 0.1 m2) or all of the original concrete slab that has been removed and replaced or additional material applied to the pavement after original construction.
+Severity Levels
+LOW
+Patch has, at most, low severity distress of any type, no measurable faulting or settlement, and there is no loss of patching material. Pumping is not evident.
+MODERATE
+Patch has moderate severity distress of any type or faulting or settlement up to 6 mm.
+Pumping is not evident.
+HIGH
+Patch has a high severity distress of any type; or, faulting or settlement is ≥ 6 mm, or the patch has additional material within it. Pumping may be evident.
+Figure 84
+Distress Type JCP 15—Patch/Patch Deterioration.
+Figure 85
+Distress Type JCP 15—Small, Low Severity AC Patch.
+
+[p. 71]
+Miscellaneous
+Distresses
+How to Measure
+Record the number of patches and square meters of affected surface area at each severity level by material type—rigid versus flexible. For slab replacement, rate each slab as a separate patch and continue to rate joints. Note: Surface flexible patches are limited to those with patching material that contain aggregate. If a surface patch has worn away revealing an underlying distress or if the underlying distress has reflected through the surface patch and the distress' existence can be verified on prior surveys, then also rate the distress. Any new distress in the original pavement layer in the patched area should also be rated. Distresses in the patched area affect the severity level of the patch. Patches with no distress are rated low severity. Applications of sealant without aggregate are not to be recorded as patches. These should be drawn on the map sheets and recorded on the distress survey sheets as distress type 17 Other provided that they exceed 0.1 m2.
+Figure 86
+Distress Type JCP 15—Large, Low
+Severity AC Patch.
+Figure 87
+Distress Type JCP 15—Large, High
+Severity AC Patch.
+Figure 88
+Distress Type JCP 15—Large, Low Severity PCC Patch.
+
+[p. 72]
+JOINTED
+PORTLAND
+CEMENT
+CONCRETE
+SURFACES
+16
+WATER BLEEDING AND PUMPING
+Description
+Seeping or ejection of water from beneath the pavement through cracks or joints. In some cases, detectable by deposits of fine material left on the pavement surface, which were eroded (pumped) from the support layers and have stained the surface.
+Severity Levels
+Not applicable. Severity levels are not used because the amount and degree of water bleeding and pumping changes with varying moisture conditions.
+How to Measure
+Record the number of occurrences of water bleeding and pumping and the length of affected pavement with a minimum length of 1 m.
+Note: Water bleeding and pumping are measured longitudinally along the length of the test section. The combined length of water bleeding and pumping cannot exceed the length of the test section.
+Figure 89
+Distress Type JCP 16—Water Bleeding and Pumping.
+
+[p. 73]
+DISTRESSES
+FOR
+PAVEMENTS
+WITH
+CONTINUOUSLY
+REINFORCED
+CONCRETE
+SURFACES
+TABLE 3. CRCP Distress Types.
+DISTRESS TYPE
+UNIT OF MEASURE
+DEFINED
+SEVERITY
+LEVELS?
+A. Cracking / 61
+
+1. Durability cracking (“D” cracking)
+Number, square meters
+Yes
+
+2. Longitudinal cracking
+Meters
+Yes
+
+3. Transverse cracking
+Number, meters
+Yes
+B. Surface Defects / 67
+
+4. Map cracking and scaling
+
+4a. Map cracking
+Number, square meters
+No
+
+4b. Scaling
+Number, square meters
+No
+
+5. Polished aggregate
+Square meters
+No
+
+6. Popouts
+Not measured
+N/A
+C. Miscellaneous Distress / 71
+
+7. Blowups
+Number
+No
+
+8. Transverse construction joint deterioration
+Number
+Yes
+
+9. Lane-to-shoulder dropoff
+Millimeters
+No
+
+10. Lane-to-shoulder separation
+Millimeters
+No
+
+11. Patch/patch deterioration
+Number, square meters
+Yes
+
+12. Punchouts
+Number
+Yes
+
+13. Spalling of longitudinal joints
+Meters
+Yes
+
+14. Water bleeding and pumping
+Number, meters
+No
+
+15. Longitudinal joint seal damage
+Number, meters
+No
+This section covers continuously reinforced concrete-surfaced pavements (CRCP), including continuously reinforced concrete overlays on PCC pavements. Each of the distresses has been grouped into one of the following categories:
+A. Cracking.
+B. Surface defects.
+C. Miscellaneous distresses.
+Table 3 summarizes the various types of distress and unit of measurement. Some distresses also have defined severity levels.
+
+[p. 75]
+A
+Cracking 61
+This section includes the following distresses:
+
+1. Durability cracking (“D” cracking).
+
+2. Longitudinal cracking.
+
+3. Transverse cracking.
+
+[p. 76]
+CONTINUOUSLY
+REINFORCED
+CONCRETE
+SURFACES
+1
+DURABILITY CRACKING (“D” CRACKING)
+Description
+Closely spaced crescent-shaped hairline cracking pattern.
+Occurs adjacent to joints, cracks, or free edges. Initiates at the intersection (e.g., cracks and a free edge).
+Dark coloring of the cracking pattern and surrounding area.
+Severity Levels
+LOW “D” cracks are tight, with no loose or missing pieces, and no patching is in the affected area.
+MODERATE
+“D” cracks are well- defined, and some small pieces are loose or have been displaced.
+HIGH
+“D” cracking has a well-developed pattern, with a significant amount of loose or missing material. Displaced pieces up to 0.1 m2 may have been patched.
+How to Measure
+Record the number of affected transverse cracks at each severity level and the square meters of area affected at each severity level. The transverse crack and affected area severity rating is based on the highest severity level present for at least 10 percent of the area affected.
+Figure 90
+Distress Type CRCP 1— “D” Cracking.
+Figure 91
+Distress Type CRCP 1—
+Moderate Severity “D”
+Cracking at Transverse Crack.
+Figure 92
+Distress Type CRCP 1—High Severity “D” Cracking at Longitudinal Joint.
+
+[p. 77]
+Cracking 2
+LONGITUDINAL CRACKING
+Description
+Cracks that are predominantly parallel to the pavement centerline.
+Severity Levels
+LOW
+Crack widths < 3 mm, no spalling, and there is no measurable faulting; or well-sealed and with a width that cannot be determined.
+MODERATE
+Crack widths ≥ 3 mm and < 13 mm; or with spalling < 75 mm; or faulting up to 13 mm.
+HIGH
+Crack widths ≥ 13 mm; or with spalling ≥ 75 mm; or faulting ≥ 13 mm.
+How to Measure
+Record the length of longitudinal cracking at each severity level. Also record the length of longitudinal cracking with sealant in good condition at each severity level. Sealant is not considered to be in good condition unless at least 1 m of continuous sealant in good condition is present. In cases where a crack is less than 1 m in length, the sealant must be present and in good condition over the entire length of the crack.
+Figure 93
+Distress Type CRCP 2—Longitudinal Cracking.
+Figure 94
+Distress Type CRCP 2—Low Severity
+Longitudinal Cracking.
+Figure 95
+Distress Type CRCP 2—High Severity
+Longitudinal Cracking.
+
+[p. 78]
+CONTINUOUSLY
+REINFORCED
+CONCRETE
+SURFACES
+TRANSVERSE CRACKING
+Description
+Cracks that are predominantly perpendicular to the pavement centerline. This cracking is expected in a properly functioning CRCP. All transverse cracks that intersect an imaginary longitudinal line at mid-lane and propagate from the pavement edges (centerline joint or the edge joint) shall be counted as individual cracks, as illustrated below. Cracks that do not cross the mid-lane are not counted.
+Severity Levels
+LOW
+Cracks that are not spalled or with spalling along ≤ 10 percent of the crack length.
+MODERATE
+Cracks with spalling along > 10 percent and ≤ 50 percent of the crack length.
+HIGH
+Cracks with spalling along > 50 percent of the crack length.
+3
+Figure 96
+Distress Type CRCP 3—Transverse Cracking.
+Figure 97
+Distress Type CRCP 3—Transverse Cracking Pattern.
+
+[p. 79]
+Cracking
+How to Measure
+Record separately the number and length in meters of transverse cracking at each severity level. The sum of all the individual crack lengths shall be recorded. Then, record the total number of transverse cracks within the survey section.
+Note: Cracks that do not cross mid-lane, although not counted, should be drawn on the map sheets.
+Figure 98
+Distress Type CRCP 3—Low Severity Transverse Cracking.
+Figure 99
+Distress Type CRCP 3—Moderate Severity Transverse Cracking.
+Figure 100
+Distress Type CRCP 3—High Severity Transverse Cracking.
+
+[p. 81]
+B
+Surface Defects 67
+This section includes the following:
+
+4. Map cracking and scaling.
+
+4a. Map cracking.
+
+4b. Scaling.
+
+5. Polished aggregate.
+
+6. Popouts.
+
+[p. 82]
+CONTINUOUSLY
+REINFORCED
+CONCRETE
+SURFACES
+4
+MAP CRACKING AND SCALING
+4A. MAP CRACKING
+Description
+A series of cracks that extend only into the upper surface of the slab. Larger cracks frequently are oriented in the longitudinal direction of the pavement and are interconnected by finer transverse or random cracks.
+Severity Levels
+Not applicable.
+How to Measure
+Record the number of occurrences and the square meters of affected area. When an entire section is affected with map cracking, it should be considered one occurrence.
+4B. SCALING
+Description
+Scaling is the deterioration of the upper concrete slab surface, normally 3 to 13 mm, and may occur anywhere over the pavement.
+Severity Levels
+Not applicable.
+How to Measure
+Record the number of occurrences and the square meters of affected area.
+Figure 101
+Distress Type CRCP 4a—Map Cracking Attributable to
+Alkali-Silica Reactivity.
+Figure 102
+Distress Type CRCP 4b—Scaling.
+
+[p. 83]
+Surface Defects
+POLISHED AGGREGATE
+Description
+Surface mortar and texturing worn away to expose coarse aggregate.
+Severity Levels
+Not applicable. However, the degree of polishing may be reflected in a reduction of surface friction.
+How to Measure
+Record square meters of affected surface area.
+Note: Diamond grinding also removes the surface mortar and texturing; however, this condition should not be recorded as polished aggregate but instead should be noted by a comment.
+5
+Figure 103
+Distress Type CRCP 5—Polished Aggregate.
+
+[p. 84]
+CONTINUOUSLY
+REINFORCED
+CONCRETE
+SURFACES
+6
+POPOUTS
+Description
+Small pieces of pavement broken loose from the surface, normally ranging in diameter from 25 to 100 mm and in depth from 13 to 50 mm.
+Severity Levels
+Not applicable. However, severity levels can be defined in relation to the intensity of popouts as measured below.
+How to Measure
+Not recorded in LTPP surveys, but should be noted.
+Figure 104
+Distress Type CRCP 6—Popouts.
+Figure 105
+Distress Type CRCP 6—Popouts.
+
+[p. 85]
+C
+Miscellaneous
+Distresses 71
+This section includes the following distresses:
+
+7. Blowups.
+
+8. Transverse construction joint deterioration.
+
+9. Lane-to-shoulder dropoff.
+
+10. Lane-to-shoulder separation.
+
+11. Patch/patch deterioration.
+
+12. Punchouts.
+
+13. Spalling of longitudinal joints.
+
+14. Water bleeding and pumping.
+
+15. Longitudinal joint seal damage.
+
+[p. 86]
+CONTINUOUSLY
+REINFORCED
+CONCRETE
+SURFACES
+BLOWUPS
+Description
+Localized upward movement of the pavement surface at transverse joints or cracks; often accompanied by shattering of the concrete in that area.
+Severity Levels
+Not applicable. However, severity levels can be defined by the relative effect of a blowup on ride quality and safety.
+How to Measure
+Record the number of blowups.
+7
+Figure 106
+Distress Type CRCP 7—Blowups.
+Figure 107
+Distress Type CRCP 7—A Blowup.
+Figure 108
+Distress Type CRCP 7—Close-up View of a Blowup.
+Figure 109
+Distress Type CRCP 7—Exposed Steel in a Blowup.
+
+[p. 87]
+Miscellaneous
+Distresses 8
+TRANSVERSE CONSTRUCTION JOINT DETERIORATION
+Description
+A series of closely spaced transverse cracks or a large number of interconnecting cracks occurring near the construction joint.
+Severity Levels
+LOW
+No spalling or faulting within 0.6 m of construction joint.
+MODERATE
+Spalling < 75 mm exists within 0.6 m of construction joint.
+HIGH
+Spalling ≥ 75 mm and breakup exists within 0.6 m of construction joint.
+How to Measure
+Record number of construction joints at each severity level.
+Figure 110
+Distress Type CRCP 8—
+Transverse Construction
+Joint Deterioration.
+Figure 111
+Distress Type
+CRCP 8—Low
+Severity Transverse
+Construction Joint
+Deterioration.
+Figure 112
+Distress Type CRCP 8— Moderate
+Severity Transverse Construction
+Joint Deterioration.
+Figure 113
+Distress Type CRCP 8— Low
+Severity Transverse Construction
+Joint Deterioration.
+
+[p. 88]
+CONTINUOUSLY
+REINFORCED
+CONCRETE
+SURFACES
+9
+LANE-TO-SHOULDER DROPOFF
+Description
+Difference in elevation between the edge of slab and outside shoulder; typically occurs when the outside shoulder settles.
+Severity Levels
+Not applicable. Severity levels could be defined by categorizing the measurements taken.
+A complete record of the measurements taken is much more desirable, however, because it is more accurate and repeatable than are severity levels.
+How to Measure
+Measure at the longitudinal construction joint between the lane edge and the shoulder.
+Record to the nearest millimeter at 15.25-m intervals along the lane-to-shoulder joint.
+If the traveled surface is lower than the shoulder, record as a negative value.
+Figure 114
+Distress Type CRCP 9—Lane-to-Shoulder Dropoff.
+Figure 115
+Distress Type CRCP 9—Lane-to-Shoulder Dropoff.
+
+[p. 89]
+Miscellaneous
+Distresses 10
+LANE-TO-SHOULDER SEPARATION
+Description
+Widening of the joint between the edge of the slab and the shoulder.
+Severity Levels
+Not applicable. Severity levels could be defined by categorizing the measurements taken.
+A complete record of the measurements taken is much more desirable, however, because it is more accurate and repeatable than are severity levels.
+How to Measure
+Record to the nearest millimeter at intervals of 15.25 m along the lane-to-shoulder joint and indicate whether the joint is well-sealed (yes or no) at each location.
+Note: A null value should be recorded and entered into the database when the surveyor is unable to take a measurement due to an anomaly such as sealant or patch material.
+Figure 116
+Distress Type CRCP 10—Lane-to-Shoulder Separation.
+Figure 117
+Distress Type CRCP 10—Close-up View of a Lane-to-Shoulder Separation.
+
+[p. 90]
+CONTINUOUSLY
+REINFORCED
+CONCRETE
+SURFACES
+11
+PATCH/PATCH DETERIORATION
+Description
+A portion greater than or equal to 0.1 m2 or all of an original concrete panel that has been removed and replaced or additional material applied to the pavement after original construction.
+Severity Levels
+LOW
+Patch has, at most, low severity distress of any type; no measurable faulting or settlement;
+and there is no loss of patching material. Pumping is not evident.
+MODERATE
+Patch has moderate severity distress of any type or has faulting or settlement up to 6 mm.
+Pumping is not evident.
+HIGH
+Patch has a high severity distress of any type or has faulting or settlement ≥ 6 mm, or the patch has additional material within it. Pumping may be evident.
+Figure 118
+Distress Type CRCP 11—Patch/Patch Deterioration.
+Figure 119
+Distress Type CRCP 11—Small, Low Severity AC Patch.
+
+[p. 91]
+Miscellaneous
+Distresses
+How to Measure
+Record the number of patches and square meters of affected surface area at each severity level by material type—rigid versus flexible. Surface flexible patches are limited to those with patching material that contain aggregate. If a surface patch has worn away revealing an underlying distress or the underlying distress has reflected through the surface patch and the distress' existence can be verified on prior surveys, then also rate the distress. Any new distress in the original pavement layer in the patched area should also be rated. Distresses in the patched area affect the severity level of the patch. Patches with no distress are rated low severity. Applications of sealant without aggregate are not to be recorded as patches. These should be drawn on the map sheets and recorded on the distress survey sheets as distress type 16 Other provided that they exceed 0.1 m2.
+Note: Panel replacement shall be rated as a patch. Any sawn joints shall be considered construction joints and rated separately. All patches are rated regardless of location.
+Figure 120
+Distress Type CRCP 11—Low Severity AC Patch.
+Figure 121
+Distress Type CRCP 11—Moderate Severity AC Patch.
+Figure 122
+Distress Type CRCP 11—Low Severity PCC Patch.
+
+[p. 92]
+CONTINUOUSLY
+REINFORCED
+CONCRETE
+SURFACES
+PUNCHOUTS
+Description
+The area enclosed by two closely spaced (usually < 0.6 m) transverse cracks, a short longitudinal crack, and the edge of the pavement or a longitudinal joint. Also includes “Y” cracks that exhibit spalling, breakup, or faulting. An area that is enclosed by two distressed transverse cracks that are spaced between 0.6 m and 1 m, a short longitudinal crack, and the edge of the pavement or a longitudinal joint is also considered a punchout.
+Severity Levels
+LOW
+Longitudinal and transverse cracks are tight and may have spalling < 75 mm or faulting < 6 mm with no loss of material and no patching. Does not include “Y” cracks.
+MODERATE
+Spalling ≥ 75 mm and < 150 mm or faulting ≥ 6 mm and < 13 mm exists.
+HIGH
+Spalling ≥ 150 mm or concrete within the punchout is punched down by ≥ 13 mm, or is loose and moves under traffic, or is broken into two or more pieces, or contains patch material.
+12
+Figure 123
+Distress Type CRCP 12—Punchouts.
+Figure 124
+Distress Type CRCP 12—Low Severity Punchout.
+
+[p. 93]
+Miscellaneous
+Distresses
+How to Measure
+Record the number of punchouts at each severity level.
+The cracks which outline the punchout are also recorded under “longitudinal cracking”
+(CRCP 2), and “transverse cracking” (CRCP 3).
+Punchouts that have been repaired by completely removing all broken pieces and replacing them with patching material (rigid or flexible) should be rated as a patch. If the boundaries of the punchout are visible, then also rate as a high severity punchout.
+Note: Areas between two transverse cracks spaced greater than 0.6 m but less than or equal to 1 m apart and bounded by the edge of pavement (or longitudinal joint) and a longitudinal crack, are rated as moderate or high severity punchouts if the cracks are exhibiting spalling or if the area is breaking up or faulting.
+Figure 125
+Distress Type CRCP 12—Moderate Severity Punchouts.
+Figure 126
+Distress Type CRCP 12—High
+Severity Punchouts.
+
+[p. 94]
+CONTINUOUSLY
+REINFORCED
+CONCRETE
+SURFACES
+13
+SPALLING OF LONGITUDINAL JOINTS
+Description
+Cracking, breaking, chipping, or fraying of slab edges within 0.3 m of the longitudinal joint.
+Severity Levels
+LOW
+Spalls < 75 mm wide measured to the face of the joint with loss of material or spalls with no loss of material and no patching.
+MODERATE
+Spalls 75 to 150 mm wide measured to the face of the joint with loss of material.
+HIGH
+Spalls > 150 mm wide measured to the face of the joint with loss of material, or is broken into two or more pieces, or contains patch material.
+Figure 127
+Distress Type CRCP 13—Spalling of Longitudinal Joints.
+
+[p. 95]
+Miscellaneous
+Distresses
+How to Measure
+Record the length of longitudinal joint spalling at each severity level. Only record spalls having a length of 0.1 m or more. Spalls that have been repaired by completely removing all broken pieces and replacing them with patching material (rigid or flexible) should be rated as a patch. If the boundaries of the spall are visible, then also rate as a high severity spall.
+Note: All patches meeting the size criteria are rated as patches.
+Figure 128
+Distress Type CRCP 13—Close-up View of Low Severity
+Spalling of a Longitudinal Joint.
+Figure 129
+Distress Type CRCP 13— Low
+Severity Spalling of a Longitudinal
+Joint.
+Figure 130
+Distress Type CRCP 13—Moderate Severity
+Spalling of a Longitudinal Joint.
+
+[p. 96]
+CONTINUOUSLY
+REINFORCED
+CONCRETE
+SURFACES
+14
+WATER BLEEDING AND PUMPING
+Description
+Seeping or ejection of water from beneath the pavement through cracks or joints. In some cases, it is detectable by deposits of fine material left on the pavement surface, which were eroded (pumped) from the support layers and have stained the surface.
+Severity Levels
+Not applicable. Severity levels are not used because the amount and degree of water bleeding and pumping changes with varying moisture conditions.
+How to Measure
+Record the number of occurrences of water bleeding and pumping and the length of affected pavement with a minimum length of 1 m.
+Note: Water bleeding and pumping is measured longitudinally along the length of the test section. The combined quantity of water bleeding and pumping cannot exceed the length of the test section.
+Figure 131
+Distress Type CRCP 14—Water Bleeding and Pumping.
+Figure 132
+Distress Type CRCP 14—Close-up View of
+Water Bleeding and Pumping.
+
+[p. 97]
+Miscellaneous
+Distresses 15
+LONGITUDINAL JOINT SEAL DAMAGE
+Description
+Joint seal damage is any condition that enables incompressible materials or a significant amount of water to infiltrate into the joint from the surface. Typical types of joint seal damage include extrusion, hardening, adhesive failure (bonding), cohesive failure (splitting), or complete loss of sealant.
+Intrusion of foreign material in the joint. Grass or weed growth in the joint.
+Severity Levels
+Not applicable.
+How to Measure
+Record the number of longitudinal joints that are sealed (0, 1, 2). Record the length of sealed longitudinal joints with joint seal damage. Individual occurrences are recorded only when at least 1 m long.
+Figure 133
+Distress Type CRCP 15—Longitudinal Joint Seal Damage.
+
+[p. 99]
+GLOSSARY
+ADHESIVE FAILURE
+Loss of bond (e.g., between the joint sealant and the joint reservoir or between the aggregate and the binder).
+AGGREGATE INTERLOCK
+Interaction of aggregate particles across cracks and joints to transfer a load.
+APPROACH SLAB
+Section of pavement just prior to joint, crack, or other significant roadway feature relative to the direction of traffic (also see “Leave Slab”).
+BINDER
+Brown or black adhesive material used to hold stones together for paving.
+BITUMINOUS
+Like or from asphalt.
+BLEEDING
+Identified by a film of bituminous material on the pavement surface that creates a shiny, glass-like reflective surface that may be tacky to the touch in warm weather.
+BLOCK CRACKING
+The occurrence of cracks that divide the asphalt surface into approximately rectangular pieces, typically 0.1 m2 or more in size.
+BLOWUP
+The result of localized upward movement or shattering of a slab along a transverse joint or crack.
+CENTERLINE
+The painted line separating traffic lanes.
+CHIPPING
+Breaking or cutting off small pieces from the surface.
+COHESIVE FAILURE
+The loss of a material's ability to bond to itself. Results in the material splitting or tearing apart from itself (i.e., joint sealant splitting).
+CONSTRUCTION JOINT
+The point at which work is concluded and reinitiated when building a pavement.
+CORNER BREAK
+A portion of a JCP separated from the slab by a diagonal crack intersecting the transverse and longitudinal joint, which extends down through the slab, allowing the corner to move independently from the rest of the slab.
+DURABILITY CRACKING
+The breakup of concrete due to freezethaw expansive pressures within certain aggregates. Also called “D” cracking.
+EDGE CRACKING
+Fracture and materials loss in pavements without paved shoulders which occurs along the pavement perimeter. Caused by soil movement beneath the pavement.
+EXTRUSION
+To be forced out (i.e., joint sealant from joint).
+FATIGUE CRACKING
+A series of small, jagged, interconnecting cracks caused by failure of the AC surface under repeated traffic loading (also called “alligator cracking”).
+FAULT
+Difference in elevation between opposing sides of a joint or crack.
+FREE EDGE
+Pavement border that is able to move freely.
+HAIRLINE CRACK
+A fracture that is very narrow in width, less than 3 mm.
+JOINT SEAL DAMAGE
+Any distress associated with the joint sealant, or lack of joint sealant.
+LANE LINE
+Boundary between travel lanes, usually a painted stripe.
+LANE-TO-SHOULDER DROPOFF
+The difference in elevation between the traffic lane and shoulder.
+
+[p. 100]
+LANE-TO-SHOULDER SEPARATION
+Widening of the joint between the traffic lane and the shoulder.
+LEAVE SLAB
+Section of pavement just past a joint, crack, or other significant roadway feature relative to the direction of traffic.
+LONGITUDINAL
+Parallel to the centerline of the pavement.
+MAP CRACKING
+A series of interconnected hairline cracks in PCC pavements that extend only into the upper surface of the concrete.
+Includes cracking typically associated with alkali-silica reactivity.
+PATCH
+An area where the pavement has been removed and replaced with a new material.
+PATCH DETERIORATION
+Distress occurring within a previously repaired area.
+POLISHED AGGREGATE
+Surface mortar and texturing worn away to expose coarse aggregate in the concrete.
+POPOUTS
+Small pieces of pavement broken loose from the surface.
+POTHOLE
+A bowl-shaped depression in the pavement surface.
+PUMPING
+The ejection of water and fine materials through cracks in the pavement under moving loads.
+PUNCHOUT
+A localized area of CRCP bounded by two transverse cracks and a longitudinal crack. Aggregate interlock decreases over time and eventually is lost, leading to steel rupture and allowing the pieces to be punched down into the subbase and subgrade.
+RAVELING
+The wearing away of the pavement surface caused by the dislodging of aggregate particles.
+REFLECTION CRACKING
+The fracture of AC above joints in the underlying JPC layer(s).
+RUTTING
+Longitudinal surface depressions in the wheel paths.
+SCALING
+The deterioration of the upper 3 to
+12 mm of the concrete surface, resulting
+in the loss of surface mortar.
+SHOVING
+Permanent longitudinal displacement of a localized area of the pavement surface caused by traffic pushing against the pavement.
+SPALLING
+Cracking, breaking, chipping, or fraying of the concrete slab surface within 0.6 m of a joint or crack.
+TRANSVERSE
+Perpendicular to the pavement centerline.
+WATER BLEEDING
+Seepage of water from joints or cracks.
+WEATHERING
+The wearing away of the pavement surface caused by the loss of asphalt binder.
+
+[p. 101]
+A
+MANUAL FOR
+DISTRESS
+SURVEYS
+TABLE OF CONTENTS
+Introduction / 87
+Equipment for Distress Surveys / 88
+Instructions for completing Distress Maps / 88
+
+ACP
+
+JCP and CRCP
+Instructions for Completing ACP Distress Survey Sheets / 90
+
+Description of Data Sheet 1
+
+Description of Data Sheet 2
+
+Description of Data Sheet 3
+Instructions for Completing JCP Data Sheets / 93
+
+Description of Data Sheet 4
+
+Description of Data Sheet 5
+
+Description of Data Sheet 6
+
+Description of Data Sheet 7
+Instructions for Completing CRCP Data Sheets / 95
+
+Description of Data Sheet 8
+
+Description of Data Sheet 9
+
+Description of Data Sheet 10
+Example Survey Maps and Completed Sheet / 99
+Blank Distress Map Forms and Data Sheets / 107
+INTRODUCTION
+This appendix provides instructions, data sheets, and distress maps for use in visual surveys for the collection of distress information for ACP, JCP, and CRCP surfaces.
+Visual distress survey procedures have been used in the LTPP program as the primary distress data collection method since 1995. The Distress Identification Manual for the Long- Term Pavement Performance Program (DIM) is the basis for all distress surveys performed for the LTPP program.
+During the visual distress survey, safety is the first consideration, as with all field data collection activities. All raters must adhere to the practices and authority of the State or Canadian Province and follow the guidelines in LTPP directive D-42 or its latest version.
+
+[p. 102]
+DISTRESS
+SURVEYS
+EQUIPMENT FOR DISTRESS SURVEYS
+The following equipment is necessary for performing field distress surveys of any pavement surface type:
+• Copy of map sheets and survey forms from most recent prior survey.
+• Pavement thermometer.
+• Extra blank data sheets and maps.
+• Pencils.
+• Latest version of the DIM.
+• Clipboard.
+• Two tape measures, one at least 30 m long and a scale or ruler graduated in millimeters.
+• Calculator.
+• Hard hat or safety cap and safety vest.
+• Faultmeter, calibration stand, and machined spacer block.
+• Digital camera, video camera, and tapes.
+• Transverse profile equipment.
+• Longitudinal profile equipment is required on sites where the LTPP profilometer is unable to test.
+INSTRUCTIONS FOR COMPLETING DISTRESS MAPS
+The distress maps show the exact location of each distress type existing on the test section. The distress types and severity levels should be identified by using the DIM.
+A total of five sheets are used to map; each sheet contains two 15.25-m maps which represent 30.5 m of the test section (with the exception of SPS-6 sections 2 and 5, which are 305 m).
+Each test section must be laid out consistently each time a survey is conducted. Sections begin and end at the stations marked on the pavement. Lateral extent of the section, for survey purposes, will vary depending on the existence of longitudinal joints and cracks and the relative position of the lane markings. Figure 134 and figure 135 illustrate the rules to follow when determining the lateral extent of the section for a distress survey.
+The lateral extent of the test sections should be consistent with prior distress surveys. On widened PCC sections, the lateral extent of the test section includes the full width (4.3 m)
+of the slab measured from the centerline longitudinal joint to the shoulder joint.
+The lateral extent of an ACP test section will vary depending on the existence of longitudinal construction joints, longitudinal cracks, and the edge of the pavement or the relative position of the lane marking. Generally the lateral extent of the test section on ACP is from the outside edge of the edge stripe to the outside edge of the centerline stripe (see figure 134). The lateral extent of ACP test sections with double yellow lines on the centerline are determined by using the inside yellow line. If a longitudinal construction joint or a longitudinal crack or the edge of the pavement exists outside the stripes within 0.3 m of the stripes, the lateral extent of the test section is extended to the longitudinal construction joint or the longitudinal crack or the edge of the pavement.
+The lateral extent of a CRCP or JCP test section is defined by the centerline and edge longitudinal joints. All distresses within the lateral extent of the survey are rated. The lateral extent of the test section (test section width) shall be recorded in the comments on map sheet 1. Test sections begin and end at the stations marked on the pavement. All distresses within the test section limits are to be recorded on distress map forms and data
+
+[p. 103]
+Appendix A sheets. In cases where a transverse crack, or any other distress, falls directly on one of the beginning or ending pavement markings, the rater shall record it consistent with previous surveys.
+Figure 134
+Test Section Limits for Surveys—Asphalt
+Surface.
+Figure 135
+Test Section Limits for Surveys—Concrete
+Surface.
+To map the test section, place the tape measure on the shoulder adjacent to the test section from Station 0+00 to Station 1+00. It may be necessary to secure the tape onto the pavement with adhesive tape or a heavy object. After the tape is in place, the distresses can be mapped with the longitudinal placement of the distresses read from the tape. The transverse placement and extent of the distresses can be recorded using the additional tape measure. After the first 30.5-m subsection is mapped, the tape measure should be moved to map the second 30.5-m subsection. The process is repeated throughout the test section. A calibrated measuring wheel can be used as an alternative under the conditions outlined in LTPP directive D-28 or its latest version.
+The distresses are drawn on the map at the scaled location using the symbols appropriate to the pavement type. In general, the distress is drawn and is labeled using the distress type number and the severity level (L, M, or H) if applicable. For example, a high severity longitudinal crack in the wheel path of an ACP would be labeled “4aH.” An additional symbol is added beside the distress type and severity symbol in cases where the crack or joint is well-sealed. Figures specifying the symbols to be used for each pavement type are presented in the following chapters. In addition, example maps are provided to illustrate properly completed maps.
+Photographs are an important component of LTPP manual distress surveys and must be taken during each survey in accordance with LTPP directive D-54 or its latest version.
+Any observed distresses that are not described in the DIM should be photographed and described on the comments line of the map sheet. The location and extent of the distress should be shown and labeled on the map. Crack sealant and joint sealant condition is to be mapped only for those distresses indicated in figure 137, figure 138, and figure 141. The specific distress types that are not to be included on the maps are to be recorded as follows.
+
+[p. 104]
+DISTRESS
+SURVEYS
+ACP
+If raveling, polished aggregate, or bleeding occur in large areas over the test section, do not map the total extent. Instead, note the location and extent in the space for comments underneath the appropriate map(s). These distresses should be mapped only if they occur in localized areas. The extent of these distresses must be summarized on the data summary sheets.
+JCP and CRCP
+If map cracking/scaling, or polished aggregate occur in large areas over the test section, do not map the total extent. Instead, note the location, extent, and severity level if applicable in the space for comments underneath the appropriate map(s). These distresses should be mapped only if they occur in localized areas. The extent of these distresses must be summarized on the data summary sheets.
+SURVEY SHEETS' DATA ELEMENTS
+In the common data section appearing in the upper right-hand corner of each of the distress survey data sheets the six-digit SHRP ID (two-digit State code plus four-digit SHRP Section ID) is entered. The date the survey was conducted, the initials of up to two raters, before and after pavement surface temperature readings, and the code indicating whether photographs and/or video tape were obtained at the time of the survey are entered in the appropriate spaces.
+INSTRUCTIONS FOR COMPLETING ACP DISTRESS SURVEY SHEETS
+Location of the vehicle wheel paths is critical for distinguishing between types of longitudinal cracking in ACP. Figure 136 illustrates the procedure for establishing the location and extent of the wheel paths. Both wheel paths must be drawn and identified on the distress maps. The distresses observed are recorded to scale on map sheets.
+The individual distresses and severity levels depicted on the map are carefully scaled and summed to arrive at the appropriate quantities (e.g., square meters or number of occurrences) and are then recorded on sheets 1 through 3. It is important to carefully evaluate the distress map for certain distress types which have multiple methods of measurement because of orientation or location within the section. Longitudinal cracking, in the wheel path or elsewhere, are examples of these. Except where indicated otherwise, entries are made for all distress data elements. If a particular type of distress does not exist on the pavement, enter “0” as a positive indication that the distress was not overlooked in summarizing the map sheets. All data sheets are to be completed in the field prior to departing the site. Symbols to be used for mapping ACP sections are contained in figure 137, and an example mapped section is shown in figure 138.
+Description of Data Sheet 1
+This data sheet provides space for recording measured values for the distress types identified in the left column. The units of measurement for each of the distress types are also identified in the left column. The extent of the measured distress for each particular level of severity is entered in the severity level columns identified as low, moderate, or high. Enter “0” for any distress types and/or severity levels not found.
+
+[p. 105]
+Appendix A
+Figure 136
+Locating Wheel Paths in ACP.
+Description of Data Sheet 2
+This sheet is a continuation of the distress survey data recorded on sheet 1 and is completed as described under data sheet 1. In addition, space is provided to list other distress types found on the test section but not listed on data sheets 1 or 2.
+Description of Data Sheet 3
+This data sheet provides space to record rutting (using a straight edge 1.2 m long).
+Manual rutting measurements using a straight edge are only taken for visual surveys conducted on SPS-3 experiment sections. Measurements are taken at the beginning of the test section and at 15.25 m intervals. There should be a total of 11 measurements in each wheel path, for a total of 22 measurements on each test section.
+
+[p. 106]
+DISTRESS
+SURVEYS
+Figure 138
+Example Map of First 30.5 m of ACP Section.
+Figure 137
+Distress Map Symbols for ACPs.
+
+[p. 107]
+Appendix A
+INSTRUCTIONS FOR COMPLETING JCP DATA SHEETS
+The distresses observed are recorded to scale on map sheets. This information is reduced by the rater in the field to summarize the results, which are then recorded on sheets 4 through 7. Except where indicated otherwise, entries are made for all distress data elements. If a particular type of distress does not exist on the pavement, enter “0” as a positive indication that the distress was not overlooked in summarizing the map sheets.
+Symbols to be used for mapping distresses in JCP sections are shown in figure 139, and an example mapped section is presented in figure 140.
+Description of Data Sheet 4
+This data sheet provides space for recording measured values for the distress types identified in the left column. The units of measurement for each of the distress types are also identified in the left column. The extent of the measured distress for each particular level of severity is entered in the severity level columns identified as low, moderate, or high. Enter “0” for any distress types and/or severity levels not found. The distress types and severity levels should be identified by using the DIM.
+Description of Data Sheet 5
+This sheet is a continuation of the distress survey data recorded on sheet 4 and is completed as described under data sheet 4. In addition, space is provided to list other distress types found on the test section but not listed on data sheets 4 or 5.
+Description of Data Sheet 6
+This data sheet provides space to record faulting information for each transverse joint and transverse crack. Distance from the beginning of the section and faulting measurements made at two transverse locations are recorded. The transverse locations are 0.3 and 0.75 m from the outside edge of the slab. For widened lanes, measure 0.3 m from the edge of the slab and 0.75 m from the outside edge of the lane edge stripe.
+At each location, three measurements are made, but only the approximate average of the readings is recorded to the nearest millimeter. The faultmeter identification number, which can be found on the meter, and the device code shall be entered on the form. The following codes shall be used:
+
+1. Straightedge and ruler.
+
+2. Georgia Faultmeter with 1/32-inch resolution.
+
+3. Georgia Faultmeter with 1/20-inch resolution.
+
+4. Georgia Faultmeter with 1-mm resolution.
+
+5. FHWA Mechanical Faultmeter 1-mm resolution.
+Although no field is provided in the space to the left of the entry for measured faulting, there is room for a negative sign when negative faulting is observed. If the approach slab is higher than the departure slab, a positive sign is assumed, but no entry is required. If the approach slab is lower, a negative sign is entered.
+
+[p. 108]
+DISTRESS
+SURVEYS
+Figure 139
+Distress Map Symbols for JCPs.
+Description of Data Sheet 7
+This sheet is used to record lane-to-shoulder dropoff and lane-to-shoulder separation.
+Lane-to-shoulder dropoff is measured as the difference in elevation, to the nearest 1 mm, between the pavement surface and the adjacent shoulder surface. Measurements are taken at the beginning of the test section and at 15.25-m intervals (a total of 11 measurements) at the lane/shoulder interface or joint. Lane-to-shoulder dropoff typically occurs when the outside shoulder settles. However, heave of the shoulder may occur due to frost action or swelling soil. If heave of the shoulder is present, it should be recorded as a negative value. At each point where there is no lane-to-shoulder dropoff, enter “0.”
+Lane-to-shoulder separation is measured as the width of the joint (to the nearest 1 mm)
+between the outside lane and the adjacent shoulder surface. Measurements are taken at the beginning of the test section and at 15.25-m intervals (a total of 11 measurements).
+At each point where there is no lane-to-shoulder separation, enter “0.” When the surveyor is unable to take a measurement due to an anomaly such as sealant or patch material, a null value should be recorded and entered into the database.
+
+[p. 109]
+Appendix A
+Figure 140
+Example Map of First 30.5 m of a JCP Section.
+INSTRUCTIONS FOR COMPLETING CRCP DATA SHEETS
+The results of distress surveys on CRCP surfaces are recorded on sheets 8 through
+10. Except where indicated otherwise, entries are made for all distress data elements.
+If a particular type of distress does not exist on the pavement, enter “0” as a positive indication that the distress was not overlooked in summarizing the map sheets. All data sheets are to be completed in the field prior to departing the site. Symbols to be used for mapping CRCP distresses are contained in figure 141, and an example mapped section is presented in figure 142.
+Description of Data Sheet 8
+This data sheet provides space for recording measured values for the distress types identified in the left column. The units of measurement for each of the distress types are also identified in the left column. The extent of the measured distress for each particular level of severity is entered in the severity level columns identified as low, moderate, or high, except as indicated on the form. Enter “0” for any distress types and/or severity levels not found. The distress types and severity levels should be identified by using the DIM.
+
+[p. 110]
+DISTRESS
+SURVEYS
+Description of Data Sheet 9
+This sheet is a continuation of the distress survey data recorded on sheet 8 and is completed as described under data sheet 8. In addition, space is provided to list “Other” distress types found on the test section but not listed on data sheets 8 or 9.
+Description of Data Sheet 10
+This data sheet provides space to record lane-to-shoulder dropoff and lane-to-shoulder separation. Measurements are taken at the beginning of the test section and at 15.25-m intervals (a total of 11 measurements for each distress) at the lane/shoulder interface or joint.
+Lane-to-shoulder dropoff is measured as the difference in elevation (to the nearest 1 mm) between the pavement surface and the adjacent shoulder surface. Lane-toshoulder dropoff typically occurs when the outside shoulder settles. However, heave of the shoulder may occur due to frost action or swelling soil. If heave of the shoulder is present, it should be recorded as a negative value.
+Lane-to-shoulder separation is measured as the width of the joint (to the nearest 1 mm)
+between the outside lane and the adjacent shoulder surface.
+When the surveyor is unable to take a measurement due to an anomaly such as a sealant or patch material, a null value is recorded and entered into the database.
+At each point where there is no lane-to-shoulder dropoff or lane-to-shoulder separation, enter “0.”
+The faultmeter identification number, which can be found on the meter, and the device code shall be entered on the form. The following codes shall be used:
+
+1. Straightedge and ruler.
+
+2. Georgia Faultmeter with 1/32-inch resolution.
+
+3. Georgia Faultmeter with 1/20-inch resolution.
+
+4. Georgia Faultmeter with 1-mm resolution.
+
+5. FHWA Mechanical Faultmeter 1-mm resolution.
+
+[p. 111]
+Appendix A
+Figure 141
+Distress Map Symbols for CRCPs.
+
+[p. 112]
+DISTRESS
+SURVEYS
+Figure 142
+Example Map of First 30.5 m of a CRCP Section.
+
+[p. 113]
+Example Survey
+Maps and
+Completed
+Sheets
+This part of the appendix shows completed maps and survey forms for a JCP 60 m long.
+The rater uses the definitions from the DIM and the symbols from this appendix when mapping the section. The rater then quantifies each distress (and severity levels for the appropriate distresses) on the map. The rater then uses the right margin of the map sheets to tally the quantities of each distress type. This method is required because it simplifies totaling the various distress types, and reduces errors. The rater then uses the tallies from each map sheet to add the distress quantities. The section totals are entered in the left margin of the first map sheet.
+The rater then writes in the totals in the appropriate blanks on the survey forms. All blanks are filled in. Zeros are entered if no distress was found. These forms provide a summary of the distresses found in the JCP section.
+
+[p. 137]
+B
+MANUAL FOR
+FAULTMETER
+MEASUREMENTS
+TABLE OF CONTENTS
+Introduction / 124
+
+Measurement of Faulting in the LTPP Program
+
+The FHWA Modified Georgia Digital Faultmeter
+
+The Mechanical Faultmeter
+Operating the Faultmeter / 125
+Calibration / 126
+Maintenance / 126
+References / 127
+
+[p. 138]
+FAULTMETER
+MEASUREMENTS
+INTRODUCTION
+Measurement of Faulting in the LTPP Program
+This manual is intended for use by the FHWA-LTPP Regional Support Contractor (RSC)
+personnel and others responsible for using the faultmeter to measure JCP faulting and lane-to-shoulder dropoff on LTPP pavement test sites. The change in joint faulting and lane-to-shoulder dropoff with time are important indicators of pavement performance.
+The digital faultmeters will be used to collect these data. It is the responsibility of each RSC to store, maintain, and operate the faultmeter for faulting and lane-to-shoulder dropoff data collection.
+The FHWA Modified Georgia Digital Faultmeter
+The electronic digital faultmeter was designed to simplify measuring concrete joint faulting. This meter was designed, and developed by the Georgia Department of Transportation Office of Materials and Research personnel.(1) The FHWA/TFHRC Electronics Laboratory has made many improvements and modifications to the faultmeter over the years. The faultmeter is very light and easy to use. The unit, shown in figure 143, weighs approximately 3.2 kg and supplies a digital readout with the push of a button located on the carrying handle. It reads out directly in millimeters (e.g., a digital readout of 6 indicates 6 mm of faulting)
+and shows whether the reading is positive or negative.
+The unit reads out in 1 second and freezes the reading in the display so that it can be removed from the road before reading for safer operation. The legs of the faultmeter's base are set on the slab in the direction of traffic on the “leave side” of the joint. The measuring probe contacts the slab on the approach. Movement of this probe is transmitted to a linear variance displacement transducer to measure joint faulting. The joint must be centered between the guidelines shown on the side of the meter.
+Any slab that is lower on the leave side of the joint will register as a positive faulting number. If the slab leaving the joint is higher, the meter gives a negative reading.
+The amount of time it takes to complete the faulting survey of a LTPP test section depends on the number of joints and cracks encountered and on the amount of time needed to measure and record the location of each joint and crack. Generally, it should take less than 30 minutes to measure and record faulting and lane-to-shoulder dropoff on a 150-m test section using this device.
+The Mechanical Faultmeter
+The mechanical faultmeter was designed as a backup to the Georgia faultmeter. It is not intended for use as a primary measuring device for faulting. The mechanical faultmeter has the same “footprint” as the Georgia faultmeter and should be used in a similar manner. It has a dial indicator instead of the Georgia faultmeter's electronic digital readout. The mechanical faultmeter also does not take negative faulting readings and must be reversed to read negative faulting.
+Figure 143
+The Georgia Faultmeter in Use.
+
+[p. 139]
+Appendix B
+OPERATING THE FAULTMETER
+This section gives step-by-step operating instructions. The Georgia faultmeter has several unique features, which have been added to simplify operations, increase range of measurement to 22 mm, and increase reach to 100 mm to allow for spanning spalls and excess joint material on the slab surface.
+Use the right hand when testing the outside lane. This allows the operator to stand safely on the shoulder facing traffic while making the test. There is an arrow on the meter showing traffic direction. Set the meter on the leave side of the joint. A probe contacts the slab on the approach side. The joint must be centered approximately between the two marks on each side of the meter.
+As indicated in Chapter 3 of the Data Collection Guide, faulting of transverse joints and cracks is measured as the difference in elevation to the nearest 1 mm between the pavement surface on either side of a transverse joint or crack.(2) In cases of a widened lane, measure 0.3 m from the edge of the slab and 0.75 m from the outside edge of the lane edge stripe. When anomalies such as patching, spalling, and corner breaks are encountered, the faultmeter should be offset to avoid including such anomalies in the readings. The maximum offset is 0.3 m. A null value should be recorded and entered into the database when the surveyor is unable to take a measurement due to an anomaly.
+Three measurements are made at each location. The representative value of the readings is recorded to the nearest millimeter. Measurements are taken at every joint and crack.
+This data is to be recorded on distress survey sheet 6. The distance from the start of the test section to the point where the measurement is taken is also recorded. This distance is obtained with a metric tape measure. Faulting is assumed to be positive. Therefore, the space to the left of the entry of measured faulting is to be filled with a negative sign when necessary. If the approach slab is higher than the departure slab, no positive sign is to be entered. If the approach slab is lower, a negative sign is entered. The readings recorded on the faultmeter are reported in millimeters on sheet 6. Faulting measurements and sheet 6 are to be completed at the beginning of the distress survey. Point distance measurements entered on sheet 6 for joints and transverse cracks should be consistent between surveys of the same test section to an accuracy of less than 0.5 m. Evaluate point distance differences for previous measurements of ≥ 0.5 m with a metric tape measure.
+Note: The precise start point of surveys must be identified clearly in the field.
+Lane-to-shoulder dropoff is measured as the difference in elevation to the nearest 1 mm between the pavement surface and the adjacent shoulder surface. Measurements are taken at the beginning of the test section and at 15.25-m intervals (a total of 11 measurements) at the lane/shoulder interface or joint. Lane-to-shoulder dropoff typically occurs when the outside shoulder settles. However, heave of the shoulder may occur due to frost action or swelling soil. If heave of the shoulder is present, record it as a negative value. At each point where there is no lane-to-shoulder dropoff, enter “0.”
+This data should be entered again on JCP data sheet 7 and CRCP data sheet 10.
+The distance from the center of the measuring probe to the edge of the base's forward foot is 100 mm to allow easy placement on the joint, and for more overhang, to measure shoulder dropoff. In addition, the base feet are 50 mm long, to bridge any bad crack or low spot in the pavement. The faultmeters will read up to 22 mm.
+
+[p. 140]
+FAULTMETER
+MEASUREMENTS
+Differential elevations greater than 22 mm will still need to be measured using the machined spacer block supplied with the faultmeter.
+The operational procedures for the mechanical faultmeter are the same as for the Georgia faultmeter, with the exception of taking negative faulting readings. The mechanical faultmeter must be reversed to record negative readings and lane-to-shoulder dropoff.
+CALIBRATION
+Surveyors must ensure that they have a working faultmeter with fully charged batteries prior to beginning a survey on a test section. Although the meter is very stable, it should be checked at the beginning and end of every use to assure correct readings. Calibration is checked by setting the meter on the calibration stand, which has been provided with the faultmeter. Align the front end of the faultmeter with the measuring probe on the 9-mm calibration block. In this position, a reading of 9 mm should be obtained. Then align the meter should with the measuring probe off the 9-mm calibration block. In this position, a reading of 0 mm should be obtained.
+As long as the “0” and “9” readings are obtained, the unit is working properly. If not, align the meter with the measuring probe off the 9-mm calibration block. In this position, if a reading of 0 mm is not obtained, reset the “0” button and check the calibration again. Be sure to check for any electronic malfunction before checking the calibration. Weak batteries can also cause an erroneous reading.
+Faultmeters that do not pass the calibration checks, cannot be “zeroed,” or have other maintenance problems, should be returned to FHWA's LTPP team distress coordinator for repair.
+The calibration checks are the same for the mechanical faultmeter. “Zero” adjustments can be made to the mechanical faultmeter with a one-eighth-inch Allen wrench by adjusting the dial indicator height with the set screw adjacent to the dial indicator. Care must be taken during adjustment to ensure that the measuring rod moves freely.
+MAINTENANCE
+The only maintenance normally required for the faultmeter is the routine recharging of the batteries. When the batteries no longer hold a charge, they should be replaced. RSCs should send the meter to FHWA's LTPP team for repairs, maintenance, and battery replacement.
+The mechanical faultmeter requires no special maintenance.
+If the measuring rod does not move freely, the readings will be in error. This should not be a problem, as the rod is made of stainless steel and will not rust. If the rod becomes coated with road film and dust, clean it with a damp cloth. Do not clean with penetrating oil or any products that will leave an oily residue, as this will cause dust to adhere to the rod. If the rod “clicks” when the meter is lifted from the pavement, this is a good indication that it is sliding freely. Care should be taken when storing the meter to ensure that the rod is not damaged.
+
+[p. 141]
+Appendix B
+REFERENCES
+1. Stone, J. (1991). Georgia Digital Faultmeter, Report No. FHWA-GA-91-SP9010, Federal Highway Administration, Washington, DC.
+2. Strategic Highway Research Program. (1990). Data Collection Guide for Long-Term Pavement Performance Studies, Operation Guide SHRP-LTPP-OG-001, U.S. Department of Transportation, Washington, DC.
+
+[p. 143]
+C
+PROFILE
+MEASUREMENTS
+CURRENT LTPP PROFILE MANUAL
+Please use the link below to view the current manual:
+Publication Number: FHWA-HRT-08-056
+Date: November 2008
+Title: LTPP Manaul for Profile Measurements and Processing
+URL: http://www.fhwa.dot.gov/publications/research/infrastructure/pavements/ltpp/08056/
+
+[p. 146]
+Research, Development, and Technology
+Turner-Fairbank Highway Research Center
+6300 Georgetown Pike
+McLean, VA 22101-2296
+HRDI-30/05-14(5M)E
+Recycled
+Recyclable

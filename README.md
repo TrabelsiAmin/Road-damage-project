@@ -1,127 +1,172 @@
-# Road Damage RAG — Intelligent Road Damage Assistant
+# Road Damage RAG — Assistant IA pour les dommages et pathologies routières
 
-## Présentation du projet
 
-**Road Damage RAG** est un assistant intelligent spécialisé dans les dommages et les pathologies routières. Il utilise une architecture **Retrieval-Augmented Generation (RAG)** pour fournir des réponses contextualisées à partir de documents techniques relatifs à l'identification, à la classification et à l'entretien des chaussées.
+Ce projet implémente un système **RAG (Retrieval-Augmented Generation)** en français, spécialisé dans les dégradations des chaussées (fissures longitudinales/transversales, faïençage, ornières, nids-de-poule, classes RDD2022, etc.). Il est conçu pour alimenter l'agent de détection de fissures routières (YOLO / RDD2022) avec une base de connaissances documentaire.
 
-Le système combine un modèle de langage, un moteur de recherche vectorielle et une interface utilisateur interactive afin de faciliter l'accès aux connaissances techniques sur les dégradations routières.
+---
 
-## Objectifs
+## 1. Architecture
 
-* Répondre aux questions concernant les pathologies routières.
-* Rechercher des informations pertinentes dans des documents techniques.
-* Générer des réponses contextualisées à l'aide d'un modèle de langage.
-* Faciliter l'accès aux connaissances sur les fissures et autres dégradations des chaussées.
-* Préparer l'intégration avec un système global de détection des dommages routiers et un système d'information géographique (SIG).
-
-## Architecture du système
-
-Le prototype repose sur les composants suivants :
-
-| Composant             | Technologie         | Rôle                                         |
-| --------------------- | ------------------- | -------------------------------------------- |
-| Modèle de langage     | Qwen2.5-7B-Instruct | Génération des réponses                      |
-| Modèle d'embedding    | BGE-M3              | Vectorisation des documents et des questions |
-| Base vectorielle      | FAISS               | Recherche de passages pertinents             |
-| Interface utilisateur | Streamlit           | Interaction avec l'utilisateur               |
-| Langage               | Python              | Développement du système                     |
-
-###  Pipeline RAG
-
-1. **Collecte des documents** : récupération de ressources techniques sur les dommages routiers.
-2. **Prétraitement** : extraction et découpage des documents en segments (*chunks*).
-3. **Vectorisation** : transformation des segments en représentations vectorielles avec BGE-M3.
-4. **Indexation** : stockage des vecteurs dans FAISS.
-5. **Recherche sémantique** : récupération des segments les plus pertinents pour une question.
-6. **Génération** : utilisation du contexte récupéré pour produire une réponse avec Qwen2.5-7B-Instruct.
-7. **Affichage** : présentation de la réponse dans l'interface Streamlit.
-
-## Technologies utilisées
-
-* Python
-* Hugging Face Transformers
-* Sentence Transformers
-* BGE-M3
-* FAISS
-* Qwen2.5-7B-Instruct
-* Streamlit
-* PyTorch
-
-## Structure du projet
-
-```text
-road_damage_rag/
-│
-├── app.py                 # Application Streamlit
-├── requirements.txt       # Dépendances Python
-├── README.md              # Documentation du projet
-├── .gitignore             # Fichiers exclus de Git
-│
-├── data/                  # Documents sources (non versionnés)
-│
-└── vector_db/             # Index vectoriel et données générées
-                           # (non versionnés)
+```
+Documents (.txt)
+      │
+      ▼
+Découpage en chunks (800 caractères, overlap 100)
+      │
+      ▼
+Embeddings  ── BAAI/bge-m3 (1024 dimensions, normalisés)
+      │
+      ▼
+Index FAISS (IndexFlatIP, similarité cosinus)
+      │
+Question ─► Embedding ─► Recherche top-k ─► Construction du contexte
+                                                    │
+                                                    ▼
+                                    Qwen2.5-7B-Instruct (4 bits, NF4)
+                                                    │
+                                                    ▼
+                                      Réponse + sources (API FastAPI)
 ```
 
-## Installation
+| Composant | Choix |
+|---|---|
+| Embeddings | `BAAI/bge-m3` (SentenceTransformers, exécuté sur CPU) |
+| Base vectorielle | FAISS `IndexFlatIP` (produit scalaire sur vecteurs normalisés) |
+| LLM | `Qwen/Qwen2.5-7B-Instruct`, quantification 4 bits via `bitsandbytes` |
+| API | FastAPI + Uvicorn, exposée via ngrok |
+| Environnement | Google Colab, GPU T4 (~5,2 Go de VRAM utilisés) |
 
-### 1. Cloner le dépôt
+---
+
+## 2. Corpus documentaire
+
+Six documents texte placés dans `/content/road_damage_rag/data` :
+
+- `Manuel_identification_degradations_chaussees_flexibles_contenu_organise.txt`
+- `Pathologie_des_routes_contenu_organise.txt`
+- `Cours_Pathologies_Entretien_Routes_Ouvrages_contenu_organise.txt`
+- `Distress_Identification_Manual_contenu_organise.txt`
+- `RDD2022_contenu_organise.txt`
+- `ArticleOuargla_contenu_organise.txt`
+
+Après découpage : **479 chunks**.
+
+---
+
+## 3. Structure du notebook
+
+| Étape | Contenu |
+|---|---|
+| 1 | Vérification de PyTorch et du GPU |
+| 2 | Installation : `transformers`, `accelerate`, `bitsandbytes`, `sentence-transformers`, `faiss-cpu` |
+| 3 | Chargement de BGE-M3 et test de similarité |
+| 4 | Chargement de Qwen2.5-7B-Instruct en 4 bits et test de génération |
+| 5 | Mini-démonstration RAG sur 3 documents + FAISS |
+| 6 | Création des dossiers `data/` et `vector_db/` |
+| 7 | Chargement des `.txt` et découpage en chunks |
+| 8 | Embeddings des chunks et construction de l'index FAISS |
+| 9 | Fonctions `retrieve`, `build_context`, `build_prompt`, `generate_answer`, `ask_rag` |
+| 10 | Batterie de 10 questions de test |
+| 11 | Sauvegarde de l'index, des chunks et de la configuration |
+| 12 | API FastAPI + tunnel ngrok |
+
+---
+
+## 4. Prérequis
+
+- Compte Google Colab avec GPU (T4 suffisant)
+- Les 6 fichiers `.txt` du corpus dans `/content/road_damage_rag/data`
+- (Optionnel) un token ngrok pour exposer l'API
 
 ```bash
-git clone https://github.com/TrabelsiAmin/Road-damage-project.git
-cd Road-damage-project
+pip install -q -U transformers accelerate bitsandbytes sentence-transformers faiss-cpu
+pip install -q fastapi uvicorn pyngrok nest-asyncio
 ```
 
-### 2. Accéder à la branche du RAG
+---
+
+## 5. Utilisation
+
+### 5.1 Exécution du notebook
+
+1. Activer le GPU : *Exécution → Modifier le type d'exécution → T4 GPU*.
+2. Uploader les fichiers `.txt` dans `/content/road_damage_rag/data`.
+3. Exécuter les cellules dans l'ordre.
+
+### 5.2 Interrogation directe
+
+```python
+answer, sources = ask_rag(
+    "Qu'est-ce qu'une fissure longitudinale ?",
+    k=5
+)
+print(answer)
+for s in sources:
+    print(s["source"], round(s["score"], 4))
+```
+
+### 5.3 API REST
+
+| Méthode | Route | Description |
+|---|---|---|
+| GET | `/` | Vérification de l'état de l'API |
+| POST | `/ask` | Pose une question au RAG |
+
+Exemple de requête :
 
 ```bash
-git switch feature/road-damage-rag
+curl -X POST "https://<url-ngrok>/ask" \
+  -H "Content-Type: application/json" \
+  -d '{"question": "Qu'\''est-ce que le faïençage ?", "k": 5}'
 ```
 
-### 3. Créer un environnement virtuel
+Réponse :
 
-Sous Windows :
-
-```powershell
-python -m venv .venv
-.venv\Scripts\activate
+```json
+{
+  "answer": "...",
+  "sources": [
+    {"source": "fichier.txt", "score": 0.69, "text": "..."}
+  ]
+}
 ```
 
-### 4. Installer les dépendances
+La documentation interactive est disponible sur `/docs`.
 
-```bash
-pip install -r requirements.txt
+---
+
+## 6. Artefacts sauvegardés (`/content/road_damage_rag/vector_db`)
+
+| Fichier | Rôle |
+|---|---|
+| `index.faiss` | Index vectoriel FAISS (~1,9 Mo) |
+| `chunks.pkl` | Texte et source de chaque chunk |
+| `config.json` | Paramètres de construction (modèles, chunking, dimension, k) |
+
+> Colab étant éphémère, copier ce dossier sur Google Drive pour le conserver.
+
+Pour recharger sans recalculer les embeddings :
+
+```python
+import faiss, pickle
+index = faiss.read_index("/content/road_damage_rag/vector_db/index.faiss")
+with open("/content/road_damage_rag/vector_db/chunks.pkl", "rb") as f:
+    chunks = pickle.load(f)
 ```
 
-##  Exécution
+---
 
-Lancer l'application Streamlit :
+## 7. Paramètres principaux
 
-```bash
-streamlit run app.py
-```
+| Paramètre | Valeur |
+|---|---|
+| `chunk_size` | 800 caractères |
+| `chunk_overlap` | 100 caractères |
+| `k` (top-k) | 5 |
+| `max_new_tokens` | 300 |
+| Décodage | `do_sample=False` (déterministe) |
+| Quantification | 4 bits NF4, double quantification, calcul en float16 |
 
-Ouvrir ensuite l'adresse locale indiquée dans le terminal, généralement :
+Le prompt impose de répondre **uniquement à partir du contexte**, sans inventer, et d'indiquer explicitement quand l'information est absente.
 
-```text
-http://localhost:8501
-```
-
-**Prérequis :** les fichiers de configuration, les documents et l'index FAISS nécessaires doivent être disponibles. Si les données et l'index ne sont pas inclus dans Git, ils doivent être générés ou récupérés selon la procédure de préparation du projet.
-
-## Exemple d'utilisation
-
-**Question :**
-
-> Qu'est-ce qu'une fissure longitudinale et quelles sont ses caractéristiques ?
-
-**Fonctionnement attendu :**
-
-* Recherche des passages pertinents dans les documents techniques.
-* Récupération du contexte correspondant à la question.
-* Génération d'une réponse contextualisée.
-* Affichage de la réponse dans l'interface utilisateur.
-
-Les réponses dépendent des documents indexés et du contexte retrouvé.
-
-**Road Damage RAG — From technical documents to contextualized road-damage knowledge.**
+---

@@ -1,0 +1,349 @@
+# DOC_ID: RDD2022-Arya-2024
+# SOURCE: Geoscience_Data_Journal_-_2024_-_Arya_-_RDD2022__A_multi_national_image_dataset_for_automatic_road_damage_detection.pdf
+# TITRE: RDD2022: A multi-national image dataset for automatic road damage detection
+# AUTEUR: Deeksha Arya, Hiroya Maeda, Sanjay Kumar Ghosh, Durga Toshniwal, Yoshihide Sekimoto
+# EDITEUR: Geoscience Data Journal 2024;11:846-862 (Royal Meteorological Society / Wiley) ; DOI 10.1002/gdj3.260 ; jeu de données : DOI 10.6084/m9.figshare.21431547.v1
+# DATE: 2024 (accepté le 1er juin 2024)
+# LANGUE: en
+# TYPE: article scientifique (version publiée)
+# CONTEXTE: international (jeu de données multi-pays)
+# LICENCE: accès libre, Creative Commons Attribution (mention figurant dans l'article)
+# FIABILITE: haute (article publié, relu)
+# ROLE_RAG: référence ML / données : classes de dégradations, pays, annotations, protocole ; à stocker dans une collection « datasets », pas dans la base pathologie
+# PERIMETRE: description du jeu de données RDD2022 et de ses classes (fissures longitudinales, transversales, faïençage, nids-de-poule)
+# RELATION: aucune ; les 4 classes RDD2022 sont à relier aux fiches FHWA/MTQ par une table de correspondance
+# PAGES: 16 pages conservées (marqueurs [p. 1] à [p. 16]) sur 17 avant nettoyage
+# FORMAT_PAGES: marqueur [p. N] = numéro de page attribué par l'extraction (identique au numéro de page PDF pour FHWA, Cours, Benjelloun et Arya ; à vérifier pour le MTQ) ; les numéros manquants correspondent à des pages retirées (vides ou hors contenu)
+# EXTRACTION: PyMuPDF page par page, OCR Tesseract si couche texte illisible ; nettoyage Unicode, recollage des lignes, pages vides retirées
+# NETTOYAGE: page 17 (bibliographie) retirée ; lignes recollées ; en-tête corrigé (il était collé au marqueur [p. 1])
+# NOTE: tableaux/figures non reconstruits ; texte non reformulé
+# A_FAIRE: « ARYA et al. » encore présent 15 fois ; page 1 : titre, auteurs et licence fusionnés sur une ligne et « D ATA A R T I C L E » en lettres espacées
+
+[p. 1]
+Geosci. Data J. 2024;11:846–862.
+wileyonlinelibrary.com/journal/gdj3
+Received: 27 September 2023 | Revised: 16 April 2024 | Accepted: 1 June 2024 DOI: 10.1002/gdj3.260
+D ATA A R T I C L E
+RDD2022: A multi-national image dataset for automatic road damage detection Deeksha Arya1,2 | Hiroya Maeda3 | Sanjay Kumar Ghosh1,4 | Durga Toshniwal1,5 | Yoshihide Sekimoto2 This is an open access article under the terms of the Creative Commons Attribution License, which permits use, distribution and reproduction in any medium, provided the original work is properly cited.
+© 2024 The Author(s). Geoscience Data Journal published by Royal Meteorological Society and John Wiley & Sons Ltd.
+Dataset Title: RDD2022 - The multi-national Road Damage Dataset released through CRDDC'2022 Identifier: https://doi.org/10.6084/m9.figshare.21431547.v1 Creator: Deeksha Arya, Hiroya Maeda, Yoshihide Sekimoto, Hiroshi Omata, Sanjay Kumar Ghosh, Durga Toshniwal, Madhavendra Sharma, Van Vung Pham, Jingtao Zhong, Muneer Al-Hammadi, Mamoona Birkhez Shami, Du Nguyen, Hanglin Cheng, Jing Zhang, Alex Klein-Paste, Helge Mork, Frank Lindseth, Toshikazu Seto, Alexander Mraz, Takehiro Kashiyama.
+Publisher: figshare.
+Publication year: 2022.
+Resource Type: Dataset
+Version: 1 1Centre for Transportation Systems (CTRANS), Indian Institute of Technology Roorkee, Roorkee, India 2Centre for Spatial Information Science, The University of Tokyo, Tokyo, Japan 3UrbanX Technologies, Inc., Tokyo, Japan 4Department of Civil Engineering, Indian Institute of Technology Roorkee, Roorkee, India 5Department of Computer Science and Engineering, Indian Institute of Technology Roorkee, Roorkee, India Correspondence Deeksha Arya, Centre for Transportation Systems (CTRANS), Indian Institute of Technology Roorkee, Roorkee, India.
+Email: deeksha@ct.iitr.ac.in
+Abstract
+The data article describes the Road Damage Dataset, RDD2022, encompassing of 47,420 road images from majorly six countries, Japan, India, the Czech Republic, Norway, the United States, and China. The dataset incorporates over 55,000 instances of road damage, specifically longitudinal cracks, transverse cracks, alligator cracks, and potholes. Designed to facilitate the development of deep learning methodologies for automated road damage detection and classification, RDD2022 was unveiled as part of the Crowd sensing-based Road Damage Detection Challenge (CRDDC'2022), with a major contribution from the challenge winners. This challenge garnered global participation, urging researchers to propose solutions for automatic road damage detection in multiple countries.
+A noteworthy outcome of CRDDC'2022 was the emergence of a top-performing model achieving a remarkable F1 Score of 76.9% for road damage detection in all six countries using RDD2022. This success underscores the dataset's practical applicability for municipalities and road agencies, enabling low-cost, automatic monitoring of road conditions. Beyond its immediate utility, RDD2022 stands as a valuable benchmark for researchers in computer vision, geoscience, and machine learning, offering a rich resource for algorithmic evaluation in diverse imagebased applications, including classification and object detection. The latest big data cup, Optimized Road Damage Detection Challenge (ORDDC'2024), is also
+
+[p. 2]
+ARYA et al.
+1 | INTRODUCTION
+Road Damage Data is an invaluable asset for Geoscience.
+It offers insights into the state of road infrastructure across diverse geographic regions, allowing geoscientists to study different patterns of road deterioration, environmental impacts, and the efficacy of maintenance practices.
+Further, this data may aid in geospatial analysis, helping researchers assess the geological and climatic factors contributing to road damage. Additionally, it facilitates the development of machine learning (ML) models for automated road damage detection, a critical tool for infrastructure monitoring and disaster preparedness (Arya, Ghosh, & Toshniwal, 2022; Nappo et al., 2019). With the growing trend of Artificial Intelligence-based automation applications, several Road Damage Datasets have been introduced in the last decade. This data article provides background information on the datasets directly related to the proposed dataset, described as follows. For other datasets, the readers may refer to the articles (Arya, Maeda, Ghosh, Toshniwal, Mraz, et al., 2021; Yang et al., 2022, etc.).
+The proposed Road Damage Dataset, RDD2022, is an extended version of the existing RDD2020 (Arya, Maeda, Ghosh, Toshniwal, Omata, et al., 2021; Arya, Maeda, Ghosh, Toshniwal, & Sekimoto, 2021) dataset. Figure 1 shows the evolution of the dataset over the years. The corresponding statistics are compared in Figure 2. First, the dataset RDD2018 (Maeda et al., 2018) was introduced in 2018, comprising 9053 road images with 15,435 road damage instances. The RDD2018 dataset captured information on eight types of road damage (Table 1) and has been utilized for the Road Damage Detection Challenge in 2018, organized as an IEEE Big Data Cup Challenge.
+Fifty-nine teams from 14 countries participated in the challenge and proposed multiple solutions for automatic road damage detection using RDD2018. The participants also suggested some improvements in the annotation files of the RDD2018 dataset.
+Considering these suggestions and the imbalance in the road damage categories captured in the RDD2018 dataset, the authors introduced the extended version of the dataset, RDD2019 (Maeda et al., 2020). RDD2019 was prepared by correcting the annotations in the RDD2018 dataset and augmenting it using the Generative Adversarial Network (GAN). It included 13,133 images with 30,989 road damage instances. The expanded dataset helped to achieve better accuracy for road damage detection and classification models.
+In 2020, Arya, Maeda, Ghosh, Toshniwal, Mraz, et al. (2020); Arya, Maeda, Ghosh, Toshniwal, and Sekimoto (2021) attempted to apply the models trained using RDD2019 to detect road damage outside Japan.
+Experiments were performed using the data from India and the Czech Republic. The outcome revealed that the performance of the models trained using RDD2019 degraded significantly when applied to roads outside Japan. Consequently, the authors proposed another dataset, RDD2020. The RDD2020 (Arya, Maeda, Ghosh, Toshniwal, Mraz, et al., 2021) dataset has been prepared by combining the RDD2019 (Maeda et al., 2020) dataset with more data collected from India and the Czech Republic. Further, with increasing the number of images and damage instances to form RDD2020, the types of road damage considered were also updated.
+Since RDD2018 and RDD2019 captured the data from a single country, the damage categories defined in the Japanese Road Maintenance and Repair Guidebook 2013 (Maintenance Guidebook for Road Pavements, 2013 Edition, Technical Report, Japan Road Association, Japan Maintenance guidebook for road pavements, 2013) has been used. However, in RDD2020, the involvement of multiple countries required considering multiple road damage standards. Since the criteria for assessing Road Marking deteriorations such as Crosswalks or White Line Blur vary significantly across different countries, these categories were excluded from the RDD2020 dataset (Arya, Maeda, Ghosh, Toshniwal, Mraz, et al., 2021; Arya, Maeda, Ghosh, Toshniwal, & Sekimoto, 2021). Subsequently, the following four damage categories—Longitudinal Cracks (D00), Transverse Cracks (D10), Alligator Cracks (D20), and Potholes (D40), were included in the RDD2020 dataset.
+The RDD2020 dataset was utilized for organizing the
+Global Road Damage Detection Challenge (GRDDC'2020)
+(Arya, Maeda, Ghosh, Toshniwal, Omata, et al., 2020). The challenge invited researchers across the globe to propose a single model for monitoring road conditions in the three based on RDD2022, underscoring its continued relevance and pivotal role in current research and development endeavors.
+K E Y W O R D S
+artificial intelligence, deep learning, global road damage detection, intelligent transport system, multi-national data
+
+[p. 3]
+ARYA et al.
+FIGURE 1 Schematic overview of the study design: Evolution of road damage datasets from RDD2018 to the proposed dataset RDD2022.
+FIGURE 2 Statistical comparison of the road damage datasets from 2018 to 2022.
+
+[p. 4]
+ARYA et al.
+countries (India, Japan, and the Czech Republic). A total of 121 teams participated in the challenge and proposed multiple solutions with varying accuracy and resource requirements. The best-performing model utilized the YOLOv5-based ensemble model and achieved an F1 score of 0.67 (Hegde et al., 2020).
+Further, the analysis conducted by Arya, Maeda,
+Ghosh, Toshniwal, Mraz, et al. (2021) indicated that adding data from other countries helps improve the generalizability of models trained for detecting road damage in any country. This analysis and the tremendous success of the GRDDC'2020 (Arya, Maeda, Ghosh, Toshniwal, Omata, et al., 2020) are the motivation behind introducing the current dataset RDD2022. It aims to solve road damage detection for a more extensive set of countries, targeting solutions for India, Japan, the Czech Republic, Norway, China, and the United States. The major contributions of the study in this regard are summarized as follows.
+(i) Large-scale Globalized Training Dataset: The study enriches the domain by offering a globally diverse dataset, RDD2022, leveraging images from six countries, enhancing the efficacy of deep learning models for road damage detection through improved generalization across varied geographies.
+(ii) Support for Sustainable Development: The proposed dataset supports applications corresponding to the Sustainable Development Goal-11 of the United Nations (n.d., Sustainable Transport: UN SDG-11).
+(iii) Compatibility and Methodology: Modelled after
+PASCAL VOC datasets (Everingham et al., 2015),
+RDD2022 ensures compatibility with existing image processing techniques and provides a foundation for developing and refining deep convolutional neural network architectures, advancing the field of AIbased object detection.
+(iv) Practical Impact: RDD2022 facilitates training the models for low-cost road condition monitoring by municipalities and road agencies, along with supporting rapid large-area inspections from moving vehicles, underscoring the real-world applicability of the proposed work.
+(v) Global Benchmarking Resource: RDD2022 serves as a benchmark for ML algorithms in image classification, object detection, and Geoscience applications, along with supporting the organization of data cup challenges like CRDDC'2022, fostering international collaboration and research advancement.
+(vi) Augmentation Possibilities for Enhanced Coverage:
+RDD2022's augmentation potential allows for the expansion of applications by covering more countries, capturing diverse scenarios, and introducing new damage categories, ensuring a more comprehensive representation of real-world conditions.
+The sample images for the four types of damage considered in RDD2022 are shown in Figure 3. The country-wise samples have been included in a later section. Further details of the dataset and the underlying methods are provided in the following section.
+2 | DATA DESCRIPTION AND
+DEVELOPMENT
+2.1 | Description and development
+The proposed dataset, RDD2022, is prepared and released as a part of the Crowd sensing-based Road Damage Detection Challenge (Arya, Maeda, et al., 2022)— (CRDDC'2022—https://crddc2022.sekilab.global/). It is divided into two sets (80:20 distribution): train and test.
+The images in the train set have been released with annotations. However, the images in the test set are for testing the models proposed by the CRDDC participants and hence have been released without annotations.
+Damage type
+Detail
+Class name
+Crack
+Linear Crack
+Longitudinal
+Wheel mark part
+D00
+Construction joint part
+D01
+Lateral
+Equal interval
+D10
+Construction joint part
+D11
+Alligator Crack
+Partial pavement, overall pavement
+D20
+Other Corruption
+Rutting, bump, pothole, separation
+D40
+Crosswalk blur
+D43
+White line blur
+D44
+TABLE 1 Road damage types in the
+RDD2018 dataset (Maeda et al., 2018).
+
+[p. 5]
+ARYA et al.
+The country-wise distribution of images and labels for
+RDD2022 is presented in Figure 4. The distribution of different labels (damage categories) in the train set is summarized in Figure 5.
+Further details regarding the dataset are provided as follows. For data included from Japan, India, and the Czech Republic, the readers may refer to the articles (Arya, Maeda, Ghosh, Toshniwal, Mraz, et al., 2021; Arya, Maeda, Ghosh, Toshniwal, & Sekimoto, 2021). A summary of the locations covered in these countries is included here to comprehensively describe the heterogeneity and robustness considered in the proposed RDD2022 dataset.
+The corresponding visualization of major data collection sites is presented in Figure 6.
+(i) Japan: The data is collected from seven local governments in Japan (Ichihara city, Chiba city, Sumida ward, Nagakute city, Adachi city, Muroran city, and Numazu city). The municipalities have snowy and urban areas that vary widely from the perspective of regional characteristics like weather and budgetary constraints.
+(ii) India: The data from India includes images captured from local roads, state highways, and national highways, covering the metropolitan (Delhi, Gurugram)
+as well as non-metropolitan regions (mainly from the state of Haryana). All these images have been collected from plain areas. Selection of road and time of data collection were decided based on accessibility of road, atmospheric conditions, and traffic volume.
+(iii) Czech Republic (partially in Slovakia): A substantial portion of road images was collected in Olomouc, Prague, and Bratislava municipalities and covered a mix of first-class, second-class, and third-class roads (the classification is based on factors like traffic flow, connectivity, speed limit, etc.) and local roads. A smaller portion of the road image dataset was collected along D1, D2, and D46 motorways to enhance the resilience of the targeted model.
+(iv) Norway: The data from Norway consists of two classes of roads (a) Expressways and (b) County Roads (or Low Volume Roads). Both types of road classes are asphalt pavements. Data collection has been done by the Norwegian Public Road Administration (Statens Vegvesen, SVV) and Inlandet Fylkeskommune (IFK).
+Images provided by SVV pertain to European Route
+E14, connecting the city of Trondheim in Norway to Sundsvall in Sweden, while the images from IFK belong to different county roads within Inllanndet County in Norway. The images were collected without any control over daytime/light, and all the images are natural without further processing. Further, the dataset captures diverse backgrounds, including clear grass fields, snow-covered areas, and conditions after rain. Furthermore, images with different illuminances, such as high sunlight and overcast weather resulting in daylight, have been considered.
+(v) The United States: The data from the United States consists of Google Street View images covering multiple locations, including California, Massachusetts, and New York. The image count for each site is provided in Figure 7.
+(vi) China: RDD2022 considered two types of data from
+China: (a) images captured by Drones (represented as China_Drone or China_D), and (b) the images captured using Smartphone-mounted MotorBikes (represented as China_MotorBike or China_M). The drone images were obtained from Dongji Avenue in Nanjing, China. The MotorBike images were collected on Jiu long hu campus, Southeast University.
+Images with normal light, under a shadow environment, and wet stains are covered.
+Asphalt concrete pavement is considered with a few exceptions in all six subsets of RDD2022. The methods used to capture the images and generate the annotations in RDD2022 are discussed in the following section. A comparative summary of RDD2022 with its previous versions FIGURE 3 Sample images for road damage categories considered in the data. (a) Longitudinal Crack (D00), (b) Transverse Crack (D10), (c) Alligator Crack (D20), (d) Pothole (D40).
+
+[p. 6]
+ARYA et al.
+is presented in Table 2, showing the quantum of improvement in the proposed dataset. Further, an analysis of the RDD datasets compared with other existing datasets is covered in tables 1 and 2 in Arya, Maeda, Ghosh, Toshniwal, Mraz, et al. (2021), and table 2 in Arya et al. (2024).
+2.2 | Methods
+The RDD2022 data has been prepared using two steps:
+image acquisition and damage annotation. For each of the six countries specified above, road images are captured and labelled using software to mark the road damage captured in the images. The details of these two processes are provided as follows.
+2.2.1 | Image acquisition
+The images in RDD2022 have been acquired using different methods for different countries. For India, Japan and the Czech Republic, smartphone-mounted FIGURE 4 Data statistics for RDD2022: Country-wise distribution of images and labels.
+FIGURE 5 Damage category-based data statistics for RDD2022.
+
+[p. 7]
+ARYA et al.
+FIGURE 6 Geographical distribution of major data collection sites from countries included in RDD2022.
+FIGURE 7 Details of the locations covered from the United States in RDD2022 data.
+
+[p. 8]
+ARYA et al.
+vehicles (cars) have been used to capture road images.
+The installation setup of the smartphone inside the car is shown in Figure 8. In some cases, the setup with the smartphone mounted on the windshield (inside the car)
+has also been used. Resolution of the images captured for Japan and the Czech Republic is 600 × 600. For India, images have been captured at a resolution of 960 × 720 and subsequently resized to 720 × 720 to maintain uniformity with the data from Japan and the Czech Republic.
+For Norway, instead of smartphones, high-resolution cameras mounted inside the windshield of a specialized vehicle, ViaPPS, have been used for collection of data (Figure 9). ViaPPS System employs two Basler_Ace2040gc cameras with Complementary metal oxide semiconductor (CMOS) sensor to capture images and then stitches them into one wide view image of a typical resolution 3650 × 2044.
+In contrast, the data for the United States comprises Google Street View Images (vehicle-based) of the TABLE 2 Comparative summary of the proposed RDD2022 dataset with previous versions.
+RDD2018
+RDD2019
+RDD2020
+RDD2022 (proposed)
+#Images 9053 13,133 26,336 47,420
+Image capturing device
+Smartphones
+Smartphones
+Smartphones
+Smartphones,
+High-resolution Cameras,
+Google Street View images
+Vehicle for data collection
+Cars
+Cars
+Cars
+Cars,
+Motorbikes,
+Drones
+Image resolution
+600 × 600
+600 × 600
+600 × 600, 720 × 720
+512 × 512, 600 × 600,
+720 × 720, 3650 × 2044
+Road view captured in the images
+Wide view (Road surface and surroundings captured horizontally)
+Wide view
+Wide view
+Wide view, extra-wide view (using two cameras in Norway), top-down view #Damage categories 8 9 4 4 #Labels 15,435 (train + test) for eight categories 30,989 (train + test) for nine categories 21,041 (Released for training) for four categories 55,007 (Released for training) for four categories Annotation method LabelImg tool LabelImg tool LabelImg tool LabelImg tool and Computer Vision Annotation Tool (CVAT)
+#Countries covered
+1 (Japan)
+1 (Japan)
+3 (Japan, India, Czech
+Republic)
+6 (Japan, India, Czech
+Republic, Norway, the
+United States, China)
+Geographical diversity
+High (7 municipalities with diverse regional and weather characteristics)
+Same as RDD2018
+Higher (internationally diverse regions are considered along with a local variation for each country)
+Highest (international diversity further enhanced)
+FIGURE 8 Sample installation setup of the smartphone in the car for image acquisition from India, Japan, and the Czech Republic.
+
+[p. 9]
+ARYA et al.
+resolution of 640 × 640. Likewise, for China, two types of image-acquisition methods have been considered. In the first method, a camera is mounted on motorcycles moving at an average speed of 30 km/h and this corresponding dataset is referred to as China_MotorBike or China_M. The second method uses a six-motor UAV M600 Pro (manufactured by DJI) for collection of pavement image, resulting in China_Drone (or China_D)
+data. A controllable three-axis gimbal was mounted at the bottom of the UAV to hold the camera and allow 360-degree rotation for capturing the China_Drone data.
+The resolution of images for the data from China_D is
+512 × 512 and the details are available by the CRDDC
+data contributors (Zhu et al., 2022). It may be noted that the China_Drone data has been included only in the training set of the proposed RDD2022 data to enhance the heterogeneity. The main goal of RDD2022 data still aligns with that of RDD2020, which focuses on low-cost affordable automatic road damage detection considering feasible methods for the public.
+2.2.2 | Annotation
+RDD2022 includes annotation for road damage present in the image. The software LabelImg has been used to annotate the images except for the data from Norway. For Norway, another software Computer Vision Annotation Tool (CVAT), has been used. Both the software packages are open source through public repositories: https://github.com/heartexlabs/labelImgandhttps://github.
+com/opencv/cvat, respectively.
+The annotation pipeline is the same as the one used for RDD2020 (Arya, Maeda, Ghosh, Toshniwal, Mraz, et al., 2021) and is presented in Figure 10. Sample annotation in the Labelling tool is shown in Figure 11.
+All recognized damage instances have been annotated by enclosing them with bounding boxes and classified by attaching the proper class label. Class labels and bounding box coordinates, defined by four decimal numbers (xmin, ymin, xmax, ymax), have been stored in the XML format similar to PASCAL VOC (Everingham et al., 2015). The sample annotation file is shown in Figure 12.
+3 | DATASET ACCESS AND
+SAMPLES
+The RDD2022 data may be accessed at the FigShare repository:
+https://doi.org/10.6084/m9.figshare.21431547.
+v1. Figure 13 shows the corresponding directory structure.
+It comprises seven folders, described as follows:
+1. China_Drone: It contains the data from China collected using Drones. Sample images are shown in Figure 14.
+2. China_MotorBike: It covers the data from China collected using Motorbike. Figure 15 shows the sample images.
+FIGURE 9 Camera set-up in the ViaPPS vehicle used to collect data from Norway (Source: Team NTNU, Data contributors in CRDDC).
+
+[p. 10]
+ARYA et al.
+3. Czech: It includes the Czech Republic data collected
+using vehicle-mounted Smartphones. The sample images are shown in Figure 16.
+4. India: It consists of the data from India collected using
+vehicle-mounted Smartphones. Figure 17 shows the sample images.
+5. Japan: It includes the data from Japan, collected using
+vehicle-mounted Smartphones. Figure 18 shows the sample images.
+6. Norway: It includes the Norway data collected using
+vehicle-mounted high-resolution cameras. Figure 19 shows the sample images.
+7. United_States: It contains the US data collected using
+Google Street View. Figure 20 shows the sample images.
+Each folder contains a sub-folder, “train,” which includes images (.jpg) and their annotations (.xml), as described in the previous section. The corresponding statistics (number of images, number of labels, etc.) are presented in Figure 4 and Figure 5. The sample annotation file (.xml) is shown in Figure 12.
+Along with the “train,” a sub-folder “test” is also included in each of the folders, except for China_Drone.
+The “test” directory contains images (.jpg files) for testing the models trained using “train” data. The annotations for “test” images have not been released. The users may utilize the leader boards on the CRDDC'2022 or ORDDC'2024 website to assess the prediction of their models for images in “test” data.
+FIGURE 11 Sample annotation in labelling tool (LabelImg).
+FIGURE 10 Annotation pipeline (a) input image, (b) image with bounding boxes, (c) final annotated image containing bounding boxes and class label (D00 in this case).
+
+[p. 11]
+ARYA et al.
+4 | USAGE NOTES AND INSIGHTS
+4.1 | Applications
+The RDD2022 dataset follows the format of the renowned PASCAL Visual Object Classes (VOC) datasets (Everingham et al., 2015), making it compatible with a wide range of existing image processing methods. A few applications are listed below.
+(i) Foundation for Road Damage Detection: The RDD2022 data lays the groundwork for automatic road damage detection and is valuable for municipalities and road agencies for low-cost inspection of road conditions.
+(ii) Architectural Advancements: The data may be used for developing new deep convolutional neural network architectures or improving the existing ones.
+(iii) Algorithm Training and Validation: Researchers may utilize the data to train, validate, and test the algorithms for automatically identifying road damages in six countries. Sample prediction results of a deep learning-based model trained using RDD2022 data are shown in Figure 21. Further, the readers may refer to the articles (Arya, Maeda, et al., 2022) and (Arya et al., 2024) for more details about the experiments conducted and models trained using RDD2022 as a part of CRDDC'2022. Additionally, Arya, Maeda, Ghosh, Toshniwal, Mraz, et al. (2021) provides both visual as well as quantitative analysis of several models trained with varying underlying data, utilizing a subset of RDD2022.
+(iv) Mobile Detection Capabilities: RDD2022's images have been collected using vehicle-mounted smartphones (or cameras in Norway), making models trained with this data capable of damage detection using data from moving vehicles, facilitating quick large-area inspections.
+(v) Data Challenge Organization: RDD2022 can be utilized to organize data challenges, like the Crowd Sensing-based Road Damage Detection Challenge (CRDDC'2022) and the Global Road Damage Detection Challenge (GRDDC'2020), assessing solutions for road damage detection in multiple countries.
+For instance, the ongoing big data cup, ORDDC'2024, also utilizes RDD2022 dataset.
+(vi) Benchmarking ML: Researchers can leverage
+RDD2022 to benchmark various algorithms for image classification, object detection, and similar applications in Geoscience or other fields.
+FIGURE 12 Sample annotation file: XML file corresponding to annotation performed in Figure 10.
+
+[p. 12]
+ARYA et al.
+4.2 | Challenges and
+performance aspects
+The following two aspects may be considered for global insights into road damage detection based on RDD2022:
+(i) Data distribution: The statistics shown in Figures 4 and 5, and the images shown in Figures 14–20 reveal significant variation in distribution between countries, both label-wise and acquisition-wise. These disparities highlight considerable dataset biases, presenting various challenges and opportunities for future research.
+Some of these opportunities are discussed as follows:
+a. Researchers may explore methods to mitigate dataset biases, such as data augmentation techniques that balance the distribution of labelled instances across countries.
+b. Additionally, developing models that are robust to variations in road conditions and data acquisition methods may improve the generalizability of road damage detection systems.
+c. Further, collaborative efforts to collect and annotate data from various regions can also help create more representative datasets for training and evaluation, spanning diverse geographical contexts.
+(ii) Performance variation: Concerning the performance of ML models trained using the RDD2022 data for detecting road damage in different countries, Table 3 presents the F1-scores of the top 11 teams across five leaderboards in CRDDC'2022. The performance shows FIGURE 13 The directory structure for the RDD2022 dataset.
+FIGURE 14 Sample images from China: Collected using drones.
+FIGURE 15 Sample images from China: Collected using motorbikes.
+
+[p. 13]
+ARYA et al.
+notable disparities between countries and teams, indicating a wide scope for improvement.
+a. The winning team achieved an F1-score of 77% for all six countries, outperforming the 2nd team by 2.7% and the 11th team by 16.7%.
+b. Performance differences for individual countries range from 16.2% (India) to 21.2% (Norway) between the top and bottom-ranked teams. The variation may be attributed to several factors including the teams' working methodologies, resource usage etc.
+For further information on the associated challenges, cross-country experiments and strategies employed by the CRDDC winning teams, the readers are referred to (Arya et al., 2024). The study indicates that there are several challenges including data imbalance, data sparsity, domain shift, that require focussed attention for training performance-effective models for global road damage detection.
+5 | FUTURE SCOPE
+The proposed dataset, RDD2022, holds substantial future potential, as outlined below:
+(i) Additional Images: Users may refer to image acquisition in the Methods section of the manuscript and may augment the RDD2022 with new images targeting multiple applications such as:
+a. Covering more countries: Adding images from other countries would help automate detection of road damage for those countries and improve FIGURE 16 Sample images from the Czech Republic.
+FIGURE 17 Sample images from Japan.
+FIGURE 18 Sample images from India.
+
+[p. 14]
+ARYA et al.
+FIGURE 19 Sample images from Norway.
+FIGURE 20 Sample images from the United States of America.
+FIGURE 21 Sample detection results (Longitudinal Crack—D00, and Alligator Crack—D20) of the model trained using RDD2022 data.
+
+[p. 15]
+ARYA et al.
+the performance for the currently considered six countries.
+b. More images for the underlying six countries:
+Currently, the RDD2022 dataset captures a massive number of images compared to other datasets.
+However, it is still not exhaustive in capturing all possible conditions (climatic/geographical) of the underlying six countries. New images may be collected to represent the heterogeneous scenarios in these countries better and train more robust models.
+c. Covering new road types: Currently, the images in
+RDD2022 mainly capture the flexible type of roads.
+Application for rigid pavement may be considered by augmenting RDD2022 with new images.
+(ii) Additional Annotations (damage categories): New annotations for additional damage categories, like Rutting and Ravelling, may be added to, broaden the application of dataset for monitoring road conditions, and assisting road agencies in maintenance efforts. Users may refer to the annotation pipeline provided in the manuscript to add new categories.
+(iii) Diversification of Applications: The users may utilize the images from RDD2022 and generate new annotations targeting new applications in geoscience or similar fields. For instance:
+a. The dataset in its current form primarily facilitates the detection, classification, and localization of road damage, yet its scope is constrained regarding severity analysis. Future work may focus on incorporating severity labels enabling the development of models capable of assessing and categorizing the severity levels of identified damages.
+b. Further, pixel-wise annotations may be created to support segmentation-based applications.
+Implementing advanced image segmentation techniques may also help in precisely delineating the boundaries of the detected damage instance. This may provide a finer level of detail for assessing the severity of damage areas.
+c. Likewise, the users may annotate the images targeting other domains such as identification of road assets, monitoring of traffic flow, detection of road congestion, etc. Here, it may be noted that the vehicles in the Norwegian dataset included in RDD2022 have been masked in the images. Hence, the vehiclerelated applications using RDD2022 may be targeted for Japan, India, the United States, the Czech Republic, and China, but not for Norway.
+6 | CONCLUSION
+Introducing the RDD2022 road damage dataset, this study establishes a versatile resource for geoscientists, computer vision experts, and ML researchers, providing a robust foundation for global road safety and sustainable transportation. This contribution is marked by the dataset's immediate applicability and adaptability to diverse scenarios, facilitating low-cost road inspection, algorithm development, and fostering international data cup challenges. While exhibiting substantial current value, RDD2022 holds significant potential for future enhancements. Prospective avenues include the addition of more images to enhance TABLE 3 Performance of RDD2022-based ML models for different countries in CRDDC'2022 (Source: Arya, Maeda, et al., 2022, table II).
+Rank
+Team reference
+F1-score for the five leaderboards in CRDDC
+All 6 countries
+India
+Japan
+Norway
+United States 1
+ShiYu_SeaView (Ding et al., 2022)
+0.770 0.583 0.789 0.595 0.844 2
+DongjunJeong (Jeong and
+Kim, 2022)
+0.743 0.540 0.750 0.538 0.801 3
+MDPT (Pham et al., 2022)
+0.741 0.516 0.735 0.504 0.817 4
+SGG-RS-Group (Wang et al., 2022)
+0.727 0.545 0.727 0.481 0.779 5
+IRCV-URV (Okran et al., 2022)
+0.726 0.518 0.735 0.498 0.779 6
+IMSC (Bhavsar et al., 2022)
+0.728 0.542 0.725 0.478 0.774 7
+NJUPT (Han et al., 2022)
+0.718 0.559 0.720 0.458 0.743 8
+TUT (Yang et al., 2022)
+0.694 0.519 0.773 0.464 0.727 9
+MILA (Saha & Sekimoto, 2022)
+0.697 0.494 0.716 0.462 0.775 10
+SIAI (Tran, D. Q., 2022)
+0.612 0.417 0.608 0.424 0.663 11
+Kubapok (Pokrywka J., 2022)
+0.603 0.421 0.594 0.383 0.649
+
+[p. 16]
+ARYA et al.
+geographical coverage and capture varied conditions or road types within the represented countries. The utility of the dataset may be further enriched through additional annotations for diverse categories of road damage, broadening its applicability for monitoring road conditions and aiding maintenance efforts.
+Furthermore, RDD2022's flexibility encourages users to explore various applications, spanning severity analysis, segmentation-based techniques, and broader domains like road asset identification and traffic flow monitoring.
+In essence, the study not only contributes a valuable dataset to the research community but also outlines a roadmap for its continuous refinement and extended utility, positioning it at the forefront of cutting-edge research across multiple disciplines.
+ACKNOWLEDGEMENTS
+We thank the researchers Hiroshi Omata and Takehiro
+Kashiyama for their support in organizing the
+CRDDC'2022. The research is partially sponsored by the
+Japan Society of Civil Engineers. The authors also acknowledge the participants of CRDDC—Madhavendra Sharma, Dr. Muneer Al- Hammadi, Mamoona Birkhez Shami, Dr. Alex Klein-Paste, Dr. Helge Mork, and Dr.
+Frank Lindseth, from Norwegian University of Science and Technology, Norway, Dr. Van Vung Pham and Du Nguyen from Sam Houston State University, Texas, United States, and Jingtao Zhong, Hanglin Cheng, Jing Zhang from Southeast University, China, for contributing the respective datasets.
+OPEN RESEARCH BADGES
+This article has been awarded Open Data Badge for making publicly available the digitally-shareable data necessary to reproduce the reported results. Data is available at https://doi.org/10.6084/m9.figshare.21431547.v1.
+DATA AVAILABILITY STATEMENT
+The underlying dataset is available at https://doi.org/10.6084/m9.figshare.21431547.v1.
+ORCID
+Deeksha Arya https://orcid.org/0000-0002-7948-5930

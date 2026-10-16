@@ -49,16 +49,18 @@ export const SEVERITY_COLORS = {
 export const STATUS_LABELS = {
   unconfirmed: { en: 'Unconfirmed', fr: 'Non confirmé', badge: 'badge-gray' },
   confirmed: { en: 'Confirmed', fr: 'Confirmé', badge: 'badge-amber' },
+  in_progress: { en: 'In progress', fr: 'En cours', badge: 'badge-blue' },
   scheduled: { en: 'Work Scheduled', fr: 'Planifié', badge: 'badge-blue' },
   repaired: { en: 'Repaired', fr: 'Réparé', badge: 'badge-emerald' },
   verified: { en: 'Verified by Pass', fr: 'Vérifié', badge: 'badge-green' },
+  rejected: { en: 'Rejected', fr: 'Rejeté', badge: 'badge-dark' },
   dismissed: { en: 'Dismissed', fr: 'Rejeté', badge: 'badge-dark' },
 };
 
 export const I18N = {
   en: {
-    title: 'TariqMap Decision Support',
-    subtitle: 'Institutional Road Asset Management & Repair Prioritization',
+    title: 'Road Infrastructure Overview',
+    subtitle: 'Ministry road condition, critical damage, and repair follow-up',
     demoBanner: 'DEMO DATA ACTIVE — Generated synthetic observations around Tunisian test corridors. Values labeled estimates.',
     filterClass: 'Damage Type',
     filterSeverity: 'Priority Level',
@@ -88,8 +90,8 @@ export const I18N = {
     close: 'Close',
   },
   fr: {
-    title: 'TariqMap Aide à la Décision',
-    subtitle: 'Gestion Patrimoniale Routière & Priorisation des Travaux',
+    title: 'Infrastructure routière',
+    subtitle: 'État du réseau, dangers critiques et suivi des réparations',
     demoBanner: 'DONNÉES DE DÉMO — Observations synthétiques sur les axes tunisiens. Montants estimés.',
     filterClass: 'Type d\'anomalie',
     filterSeverity: 'Niveau de priorité',

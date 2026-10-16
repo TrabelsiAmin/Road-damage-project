@@ -24,6 +24,7 @@ import {
 } from './supabase';
 import { haversineDistanceMeters } from './utils/clustering';
 import { MinistryOverview } from './components/MinistryOverview';
+import { TechnicalRecommendation } from './components/TechnicalRecommendation';
 import {
   buildMinistryOverview,
   isWithinPeriod,
@@ -33,6 +34,11 @@ import {
   observationTime,
 } from './utils/ministryAnalytics';
 import { calculatePriorityScore, PRIORITY_CONFIG } from './utils/priorityScoring';
+import {
+  buildMapRagPopupHtml,
+  buildTechnicalQuestion,
+  observationForRecommendation,
+} from './utils/ragClient';
 import validationMetricsData from './data/validation_metrics.json';
 import {
   MapPin,
@@ -63,6 +69,7 @@ import {
   Trash2,
   RotateCcw,
   Info,
+  BookOpen,
 } from 'lucide-react';
 
 // Priority Colors for Leaflet pins (v2: HIGH, MEDIUM, LOW)
@@ -342,6 +349,25 @@ export default function App() {
   const focusMarkerRef = useRef(null);
   const [mapFocus, setMapFocus] = useState(null);
   const [mapReady, setMapReady] = useState(false);
+  const [ragSelection, setRagSelection] = useState(null);
+  const [ragRequest, setRagRequest] = useState(null);
+  const askObservationRef = useRef(() => {});
+  const langRef = useRef(lang);
+  langRef.current = lang;
+  askObservationRef.current = (observation) => {
+    const safe = observationForRecommendation(observation);
+    setRagSelection(safe);
+    setRagRequest({
+      id: `${Date.now()}-${Math.random().toString(36).slice(2)}`,
+      question: buildTechnicalQuestion(safe, langRef.current),
+    });
+    window.requestAnimationFrame(() => {
+      document.getElementById('recommandation-technique')?.scrollIntoView({
+        behavior: 'smooth',
+        block: 'start',
+      });
+    });
+  };
 
   const t = I18N[lang] || I18N.fr;
 
@@ -638,6 +664,31 @@ export default function App() {
 
         const marker = L.marker([cluster.latitude, cluster.longitude], {
           icon: customIcon,
+        });
+
+        const popup = L.popup({ maxWidth: 320, minWidth: 220, className: 'rag-leaflet-popup' });
+        popup.setContent('<div class="rag-map-popup-root"></div>');
+        marker.bindPopup(popup);
+        marker.on('popupopen', () => {
+          const root = popup.getElement()?.querySelector('.rag-map-popup-root');
+          if (!root) return;
+          const safe = observationForRecommendation(cluster);
+          const known = safe.classCode && DAMAGE_CLASSES[safe.classCode];
+          const isFr = langRef.current !== 'en';
+          root.innerHTML = buildMapRagPopupHtml({
+            classCode: safe.classCode || '—',
+            classLabel: known ? (isFr ? known.fr : known.en) : (isFr ? 'Non classé' : 'Unclassified'),
+            priorityLabel: safe.priority || '—',
+            statusLabel: safe.status && STATUS_LABELS[safe.status]
+              ? (isFr ? STATUS_LABELS[safe.status].fr : STATUS_LABELS[safe.status].en)
+              : '—',
+            buttonLabel: isFr ? 'Recommandation technique' : 'Technical recommendation',
+          });
+          root.querySelector('[data-rag-ask]')?.addEventListener('click', (event) => {
+            event.preventDefault();
+            event.stopPropagation();
+            askObservationRef.current(safe);
+          });
         });
 
         marker.on('click', () => {
@@ -1016,6 +1067,13 @@ export default function App() {
         error={error}
         onRetry={loadData}
         onOpenObservation={openObservation}
+        onAskObservation={(item) => askObservationRef.current(item)}
+      />
+
+      <TechnicalRecommendation
+        lang={lang}
+        selection={ragSelection}
+        request={ragRequest}
       />
 
       <div className="ministry-map-heading">
@@ -1374,6 +1432,15 @@ export default function App() {
                             <div style={{ fontSize: '0.72rem', color: 'var(--text-muted)', marginTop: '4px' }}>
                               {new Date(obs.created_at).toLocaleString()}
                             </div>
+
+                            <button
+                              type="button"
+                              className="btn btn-secondary rag-inline-btn"
+                              onClick={() => askObservationRef.current(obs)}
+                            >
+                              <BookOpen size={12} />
+                              <span>Recommandation technique</span>
+                            </button>
 
                             {/* Authority Status Workflow Actions */}
                             {isAuthorityUser && (

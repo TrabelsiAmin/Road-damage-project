@@ -33,6 +33,7 @@ const COPY = {
     syncTitle: 'Operational catalogue',
     syncBody: 'This view reads reports already stored in Supabase. Device upload queues stay on the inspection app.',
     open: 'Open on map',
+    ask: 'Technical recommendation',
     empty: 'No road damage observations match these filters.',
     chartEmpty: 'None recorded in this view.',
     loading: 'Loading the road catalogue…',
@@ -72,6 +73,7 @@ const COPY = {
     syncTitle: 'Catalogue opérationnel',
     syncBody: 'Cet écran lit les rapports déjà stockés dans Supabase. Les files d\'envoi restent sur l\'application d\'inspection.',
     open: 'Voir sur la carte',
+    ask: 'Recommandation technique',
     empty: 'Aucune observation ne correspond à ces filtres.',
     chartEmpty: 'Aucun enregistrement dans cette vue.',
     loading: 'Chargement du catalogue routier…',
@@ -163,7 +165,7 @@ function KpiCard({ label, value, help, delta, tone }) {
   );
 }
 
-function ReportRow({ item, copy, lang, onOpen }) {
+function ReportRow({ item, copy, lang, onOpen, onAsk }) {
   const klass = DAMAGE_CLASSES[item.classCode];
   const status = STATUS_LABELS[item.status];
   const coords = item.latitude != null && item.longitude != null
@@ -195,9 +197,16 @@ function ReportRow({ item, copy, lang, onOpen }) {
         </p>
         <p className="ministry-report-meta">{when} · {coords}</p>
       </div>
-      <button type="button" className="btn btn-secondary" onClick={() => onOpen(item.id)}>
-        {copy.open}
-      </button>
+      <div className="ministry-report-actions">
+        <button type="button" className="btn btn-secondary" onClick={() => onOpen(item.id)}>
+          {copy.open}
+        </button>
+        {onAsk && (
+          <button type="button" className="btn btn-secondary" onClick={() => onAsk(item)}>
+            {copy.ask}
+          </button>
+        )}
+      </div>
     </li>
   );
 }
@@ -211,6 +220,7 @@ export function MinistryOverview({
   error,
   onRetry,
   onOpenObservation,
+  onAskObservation,
 }) {
   const copy = COPY[lang] || COPY.fr;
   const comparison = overview?.comparison;
@@ -341,7 +351,14 @@ export function MinistryOverview({
               ) : (
                 <ul className="ministry-report-list">
                   {overview.priorityQueue.map((item) => (
-                    <ReportRow key={item.id} item={item} copy={copy} lang={lang} onOpen={onOpenObservation} />
+                    <ReportRow
+                      key={item.id}
+                      item={item}
+                      copy={copy}
+                      lang={lang}
+                      onOpen={onOpenObservation}
+                      onAsk={onAskObservation}
+                    />
                   ))}
                 </ul>
               )}

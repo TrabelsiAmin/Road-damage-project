@@ -7,6 +7,8 @@ import 'package:intl/intl.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:uuid/uuid.dart';
 import '../core/app_colors.dart';
+import '../core/constants.dart';
+import '../inference/preprocessing.dart';
 
 import '../models/observation.dart';
 import '../services/detection_service.dart';
@@ -14,7 +16,6 @@ import '../services/observation_repository.dart';
 import '../data/remote/api_client.dart';
 import '../services/territorial_service.dart';
 import 'camera_detection_screen.dart';
-import 'live_stream_screen.dart';
 import 'model_status_screen.dart';
 import 'offline_queue_screen.dart';
 import 'photo_confirm_screen.dart';
@@ -24,7 +25,7 @@ import 'video_import_screen.dart';
 import '../widgets/dashboard_map.dart';
 
 class HomeScreen extends StatefulWidget {
-  const HomeScreen({super.key, required this.initialActor});
+  const HomeScreen({super.key, this.initialActor = 'Municipality'});
   final String initialActor;
 
   @override
@@ -108,6 +109,11 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
       } catch (_) {}
 
       final imageFile = File(picked.path);
+      final bytes = await imageFile.readAsBytes();
+      final decoded = decodeAndOrient(bytes);
+      final imageWidth = decoded.width;
+      final imageHeight = decoded.height;
+
       final results   = await _detection.detectAll(imageFile);
       final obs = Observation(
         id:             _uuid.v4(),
@@ -119,13 +125,22 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
         accuracyMeters: position?.accuracy,
         actor:          _actor,
         agentResults:   results,
+        imageWidth:     imageWidth,
+        imageHeight:    imageHeight,
+        modelBundleVersion: TariqMapConstants.modelBundleVersion,
       );
 
+      debugPrint('[Pipeline:ResultObject] Gallery observation created: ${obs.id}, '
+          'detections: ${obs.detections.length}, size: ${imageWidth}x$imageHeight, '
+          'score: ${obs.priorityScore.toStringAsFixed(1)}, '
+          'anomaly: ${obs.detections.firstOrNull?.classCode}');
+
       await _repository.save(obs);
+      final storedObs = await _repository.findById(obs.id) ?? obs;
       if (mounted) {
-        setState(() => _observations.insert(0, obs));
+        setState(() => _observations.insert(0, storedObs));
         await Navigator.of(context).push(MaterialPageRoute<void>(
-          builder: (_) => ResultScreen(observation: obs)));
+          builder: (_) => ResultScreen(observation: storedObs)));
       }
     } catch (error) {
       setState(() => _message = error.toString().replaceFirst('Bad state: ', ''));
@@ -154,23 +169,6 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
     }
   }
 
-  Future<void> _openLiveStream() async {
-    if (kIsWeb) {
-      setState(() => _message = 'Live streaming is not supported in browser.');
-      return;
-    }
-    await Navigator.of(context).push(MaterialPageRoute<void>(
-      builder: (_) => LiveStreamScreen(
-        detectionService: _detection,
-        repository:       _repository,
-        actor:            _actor,
-      ),
-      fullscreenDialog: true,
-    ));
-    final loaded = await _repository.list();
-    if (mounted) setState(() => _observations = loaded);
-  }
-
   Future<void> _openTakePhoto() async {
     // Prompt the user: camera or gallery?
     final source = await showModalBottomSheet<ImageSource>(
@@ -185,6 +183,14 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
       ),
     );
     if (source == null || !mounted) return;
+    if (source == ImageSource.camera) {
+      await _openCamera();
+      return;
+    }
+    if (source == ImageSource.gallery) {
+      await _importFromGallery();
+      return;
+    }
 
     setState(() { _busy = true; _message = null; });
     try {
@@ -222,11 +228,12 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
     if (mounted) setState(() => _observations = loaded);
   }
 
-  Future<void> _syncAll() async {
+  Future<SyncResult> _syncAll({SyncCancelToken? cancelToken}) async {
     final sync = SyncCoordinator(_repository, ApiClient());
-    await sync.syncPending();
+    final result = await sync.syncPending(cancelToken: cancelToken);
     final loaded = await _repository.list();
     if (mounted) setState(() => _observations = loaded);
+    return result;
   }
 
   @override
@@ -285,9 +292,9 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
                         // ── Map Dashboard ──────────────────────────────────
                         const _SectionLabel('ANOMALY MAP'),
                         const SizedBox(height: 10),
-                        const SizedBox(
+                        SizedBox(
                           height: 260,
-                          child: DashboardMap(),
+                          child: DashboardMap(repository: _repository),
                         ),
                         const SizedBox(height: 24),
 
@@ -562,9 +569,26 @@ class _ModelPill extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final isMock = detection.usingMock;
-    final color  = isMock ? AppColors.mockWarning : AppColors.syncDone;
-    final icon   = isMock ? Icons.science_outlined : Icons.verified_outlined;
-    final label  = isMock ? 'DEMO MODE' : 'TFLite AI ACTIVE';
+    final isFallback = detection.isRoadSenseFallback;
+    final isHybrid = detection.isHybridActive;
+
+    final color = isMock
+        ? AppColors.mockWarning
+        : isFallback
+            ? Colors.orange
+            : AppColors.syncDone;
+    final icon = isMock
+        ? Icons.science_outlined
+        : isFallback
+            ? Icons.warning_amber_outlined
+            : Icons.verified_outlined;
+    final label = isMock
+        ? 'DEMO MODE'
+        : isFallback
+            ? 'TFLite AI (FALLBACK)'
+            : isHybrid
+                ? 'TFLite AI ACTIVE (HYBRID)'
+                : 'TFLite AI ACTIVE';
 
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
@@ -614,6 +638,8 @@ class _ActionGrid extends StatelessWidget {
           enabled: !busy,
           onTap: onTakePhoto,
           large: true,
+          compact: false,
+          secondary: false,
         ),
         const SizedBox(height: 12),
         // ── Record Video — secondary large button ───────────────────────────
@@ -626,6 +652,8 @@ class _ActionGrid extends StatelessWidget {
           enabled: !busy,
           onTap: onRecordVideo,
           large: true,
+          compact: false,
+          secondary: true,
         ),
         // Loading indicator
         if (busy) const Padding(
@@ -693,7 +721,7 @@ class _ActionButtonState extends State<_ActionButton>
 
   @override
   Widget build(BuildContext context) {
-    final verticalPad = widget.compact ? 14.0 : (widget.large ? 18.0 : 14.0);
+    final verticalPad = widget.large ? 18.0 : 14.0;
 
     return GestureDetector(
       onTapDown: (_) { if (widget.enabled) _ctrl.forward(); },

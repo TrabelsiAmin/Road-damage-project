@@ -1,5 +1,4 @@
 import 'dart:io';
-import 'dart:typed_data';
 import 'package:flutter/foundation.dart';
 import 'package:image/image.dart' as img;
 import 'package:tflite_flutter/tflite_flutter.dart';
@@ -63,6 +62,8 @@ class TFLiteAgentRunner implements DetectionAgentRunner {
     required String modelPath,
     this.iouThreshold = 0.45,
     this.inputSize    = 640,
+    this.d40ThresholdOverride,
+    this.onlyD40 = false,
   }) {
     _tryLoad(modelPath);
   }
@@ -77,26 +78,66 @@ class TFLiteAgentRunner implements DetectionAgentRunner {
   /// Model input width and height (must match the exported TFLite).
   final int inputSize;
 
+  /// Optional custom confidence threshold for D40 pothole class.
+  final double? d40ThresholdOverride;
+
+  /// When true, decodes and retains only D40 pothole detections.
+  final bool onlyD40;
+
   Interpreter? _interpreter;
   bool _failed = false;
+  String? _loadError;
+  Duration? _lastInferenceDuration;
 
   @override
-  bool get isReady => _interpreter != null;
+  bool get isReady => _interpreter != null && !_failed;
   bool get failed  => _failed;
+  String? get loadError => _loadError;
 
   @override
   bool get isMock => false;
 
+  /// Last measured inference execution duration.
+  Duration? get lastInferenceDuration => _lastInferenceDuration;
+
   void _tryLoad(String modelPath) {
     try {
+      final file = File(modelPath);
+      if (!file.existsSync()) {
+        throw StateError('Model file not found: $modelPath');
+      }
+
       // Use up to 4 threads — capped so we don't starve the UI thread.
       final numThreads = (Platform.numberOfProcessors - 1).clamp(2, 4);
       final options = InterpreterOptions()..threads = numThreads;
-      _interpreter = Interpreter.fromFile(File(modelPath), options: options);
+      final interpreter = Interpreter.fromFile(file, options: options);
+
+      // Verify tensor shapes at load: [1, 640, 640, 3] and [1, 8, 8400]
+      final inTensors = interpreter.getInputTensors();
+      final outTensors = interpreter.getOutputTensors();
+      if (inTensors.isEmpty || outTensors.isEmpty) {
+        throw StateError('Model has no input or output tensors');
+      }
+
+      final inShape = inTensors[0].shape;
+      final outShape = outTensors[0].shape;
+      debugPrint('[TFLite:$agentName] Input: $inShape, Output: $outShape');
+
+      if (inShape.length != 4 || inShape[0] != 1 || inShape[1] != inputSize ||
+          inShape[2] != inputSize || inShape[3] != 3) {
+        throw StateError('Expected input shape [1, $inputSize, $inputSize, 3], got $inShape');
+      }
+
+      if (outShape.length != 3 || outShape[0] != 1 || outShape[1] != 8 || outShape[2] != 8400) {
+        throw StateError('Expected output shape [1, 8, 8400], got $outShape');
+      }
+
+      _interpreter = interpreter;
       debugPrint('[TFLite:$agentName] Loaded: $modelPath (threads=$numThreads)');
     } catch (e) {
       debugPrint('[TFLite:$agentName] Load failed: $e');
       _failed = true;
+      _loadError = e.toString();
     }
   }
 
@@ -133,24 +174,6 @@ class TFLiteAgentRunner implements DetectionAgentRunner {
     }
     try {
       return await _runInferenceOnBytes(bytes);
-    } catch (e) {
-      return AgentResult(agent: agentName, detections: const [], error: e.toString());
-    }
-  }
-
-  /// Fast path for live camera: accepts a pre-built Float32List tensor
-  /// [1, inputSize, inputSize, 3] that was already prepared off-thread.
-  /// Skips JPEG encode/decode → saves ~100-200 ms per frame.
-  Future<AgentResult> detectFromTensor(Float32List inputTensor) async {
-    if (_failed || _interpreter == null) {
-      return AgentResult(
-        agent: agentName,
-        detections: const [],
-        error: 'Model not loaded',
-      );
-    }
-    try {
-      return _runInferenceOnTensor(inputTensor);
     } catch (e) {
       return AgentResult(agent: agentName, detections: const [], error: e.toString());
     }
@@ -204,37 +227,25 @@ class TFLiteAgentRunner implements DetectionAgentRunner {
       ),
     );
 
-    // 4. Run interpreter with reshaped inputs.
+    // 4. Run interpreter with reshaped inputs and measure duration.
+    final sw = Stopwatch()..start();
     interpreter.runForMultipleInputs(
       [input.reshape([1, inputSize, inputSize, 3])],
       {0: output},
     );
+    sw.stop();
+    _lastInferenceDuration = sw.elapsed;
+    if (kDebugMode) {
+      debugPrint('[TFLite:$agentName] Inference time: ${sw.elapsedMilliseconds} ms');
+    }
 
     // 5. Shared decode logic
-    return _decodeOutput(output, numClasses, numAnchors);
+    return _decodeOutput(output, numClasses, numAnchors, latencyMs: sw.elapsedMilliseconds);
   }
 
-  /// Runs the interpreter on a pre-built Float32List — NO image decode needed.
-  AgentResult _runInferenceOnTensor(Float32List inputTensor) {
-    final interpreter = _interpreter!;
-    final numClasses  = _classNames.length;
-    final outputShape = interpreter.getOutputTensor(0).shape;
-    final numAnchors  = outputShape[2];
-
-    final output = List.generate(
-      1, (_) => List.generate(4 + numClasses, (_) => List.filled(numAnchors, 0.0)));
-
-    interpreter.runForMultipleInputs(
-      [inputTensor.reshape([1, inputSize, inputSize, 3])],
-      {0: output},
-    );
-
-    return _decodeOutput(output, numClasses, numAnchors);
-  }
-
-  /// Shared output decoder used by both inference paths.
+  /// Shared output decoder used by inference.
   AgentResult _decodeOutput(
-      List<dynamic> output, int numClasses, int numAnchors) {
+      List<dynamic> output, int numClasses, int numAnchors, {int? latencyMs}) {
     final rawDetections = <Detection>[];
     for (var anchor = 0; anchor < numAnchors; anchor++) {
       double bestScore = 0;
@@ -248,7 +259,12 @@ class TFLiteAgentRunner implements DetectionAgentRunner {
       if (bestClass == -1) continue;
       final className = _classNames[bestClass];
       if (className == null) continue;
-      if (bestScore < _thresholdFor(className)) continue;
+
+      if (onlyD40 && className != 'D40') continue;
+      final thresh = (className == 'D40' && d40ThresholdOverride != null)
+          ? d40ThresholdOverride!
+          : _thresholdFor(className);
+      if (bestScore < thresh) continue;
       if (!agentClasses.contains(className)) continue;
 
       final cx = (output[0][0][anchor] as num).toDouble().clamp(0.0, 1.0);
@@ -272,6 +288,7 @@ class TFLiteAgentRunner implements DetectionAgentRunner {
       agent: agentName,
       detections: applyClassAwareNms(rawDetections, iouThreshold: iouThreshold),
       isMock: false,
+      latencyMs: latencyMs,
     );
   }
 }

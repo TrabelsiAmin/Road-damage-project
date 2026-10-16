@@ -3,7 +3,7 @@ import 'package:flutter/services.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'core/app_colors.dart';
 import 'data/remote/supabase_service.dart';
-import 'screens/welcome_screen.dart';
+import 'screens/home_screen.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -28,7 +28,7 @@ class TariqMapApp extends StatelessWidget {
       title: 'TariqMap',
       debugShowCheckedModeBanner: false,
       theme: _buildTheme(),
-      home: const WelcomeScreen(),
+      home: const HomeScreen(),
     );
   }
 

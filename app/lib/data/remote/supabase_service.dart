@@ -1,22 +1,19 @@
 import 'dart:io';
-import 'dart:typed_data';
 import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
-import 'package:mime/mime.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:uuid/uuid.dart';
 import '../../core/constants.dart';
 import '../../core/supabase_config.dart';
 import '../../models/observation.dart';
 import '../../services/image_compressor.dart';
+import '../../services/sync_cancel_token.dart';
 
-/// Central service for all Supabase interactions from the mobile app.
+/// Central service for Supabase interactions from the mobile app.
 ///
 /// Responsibilities:
 ///  1. Upload captured images to the [SupabaseCfg.imagesBucket] storage bucket.
-///  2. Upload recorded live-session video clips to [SupabaseCfg.videosBucket].
-///  3. Write observation + detection metadata rows directly to Supabase DB.
-///  4. Manage live session lifecycle (create / append frame / finalize).
+///  2. Write observation + detection metadata rows directly to Supabase DB.
 ///
 /// The app uses the Supabase anon key governed by RLS policies.
 /// The service-role secret stays server-side only (backend/.env).
@@ -44,16 +41,22 @@ class SupabaseService {
 
   /// Uploads a still-image capture to Supabase Storage.
   /// The image is compressed to WebP before upload to reduce storage usage.
+  /// Uses a unique object path and plain insert (upsert: false).
   /// Returns the public URL of the stored object, or null on failure.
   Future<String?> uploadObservationImage({
     required String observationId,
     required String captureId,
     required File imageFile,
+    SyncCancelToken? cancelToken,
   }) async {
     try {
+      cancelToken?.throwIfCancelled();
       // Compress to WebP — saves 40-60% storage vs original JPEG/PNG
       final compressed = await ImageCompressor.compressToWebP(imageFile);
-      final storagePath = '$observationId/$captureId.${compressed.extension}';
+      cancelToken?.throwIfCancelled();
+
+      // Task D: Unique object path plus plain upload (no upsert)
+      final storagePath = '$observationId/${_uuid.v4()}.${compressed.extension}';
 
       await _client.storage
           .from(SupabaseCfg.imagesBucket)
@@ -61,8 +64,12 @@ class SupabaseService {
             storagePath,
             compressed.bytes,
             fileOptions: FileOptions(
-              contentType: compressed.mimeType, upsert: true),
+              contentType: compressed.mimeType,
+              upsert: false,
+            ),
           );
+
+      cancelToken?.throwIfCancelled();
 
       final url = _client.storage
           .from(SupabaseCfg.imagesBucket)
@@ -70,6 +77,7 @@ class SupabaseService {
 
       debugPrint('[SupabaseService] Image uploaded (WebP): $url '
           '(saved ${compressed.savedBytes ~/ 1024} KB)');
+
       await _recordMediaFile(
         observationId: observationId,
         bucket: SupabaseCfg.imagesBucket,
@@ -78,8 +86,11 @@ class SupabaseService {
         mediaType: 'image',
         mimeType: compressed.mimeType,
         fileSizeBytes: compressed.compressedSizeBytes,
+        cancelToken: cancelToken,
       );
       return url;
+    } on SyncCancelledException {
+      rethrow;
     } catch (e) {
       debugPrint('[SupabaseService] Image upload failed: $e');
       return null;
@@ -93,21 +104,31 @@ class SupabaseService {
     required String captureId,
     required Uint8List bytes,
     String mimeType = 'image/jpeg',
+    SyncCancelToken? cancelToken,
   }) async {
     try {
+      cancelToken?.throwIfCancelled();
       final compressed = await ImageCompressor.compressBytes(bytes);
-      final storagePath = '$observationId/$captureId.${compressed.extension}';
+      cancelToken?.throwIfCancelled();
+
+      final storagePath = '$observationId/${_uuid.v4()}.${compressed.extension}';
       await _client.storage
           .from(SupabaseCfg.imagesBucket)
           .uploadBinary(
             storagePath,
             compressed.bytes,
             fileOptions: FileOptions(
-              contentType: compressed.mimeType, upsert: true),
+              contentType: compressed.mimeType,
+              upsert: false,
+            ),
           );
+
+      cancelToken?.throwIfCancelled();
+
       final url = _client.storage
           .from(SupabaseCfg.imagesBucket)
           .getPublicUrl(storagePath);
+
       debugPrint('[SupabaseService] Frame image uploaded (WebP): $url');
       await _recordMediaFile(
         observationId: observationId,
@@ -117,58 +138,108 @@ class SupabaseService {
         mediaType: 'image',
         mimeType: compressed.mimeType,
         fileSizeBytes: compressed.compressedSizeBytes,
+        cancelToken: cancelToken,
       );
       return url;
+    } on SyncCancelledException {
+      rethrow;
     } catch (e) {
       debugPrint('[SupabaseService] Frame image upload failed: $e');
       return null;
     }
   }
 
-  // Video upload
-
-  /// Uploads a recorded live-session video to Supabase Storage.
-  /// Returns the public URL of the stored video, or null on failure.
-  Future<String?> uploadSessionVideo({
-    required String sessionId,
-    required File videoFile,
-    void Function(double progress)? onProgress,
+  /// Uploads a public blurred thumbnail to bucket `public-photos`.
+  /// Bucket path policy requires:
+  ///   bucket_id = 'public-photos' and name ~ '^[0-9a-f-]{36}/[0-9a-f-]{36}\.(webp|jpg)$'
+  ///
+  /// Uses a deterministic object name `<observation_id>/<uuid_v5>.webp`, derived via
+  /// UUID v5 from the observation ID using [Namespace.url.value].
+  /// This ensures retries never create orphan files and avoids random UUID accumulation.
+  ///
+  /// Order:
+  ///   1. Plain insert (upsert: false) to storage at `<observation_id>/<uuid_v5>.webp`.
+  ///      Logs HTTP status; treats 409 conflict as success.
+  ///   2. Check cancellation (on cancel, just stop; orphan file with no media_files row is harmless).
+  ///   3. Plain insert into `media_files` with `bucket='public-photos', media_type='thumbnail', is_demo=false`.
+  ///      Logs HTTP status; treats 409 conflict as success; does NOT swallow other errors.
+  Future<String?> uploadPublicThumbnail({
+    required String observationId,
+    required Uint8List thumbnailBytes,
+    String mimeType = 'image/webp',
+    SyncCancelToken? cancelToken,
   }) async {
-    try {
-      final bytes = await videoFile.readAsBytes();
-      final mimeType = lookupMimeType(videoFile.path) ?? 'video/mp4';
-      final fileName = videoFile.path.split(Platform.pathSeparator).last;
-      final storagePath = '$sessionId/$fileName';
+    cancelToken?.throwIfCancelled();
+    final fileUuid = _uuid.v5(Namespace.url.value, observationId);
+    final storagePath = '$observationId/$fileUuid.webp';
 
+    try {
       await _client.storage
-          .from(SupabaseCfg.videosBucket)
+          .from(SupabaseCfg.publicPhotosBucket)
           .uploadBinary(
             storagePath,
-            bytes,
-            fileOptions: FileOptions(contentType: mimeType, upsert: true),
+            thumbnailBytes,
+            fileOptions: FileOptions(
+              contentType: mimeType,
+              upsert: false,
+            ),
           );
-
-      final url = _client.storage
-          .from(SupabaseCfg.videosBucket)
-          .getPublicUrl(storagePath);
-
-      debugPrint('[SupabaseService] Video uploaded: $url (${(bytes.length / 1e6).toStringAsFixed(1)} MB)');
-      onProgress?.call(1.0);
-      return url;
+      debugPrint('[ThumbnailUpload] Storage upload succeeded: HTTP 200/201 path=$storagePath');
+    } on StorageException catch (e) {
+      if (e.statusCode == '409' ||
+          e.message.toLowerCase().contains('already exists') ||
+          e.message.toLowerCase().contains('duplicate')) {
+        debugPrint('[ThumbnailUpload] Storage upload duplicate (treated as success): HTTP 409 path=$storagePath');
+      } else {
+        debugPrint('[ThumbnailUpload] Storage upload failed: HTTP ${e.statusCode} ${e.message} path=$storagePath');
+        rethrow;
+      }
     } catch (e) {
-      debugPrint('[SupabaseService] Video upload failed: $e');
-      return null;
+      debugPrint('[ThumbnailUpload] Storage upload failed: $e path=$storagePath');
+      rethrow;
     }
+
+    // Cancellation check immediately after storage upload:
+    // Phone has no delete permissions; on cancel, just stop.
+    cancelToken?.throwIfCancelled();
+
+    final publicUrl = _client.storage
+        .from(SupabaseCfg.publicPhotosBucket)
+        .getPublicUrl(storagePath);
+
+    final mediaId = _uuid.v5(Namespace.url.value, '$observationId:thumbnail');
+    try {
+      await _client.from(SupabaseCfg.tableMediaFiles).insert({
+        'id': mediaId,
+        'observation_id': observationId,
+        'bucket': SupabaseCfg.publicPhotosBucket,
+        'storage_path': storagePath,
+        'public_url': publicUrl,
+        'media_type': 'thumbnail',
+        'mime_type': mimeType,
+        'file_size_bytes': thumbnailBytes.lengthInBytes,
+        'uploaded_at': DateTime.now().toUtc().toIso8601String(),
+        'is_demo': false,
+      });
+      debugPrint('[ThumbnailUpload] media_files insert succeeded: HTTP 201 row=$mediaId');
+    } on PostgrestException catch (e) {
+      if (_isConflict(e)) {
+        debugPrint('[ThumbnailUpload] media_files duplicate (treated as success): HTTP 409 code=${e.code} row=$mediaId');
+      } else {
+        debugPrint('[ThumbnailUpload] media_files insert failed: HTTP ${e.code ?? "error"} ${e.message} row=$mediaId');
+        rethrow;
+      }
+    } catch (e) {
+      debugPrint('[ThumbnailUpload] media_files insert failed: $e row=$mediaId');
+      rethrow;
+    }
+
+    return publicUrl;
   }
 
   // Observation sync
 
   /// Loads the most recent image for an observation as decoded bytes.
-  ///
-  /// Storage is the source of truth. The public URL is only a fallback for
-  /// older rows or deployments where Storage.download is not available to the
-  /// current client. Returning bytes lets the map work with both public and
-  /// private buckets and avoids relying on a stale URL stored in the database.
   Future<Uint8List?> downloadObservationImage({
     required String observationId,
   }) async {
@@ -201,8 +272,6 @@ class SupabaseService {
       }
       return response.bodyBytes;
     } catch (e) {
-      // A missing media row is expected for older observations created before
-      // image upload was enabled; do not fail the whole map for it.
       debugPrint('[SupabaseService] Observation image lookup failed: $e');
       return null;
     }
@@ -210,48 +279,71 @@ class SupabaseService {
 
   /// Syncs a complete observation directly to Supabase DB.
   /// Also uploads the captured image to Storage if [imageFile] is provided.
-  /// This method is idempotent (upsert on the observation row).
+  /// Uses plain inserts and treats 409 conflict as success (Task D).
   Future<void> syncObservation(
     Observation obs, {
     File? imageFile,
     String? organizationId,
+    SyncCancelToken? cancelToken,
   }) async {
     final capturedAt = obs.createdAt.toUtc().toIso8601String();
     final orgId = organizationId ?? '11111111-1111-4111-8111-111111111111';
 
-    // 1. Observation row
-    await _client.from(SupabaseCfg.tableObservations).upsert({
-      'id':                   obs.id,
-      'capture_id':           obs.captureId,
-      'parent_observation_id': null,
-      'created_by':           null,
-      'organization_id':      orgId,
-      'device_id':            obs.deviceId,
-      'source':               'camera',
-      'captured_at':          capturedAt,
-      'image_width':          obs.imageWidth,
-      'image_height':         obs.imageHeight,
-      'priority_score':       obs.priorityScore,
-      'priority_label':       obs.priorityLabel,
-      'anomaly_type':         _anomalyTypeFor(obs),
-      'model_bundle_version': obs.modelBundleVersion,
-      'created_at':           capturedAt,
-    });
+    cancelToken?.throwIfCancelled();
 
-    // 2. Location row
-    await _client.from(SupabaseCfg.tableLocations).upsert({
-      'observation_id':  obs.id,
-      'latitude':        obs.latitude,
-      'longitude':       obs.longitude,
-      'accuracy_meters': obs.accuracyMeters,
-      'captured_at':     capturedAt,
-    });
-
-    // 3. Agent runs + detections. RLS on agent_runs rejects the publishable
-    // key; the observation and location above are still kept.
+    // 1. Observation row (plain insert, no device_id to public tables, 409 as success)
     try {
-      for (final result in obs.agentResults) {
-        final agentRunId = _uuid.v4();
+      await _client.from(SupabaseCfg.tableObservations).insert({
+        'id':                    obs.id,
+        'capture_id':            obs.captureId,
+        'parent_observation_id': null,
+        'created_by':            null,
+        'organization_id':       orgId,
+        'device_id':             null, // Task A: do not send to public-readable tables
+        'source':                'camera',
+        'captured_at':           capturedAt,
+        'image_width':           obs.imageWidth,
+        'image_height':          obs.imageHeight,
+        'priority_score':        obs.priorityScore,
+        'priority_label':        obs.priorityLabel,
+        'anomaly_type':          _anomalyTypeFor(obs),
+        'model_bundle_version':  obs.modelBundleVersion,
+        'created_at':            capturedAt,
+        'is_demo':               false,
+        'status':                'unconfirmed',
+      });
+    } on PostgrestException catch (e) {
+      if (!_isConflict(e)) {
+        debugPrint('[SupabaseService] observations insert error: ${e.code} ${e.message}');
+        rethrow;
+      }
+    }
+
+    cancelToken?.throwIfCancelled();
+
+    // 2. Location row (plain insert, 409 as success)
+    try {
+      await _client.from(SupabaseCfg.tableLocations).insert({
+        'observation_id':  obs.id,
+        'latitude':        obs.latitude,
+        'longitude':       obs.longitude,
+        'accuracy_meters': obs.accuracyMeters,
+        'captured_at':     capturedAt,
+      });
+    } on PostgrestException catch (e) {
+      if (!_isConflict(e)) {
+        debugPrint('[SupabaseService] locations insert error: ${e.code} ${e.message}');
+        rethrow;
+      }
+    }
+
+    cancelToken?.throwIfCancelled();
+
+    // 3. Agent runs + detections (decoupled child inserts with separate logging)
+    for (final result in obs.agentResults) {
+      cancelToken?.throwIfCancelled();
+      final agentRunId = _uuid.v4();
+      try {
         await _client.from(SupabaseCfg.tableAgentRuns).insert({
           'id':                   agentRunId,
           'observation_id':       obs.id,
@@ -261,135 +353,83 @@ class SupabaseService {
           'latency_ms':           result.latencyMs,
           'model_bundle_version': obs.modelBundleVersion,
         });
-
-        if (result.detections.isNotEmpty) {
-          final detections = result.detections.map((d) => {
-            'id':                   _uuid.v4(),
-            'observation_id':       obs.id,
-            'agent_run_id':         agentRunId,
-            'media_id':             null,
-            'class_code':           d.classCode,
-            'confidence':           d.confidence,
-            'box_x':                d.box.x,
-            'box_y':                d.box.y,
-            'box_w':                d.box.width,
-            'box_h':                d.box.height,
-            'frame_index':          d.frameIndex,
-            'is_mock':              result.isMock,
-            'model_bundle_version': d.modelBundleVersion,
-            'detected_at':          d.timestamp?.toUtc().toIso8601String() ?? capturedAt,
-          }).toList();
-          await _client.from(SupabaseCfg.tableDetections).insert(detections);
+      } on PostgrestException catch (e) {
+        if (!_isConflict(e)) {
+          debugPrint('[SupabaseService] agent_runs insert error: ${e.code} ${e.message}');
+          rethrow;
         }
       }
-    } on PostgrestException catch (e) {
-      final denied = e.code == '42501' ||
-          e.message.contains('row-level security');
-      if (!denied) rethrow;
-      final detections = obs.detections;
-      if (detections.isNotEmpty) {
-        detections.sort((a, b) => b.confidence.compareTo(a.confidence));
-        final code = detections.first.classCode.trim();
-        if (code.isNotEmpty) {
-          await _client.from(SupabaseCfg.tableObservations).update({
-            'priority_label': code,
-          }).eq('id', obs.id);
+
+      if (result.detections.isNotEmpty) {
+        cancelToken?.throwIfCancelled();
+        final detections = result.detections.map((d) => {
+          'id':                   _uuid.v4(),
+          'observation_id':       obs.id,
+          'agent_run_id':         agentRunId,
+          'media_id':             null,
+          'class_code':           d.classCode,
+          'confidence':           d.confidence,
+          'box_x':                d.box.x,
+          'box_y':                d.box.y,
+          'box_w':                d.box.width,
+          'box_h':                d.box.height,
+          'frame_index':          d.frameIndex,
+          'is_mock':              result.isMock,
+          'model_bundle_version': d.modelBundleVersion,
+          'detected_at':          d.timestamp?.toUtc().toIso8601String() ?? capturedAt,
+        }).toList();
+
+        try {
+          await _client.from(SupabaseCfg.tableDetections).insert(detections);
+        } on PostgrestException catch (e) {
+          if (!_isConflict(e)) {
+            debugPrint('[SupabaseService] detections insert error: ${e.code} ${e.message}');
+            rethrow;
+          }
         }
       }
     }
 
-    // 4. Upload image to Storage (non-fatal if it fails)
+    cancelToken?.throwIfCancelled();
+
+    // 4. Upload image to Storage (plain upload, unique path)
     if (imageFile != null && await imageFile.exists()) {
       await uploadObservationImage(
         observationId: obs.id,
         captureId: obs.captureId,
         imageFile: imageFile,
+        cancelToken: cancelToken,
       );
     }
 
-    // 5. Sync receipt
+    cancelToken?.throwIfCancelled();
+
+    // 5. Sync receipt (plain insert, 409 as success)
     try {
       await _client.from(SupabaseCfg.tableSyncReceipts).insert({
         'observation_id':  obs.id,
         'idempotency_key': _uuid.v4(),
         'payload_hash':    obs.id,
       });
-    } catch (_) {
-      // Receipt may already exist — ignore.
+    } on PostgrestException catch (e) {
+      if (!_isConflict(e)) {
+        debugPrint('[SupabaseService] sync_receipts insert error: ${e.code} ${e.message}');
+        rethrow;
+      }
     }
 
     debugPrint('[SupabaseService] Observation synced: ${obs.id}');
   }
 
-  // Live session management
-
-  /// Creates a new live session record and returns its ID.
-  Future<String> createLiveSession({
-    required double latitude,
-    required double longitude,
-    required String actor,
-    String? deviceId,
-  }) async {
-    final sessionId = _uuid.v4();
-    await _client.from(SupabaseCfg.tableLiveSessions).insert({
-      'id':          sessionId,
-      'started_at':  DateTime.now().toUtc().toIso8601String(),
-      'actor':       actor,
-      'device_id':   deviceId,
-      'latitude':    latitude,
-      'longitude':   longitude,
-      'status':      'recording',
-      'frame_count': 0,
-      'anomaly_count': 0,
-    });
-    debugPrint('[SupabaseService] Live session created: $sessionId');
-    return sessionId;
-  }
-
-  /// Updates session statistics.
-  Future<void> updateLiveSession({
-    required String sessionId,
-    required int frameCount,
-    required int anomalyCount,
-    double? latitude,
-    double? longitude,
-  }) async {
-    final updates = <String, dynamic>{
-      'frame_count':  frameCount,
-      'anomaly_count': anomalyCount,
-      'updated_at':   DateTime.now().toUtc().toIso8601String(),
-    };
-    if (latitude != null)  updates['latitude']  = latitude;
-    if (longitude != null) updates['longitude'] = longitude;
-    await _client
-        .from(SupabaseCfg.tableLiveSessions)
-        .update(updates)
-        .eq('id', sessionId);
-  }
-
-  /// Finalises a live session with the uploaded video URL.
-  Future<void> finalizeLiveSession({
-    required String sessionId,
-    String? videoUrl,
-    required int totalFrames,
-    required int totalAnomalies,
-    required Duration duration,
-  }) async {
-    await _client
-        .from(SupabaseCfg.tableLiveSessions)
-        .update({
-          'ended_at':      DateTime.now().toUtc().toIso8601String(),
-          'status':        'completed',
-          'video_url':     videoUrl,
-          'frame_count':   totalFrames,
-          'anomaly_count': totalAnomalies,
-          'duration_s':    duration.inSeconds,
-        })
-        .eq('id', sessionId);
-    debugPrint('[SupabaseService] Session finalized: $sessionId (${duration.inSeconds}s, $totalAnomalies anomalies)');
-  }
-
   // Private helpers
+
+  bool _isConflict(PostgrestException e) {
+    return e.code == '23505' ||
+        e.code == '409' ||
+        e.message.toLowerCase().contains('duplicate key') ||
+        e.message.toLowerCase().contains('unique constraint') ||
+        e.message.toLowerCase().contains('already exists');
+  }
 
   String? _anomalyTypeFor(Observation obs) {
     final detections = [...obs.detections]
@@ -410,7 +450,9 @@ class SupabaseService {
     required String mediaType,
     required String mimeType,
     required int fileSizeBytes,
+    SyncCancelToken? cancelToken,
   }) async {
+    cancelToken?.throwIfCancelled();
     try {
       await _client.from(SupabaseCfg.tableMediaFiles).insert({
         'id':              _uuid.v4(),
@@ -422,9 +464,13 @@ class SupabaseService {
         'mime_type':       mimeType,
         'file_size_bytes': fileSizeBytes,
         'uploaded_at':     DateTime.now().toUtc().toIso8601String(),
+        'is_demo':         false,
       });
+    } on PostgrestException catch (e) {
+      if (!_isConflict(e)) {
+        debugPrint('[SupabaseService] media_files insert warning: ${e.code} ${e.message}');
+      }
     } catch (e) {
-      // Non-fatal
       debugPrint('[SupabaseService] media_files insert warning: $e');
     }
   }

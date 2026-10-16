@@ -1,0 +1,52 @@
+{
+  "model_name": "RoadSense YOLOv12s LiteRT",
+  "evaluation_split": "RDD2022 Test Split (Tunisia / Global)",
+  "statement": "The D40 (pothole) detection model is weak and underperforms on validation data (mAP50: 0.0001, Precision: 0.003). Pothole detections are tentative and require human authority confirmation before dispatching repair teams. Cracks (D00, D10, D20) demonstrate high precision (>88%) and strong structural reliability.",
+  "warning_highlight": "D40 pothole model is weak — human confirmation required.",
+  "per_class_metrics": [
+    {
+      "class_code": "D40",
+      "class_name": "Pothole",
+      "class_name_fr": "Nid-de-poule",
+      "precision": 0.003,
+      "recall": 0.002,
+      "map50": 0.0001,
+      "map50_95": 0.00008,
+      "assessment": "Weak / Needs Confirmation",
+      "reliability": "Low"
+    },
+    {
+      "class_code": "D20",
+      "class_name": "Alligator Crack",
+      "class_name_fr": "Faïençage",
+      "precision": 0.948,
+      "recall": 0.941,
+      "map50": 0.964,
+      "map50_95": 0.785,
+      "assessment": "Production Grade",
+      "reliability": "Very High"
+    },
+    {
+      "class_code": "D10",
+      "class_name": "Transverse Crack",
+      "class_name_fr": "Fissure transversale",
+      "precision": 0.889,
+      "recall": 0.800,
+      "map50": 0.856,
+      "map50_95": 0.581,
+      "assessment": "Production Grade",
+      "reliability": "High"
+    },
+    {
+      "class_code": "D00",
+      "class_name": "Longitudinal Crack",
+      "class_name_fr": "Fissure longitudinale",
+      "precision": 0.916,
+      "recall": 0.784,
+      "map50": 0.853,
+      "map50_95": 0.604,
+      "assessment": "Production Grade",
+      "reliability": "High"
+    }
+  ]
+}

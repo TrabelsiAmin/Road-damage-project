@@ -16,6 +16,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
   int    _liveFps             = TariqMapConstants.defaultLiveFps;
   bool   _wifiOnly            = true;
   int    _retentionDays       = 90;
+  bool   _shareBlurredPublicPhoto = true;
   bool   _loading             = true;
   bool   _saving              = false;
 
@@ -34,6 +35,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
         _liveFps       = prefs.getInt('live_fps')       ?? TariqMapConstants.defaultLiveFps;
         _wifiOnly      = prefs.getBool('wifi_only')     ?? true;
         _retentionDays = prefs.getInt('retention_days') ?? 90;
+        _shareBlurredPublicPhoto = prefs.getBool('share_blurred_public_photo') ?? true;
         _loading       = false;
       });
     }
@@ -46,6 +48,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
     await prefs.setInt('live_fps', _liveFps);
     await prefs.setBool('wifi_only', _wifiOnly);
     await prefs.setInt('retention_days', _retentionDays);
+    await prefs.setBool('share_blurred_public_photo', _shareBlurredPublicPhoto);
     if (mounted) {
       setState(() => _saving = false);
       ScaffoldMessenger.of(context).showSnackBar(
@@ -140,6 +143,13 @@ class _SettingsScreenState extends State<SettingsScreen> {
                   icon: Icons.cloud_sync_rounded,
                   title: 'Synchronisation',
                   children: [
+                    _ToggleRow(
+                      label: 'Share a blurred photo on the public map',
+                      description: 'A cropped copy of the damage is public; the original stays private.',
+                      value: _shareBlurredPublicPhoto,
+                      onChanged: (v) => setState(() => _shareBlurredPublicPhoto = v),
+                    ),
+                    const _SectionDivider(),
                     _ToggleRow(
                       label: 'Wi-Fi only uploads',
                       description: 'Prevents mobile data usage for cloud sync.',

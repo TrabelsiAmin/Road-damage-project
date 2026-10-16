@@ -1,7 +1,6 @@
 import 'dart:io';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
 import 'package:intl/intl.dart';
 import 'package:share_plus/share_plus.dart';
 import '../core/app_colors.dart';
@@ -55,6 +54,8 @@ class _ResultScreenState extends State<ResultScreen>
     final detections = obs.detections;
     final priority  = obs.priorityScore;
     final priorityColor = AppColors.forPriority(priority);
+
+    debugPrint('[Pipeline:DetailScreen] Displaying observation ${obs.id} with ${detections.length} detections');
 
     return Scaffold(
       backgroundColor: Colors.black,
@@ -211,7 +212,7 @@ class _ResultScreenState extends State<ResultScreen>
                             const Divider(color: AppColors.borderLight),
                             const SizedBox(height: 8),
 
-                            _SectionLabel('LOCATION & METADATA'),
+                            const _SectionLabel('LOCATION & METADATA'),
                             const SizedBox(height: 10),
                             _MetaSection(observation: obs),
                           ],

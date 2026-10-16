@@ -28,8 +28,8 @@ class SupabaseCfg {
   /// Bucket for captured still images (annotated JPEGs).
   static const String imagesBucket = 'observation-images';
 
-  /// Bucket for recorded live-stream video clips.
-  static const String videosBucket = 'live-session-videos';
+  /// Bucket for public blurred thumbnails (max 300 KB, webp/jpeg only).
+  static const String publicPhotosBucket = 'public-photos';
 
   // ── Database tables ────────────────────────────────────────────────────────
 
@@ -39,6 +39,5 @@ class SupabaseCfg {
   static const String tableDetections   = 'detections';
   static const String tableSyncReceipts = 'sync_receipts';
   static const String tableMediaFiles   = 'media_files';
-  static const String tableLiveSessions = 'live_sessions';
 }
 

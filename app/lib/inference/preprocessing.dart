@@ -1,6 +1,7 @@
 import 'dart:io';
 import 'package:flutter/foundation.dart';
 import 'package:image/image.dart' as img;
+import '../models/observation.dart';
 
 // ---------------------------------------------------------------------------
 // EXIF orientation — fix rotation before drawing bounding boxes
@@ -18,26 +19,119 @@ img.Image decodeAndOrient(Uint8List bytes) {
 }
 
 // ---------------------------------------------------------------------------
-// Resize for model input
+// Resize and Letterbox for model input
 // ---------------------------------------------------------------------------
+
+/// Carries letterboxed image and geometry mapping needed to convert
+/// letterboxed bounding boxes back to original image space.
+class LetterboxResult {
+  const LetterboxResult({
+    required this.image,
+    required this.originalWidth,
+    required this.originalHeight,
+    required this.scale,
+    required this.padX,
+    required this.padY,
+    required this.newWidth,
+    required this.newHeight,
+    required this.inputSize,
+  });
+
+  final img.Image image;
+  final int originalWidth;
+  final int originalHeight;
+  final double scale;
+  final int padX;
+  final int padY;
+  final int newWidth;
+  final int newHeight;
+  final int inputSize;
+
+  /// Converts normalized letterbox-space coordinates (cx, cy, w, h in [0..1]
+  /// relative to [inputSize]) to normalized [0..1] coordinates on the original image.
+  BoundingBox toOriginalNormalized(double cx, double cy, double w, double h) {
+    final boxCxPx = cx * inputSize;
+    final boxCyPx = cy * inputSize;
+    final boxWPx = w * inputSize;
+    final boxHPx = h * inputSize;
+
+    final origCx = (boxCxPx - padX) / scale;
+    final origCy = (boxCyPx - padY) / scale;
+    final origWBox = boxWPx / scale;
+    final origHBox = boxHPx / scale;
+
+    final normX = ((origCx - origWBox / 2.0) / originalWidth).clamp(0.0, 1.0);
+    final normY = ((origCy - origHBox / 2.0) / originalHeight).clamp(0.0, 1.0);
+    final normW = (origWBox / originalWidth).clamp(0.0, 1.0);
+    final normH = (origHBox / originalHeight).clamp(0.0, 1.0);
+
+    return BoundingBox(
+      x: normX,
+      y: normY,
+      width: normW,
+      height: normH,
+    );
+  }
+}
+
+/// Resizes [source] preserving aspect ratio and pads to [inputSize]×[inputSize]
+/// with 114-grey (matching Ultralytics YOLO letterbox default).
+LetterboxResult letterboxProcess(img.Image source, {int inputSize = 640}) {
+  final origW = source.width;
+  final origH = source.height;
+  final scale = inputSize / (origW > origH ? origW : origH);
+  final newW = (origW * scale).round();
+  final newH = (origH * scale).round();
+
+  final resized = img.copyResize(source, width: newW, height: newH,
+      interpolation: img.Interpolation.linear);
+  final padded = img.Image(width: inputSize, height: inputSize, numChannels: 3);
+  padded.clear(img.ColorRgb8(114, 114, 114));
+
+  final padX = (inputSize - newW) ~/ 2;
+  final padY = (inputSize - newH) ~/ 2;
+
+  img.compositeImage(padded, resized, dstX: padX, dstY: padY);
+
+  return LetterboxResult(
+    image: padded,
+    originalWidth: origW,
+    originalHeight: origH,
+    scale: scale,
+    padX: padX,
+    padY: padY,
+    newWidth: newW,
+    newHeight: newH,
+    inputSize: inputSize,
+  );
+}
 
 /// Resizes [source] to [size]×[size] preserving the aspect ratio via
 /// letterboxing (fills unused area with 114-grey, matching Ultralytics default).
-img.Image letterboxResize(img.Image source, int size) {
-  final scale = size / (source.width > source.height ? source.width : source.height);
-  final newW = (source.width  * scale).round();
-  final newH = (source.height * scale).round();
+img.Image letterboxResize(img.Image source, int size) =>
+    letterboxProcess(source, inputSize: size).image;
 
-  final resized  = img.copyResize(source, width: newW, height: newH,
-      interpolation: img.Interpolation.linear);
-  final padded   = img.Image(width: size, height: size,
-      numChannels: 3, backgroundColor: img.ColorRgb8(114, 114, 114));
+/// Converts an [img.Image] (typically 640x640) into an NCHW [1, 3, H, W]
+/// Float32List normalized to [0..1] in RGB order.
+Float32List imageToNchwFloat32(img.Image image) {
+  final width = image.width;
+  final height = image.height;
+  final planeSize = width * height;
+  final flat = Float32List(3 * planeSize);
+  final gOffset = planeSize;
+  final bOffset = 2 * planeSize;
 
-  final offsetX  = (size - newW) ~/ 2;
-  final offsetY  = (size - newH) ~/ 2;
-
-  img.compositeImage(padded, resized, dstX: offsetX, dstY: offsetY);
-  return padded;
+  var p = 0;
+  for (var y = 0; y < height; y++) {
+    for (var x = 0; x < width; x++) {
+      final pixel = image.getPixel(x, y);
+      flat[p] = pixel.r / 255.0;
+      flat[gOffset + p] = pixel.g / 255.0;
+      flat[bOffset + p] = pixel.b / 255.0;
+      p++;
+    }
+  }
+  return flat;
 }
 
 // ---------------------------------------------------------------------------

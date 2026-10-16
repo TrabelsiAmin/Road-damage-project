@@ -1,8 +1,10 @@
 import 'dart:io';
-import 'dart:typed_data';
 import 'package:flutter/foundation.dart';
+import '../core/constants.dart';
+import '../inference/roadsense_decoder.dart';
 import '../models/observation.dart';
 import 'model_manager.dart';
+import 'roadsense_agent_runner.dart';
 import 'tflite_agent_runner.dart';
 
 // ---------------------------------------------------------------------------
@@ -23,7 +25,7 @@ abstract class DetectionAgentRunner {
 
 /// Deterministic mock runner.
 ///
-/// Must ONLY be instantiated in debug/demo mode.  The [isMock] flag is
+/// Must ONLY be instantiated in debug/demo mode. The [isMock] flag is
 /// always true, which causes the UI to show "DEMO MOCK INFERENCE" banners.
 class MockAgentRunner implements DetectionAgentRunner {
   MockAgentRunner(this.agentName, this._mockBoxes);
@@ -87,9 +89,30 @@ const _agentDefs = <_AgentDef>[
 class DetectionService {
   DetectionService._({
     required List<DetectionAgentRunner> runners,
+    this.isHybridActive = false,
+    this.isRoadSenseFallback = false,
+    this.fallbackReason,
+    this.roadSenseRunner,
+    this.potholeRunner,
   }) : _runners = runners;
 
   final List<DetectionAgentRunner> _runners;
+
+  /// True when the hybrid pipeline (RoadSense cracks + legacy potholes) is running.
+  final bool isHybridActive;
+
+  /// True when RoadSense model failed to load and the service gracefully fell back
+  /// to the legacy model alone.
+  final bool isRoadSenseFallback;
+
+  /// Explanatory diagnostic message if fallback was triggered.
+  final String? fallbackReason;
+
+  /// The active RoadSense runner when running hybrid.
+  final RoadSenseAgentRunner? roadSenseRunner;
+
+  /// The active legacy pothole runner when running hybrid.
+  final TFLiteAgentRunner? potholeRunner;
 
   /// True when ALL runners are mocks (no real TFLite models loaded).
   bool get usingMock => _runners.every((r) => r.isMock);
@@ -105,13 +128,90 @@ class DetectionService {
   /// Async factory — should always be called instead of the default constructor.
   ///
   /// On web: uses mock.
-  /// On Android/iOS: attempts to load bundled TFLite models; falls back to mock
-  /// per-agent if the file is unavailable.
+  /// On Android/iOS:
+  ///   - If [TariqMapConstants.useRoadSenseModel] is true:
+  ///     Attempts to load RoadSense runner and legacy pothole runner.
+  ///     If RoadSense fails, gracefully falls back to legacy runner alone.
+  ///   - If [TariqMapConstants.useRoadSenseModel] is false (default):
+  ///     Loads the legacy pipeline untouched.
   static Future<DetectionService> create() async {
     if (kIsWeb) {
       return DetectionService._(runners: _buildMockRunners());
     }
 
+    // ── Check RoadSense Hybrid Feature Flag ──────────────────────────────────
+    if (TariqMapConstants.useRoadSenseModel) {
+      return _createHybridService();
+    }
+
+    // ── Standard / Legacy pipeline ───────────────────────────────────────────
+    return _createLegacyService();
+  }
+
+  /// Builds the hybrid pipeline (RoadSense for cracks, legacy model for potholes)
+  /// with automatic fallback to legacy model if RoadSense fails to load.
+  static Future<DetectionService> _createHybridService() async {
+    debugPrint('[DetectionService] Initializing RoadSense hybrid pipeline...');
+    try {
+      final rsPath = await ModelManager.instance.localModelPath('road_damage_roadsense');
+      if (rsPath == null) {
+        throw StateError('RoadSense model file could not be retrieved from assets');
+      }
+
+      final rsRunner = RoadSenseAgentRunner(
+        agentName: 'road_damage_roadsense',
+        modelPath: rsPath,
+      );
+
+      if (rsRunner.failed) {
+        throw StateError(rsRunner.loadError ?? 'RoadSense interpreter initialization failed');
+      }
+
+      debugPrint('[DetectionService] RoadSense model loaded successfully.');
+
+      TFLiteAgentRunner? phRunner;
+      if (TariqMapConstants.usePotholeModelForD40) {
+        final legacyPath = await ModelManager.instance.localModelPath('road_damage');
+        if (legacyPath != null) {
+          final candidateRunner = TFLiteAgentRunner(
+            agentName: 'road_damage_pothole',
+            agentClasses: const ['D40'],
+            modelPath: legacyPath,
+            d40ThresholdOverride: TariqMapConstants.d40ConfidenceThreshold,
+            onlyD40: true,
+          );
+          if (!candidateRunner.failed) {
+            phRunner = candidateRunner;
+            debugPrint('[DetectionService] Legacy pothole model loaded successfully.');
+          } else {
+            debugPrint('[DetectionService] Legacy pothole model failed to load: ${candidateRunner.loadError}');
+          }
+        }
+      }
+
+      final activeRunners = <DetectionAgentRunner>[
+        rsRunner,
+        if (phRunner != null) phRunner,
+      ];
+
+      return DetectionService._(
+        runners: activeRunners,
+        isHybridActive: true,
+        roadSenseRunner: rsRunner,
+        potholeRunner: phRunner,
+      );
+    } catch (e) {
+      debugPrint('[DetectionService] Hybrid initialization failed: $e. Falling back to legacy model.');
+      // Graceful fallback to legacy model alone
+      final legacyService = await _createLegacyService(
+        fallbackReason: 'RoadSense load failure: $e',
+      );
+      return legacyService;
+    }
+  }
+
+  /// Builds the legacy pipeline (single oracl4 road_damage model).
+  static Future<DetectionService> _createLegacyService({String? fallbackReason}) async {
     final runners = <DetectionAgentRunner>[];
 
     for (final def in _agentDefs) {
@@ -119,6 +219,9 @@ class DetectionService {
       if (path != null) {
         try {
           final runner = await _createTFLiteRunner(def.name, path, def.classes);
+          if (runner is TFLiteAgentRunner && runner.failed) {
+            throw StateError(runner.loadError ?? 'Interpreter failed');
+          }
           runners.add(runner);
           debugPrint('[DetectionService] TFLite loaded: ${def.name}');
           continue;
@@ -130,15 +233,25 @@ class DetectionService {
       runners.add(_mockForAgent(def.name, def.classes));
     }
 
-    return DetectionService._(runners: runners);
+    return DetectionService._(
+      runners: runners,
+      isHybridActive: false,
+      isRoadSenseFallback: fallbackReason != null,
+      fallbackReason: fallbackReason,
+    );
   }
 
   // ── Detection ──────────────────────────────────────────────────────────────
 
-  /// Runs all agents in parallel on a [File]. If one agent throws, its result
-  /// is returned as an empty AgentResult with an error string.
+  /// Runs all agents on a [File]. In hybrid mode, RoadSense and pothole models
+  /// run on the frame and are merged into a single AgentResult.
   Future<List<AgentResult>> detectAll(File image) async {
-    return Future.wait(_runners.map((runner) async {
+    if (isHybridActive && roadSenseRunner != null) {
+      return _detectHybrid(image: image);
+    }
+
+    final sw = Stopwatch()..start();
+    final results = await Future.wait(_runners.map((runner) async {
       try {
         return await runner.detect(image);
       } catch (error) {
@@ -151,11 +264,20 @@ class DetectionService {
         );
       }
     }));
+    sw.stop();
+    final totalDets = results.expand((r) => r.detections).length;
+    debugPrint('[Pipeline:Inference] Produced $totalDets detections (latency: ${sw.elapsedMilliseconds}ms)');
+    return results;
   }
 
-  /// Runs all agents in parallel on raw image bytes (JPEG/PNG).
+  /// Runs all agents on raw image bytes (JPEG/PNG).
   Future<List<AgentResult>> detectAllFromBytes(Uint8List bytes) async {
-    return Future.wait(_runners.map((runner) async {
+    if (isHybridActive && roadSenseRunner != null) {
+      return _detectHybrid(bytes: bytes);
+    }
+
+    final sw = Stopwatch()..start();
+    final results = await Future.wait(_runners.map((runner) async {
       try {
         if (runner is TFLiteAgentRunner) {
           return await runner.detectFromBytes(bytes);
@@ -171,33 +293,82 @@ class DetectionService {
         );
       }
     }));
+    sw.stop();
+    final totalDets = results.expand((r) => r.detections).length;
+    debugPrint('[Pipeline:Inference] Produced $totalDets detections (latency: ${sw.elapsedMilliseconds}ms)');
+    return results;
   }
 
-  /// ⚡ Fastest path for live camera: skip JPEG encode/decode entirely.
-  ///
-  /// [inputTensor] must be Float32List [inputSize*inputSize*3] normalised [0..1],
-  /// produced off-thread by [convertYUVToTensorInBackground].
-  Future<List<AgentResult>> detectAllFromTensor(Float32List inputTensor) async {
-    return Future.wait(_runners.map((runner) async {
-      try {
-        if (runner is TFLiteAgentRunner) {
-          return await runner.detectFromTensor(inputTensor);
-        }
-        return AgentResult(
-          agent: runner.agentName,
-          detections: const [],
-          isMock: runner.isMock,
-        );
-      } catch (error) {
-        debugPrint('[DetectionService] Agent ${runner.agentName} failed: $error');
-        return AgentResult(
-          agent: runner.agentName,
-          detections: const [],
-          error: error.toString(),
-          isMock: runner.isMock,
+  // ── Hybrid Execution & Merging ─────────────────────────────────────────────
+
+  Future<List<AgentResult>> _detectHybrid({File? image, Uint8List? bytes}) async {
+    final rs = roadSenseRunner!;
+    AgentResult rsResult;
+
+    if (bytes != null) {
+      rsResult = await rs.detectFromBytes(bytes);
+    } else if (image != null) {
+      rsResult = await rs.detect(image);
+    } else {
+      return const [];
+    }
+
+    var potholeDets = <Detection>[];
+    int potholeLatency = 0;
+
+    if (potholeRunner != null) {
+      AgentResult phResult;
+      if (bytes != null) {
+        phResult = await potholeRunner!.detectFromBytes(bytes);
+      } else {
+        phResult = await potholeRunner!.detect(image!);
+      }
+      potholeLatency = phResult.latencyMs ?? 0;
+
+      var d40Detections = phResult.detections;
+
+      // Optional filter: drop D40 box if RoadSense Repair overlaps with IoU > 0.5
+      if (TariqMapConstants.filterPotholesWithRepair && rs.lastRepairDetections.isNotEmpty) {
+        d40Detections = RoadSenseDecoder.filterPotholesOverlappingRepairs(
+          d40Detections,
+          rs.lastRepairDetections,
+          iouThreshold: 0.5,
         );
       }
-    }));
+      potholeDets = d40Detections;
+    }
+
+    final totalLatency = (rsResult.latencyMs ?? 0) + potholeLatency;
+
+    // Merge both outputs into canonical 'road_damage' AgentResult
+    final mergedDetections = <Detection>[
+      ...rsResult.detections,
+      ...potholeDets,
+    ];
+
+    // Ensure all detections use the canonical agent 'road_damage' matching AgentResult.agent
+    final canonicalDetections = mergedDetections.map((d) => Detection(
+      agent: 'road_damage',
+      classCode: d.classCode,
+      confidence: d.confidence,
+      box: d.box,
+      frameIndex: d.frameIndex,
+      modelBundleVersion: d.modelBundleVersion.isNotEmpty
+          ? d.modelBundleVersion
+          : TariqMapConstants.modelBundleVersion,
+      timestamp: d.timestamp,
+    )).toList();
+
+    debugPrint('[Pipeline:Inference] Produced ${canonicalDetections.length} detections (latency: ${totalLatency}ms)');
+
+    return [
+      AgentResult(
+        agent: 'road_damage',
+        detections: canonicalDetections,
+        isMock: false,
+        latencyMs: totalLatency,
+      ),
+    ];
   }
 
   void dispose() {
@@ -243,14 +414,11 @@ DetectionAgentRunner _mockForAgent(String name, List<String> classes) =>
 
 Future<DetectionAgentRunner> _createTFLiteRunner(
     String name, String path, List<String> classes) async {
-  // Guarded by kIsWeb check above — never called on web.
   return _tfliteRunnerFactory(name, path, classes);
 }
 
 Future<DetectionAgentRunner> _tfliteRunnerFactory(
     String name, String path, List<String> classes) async {
-  // Directly instantiate TFLiteAgentRunner. The kIsWeb guard in
-  // DetectionService.create() ensures this is never reached on web.
   return TFLiteAgentRunner(
     agentName: name,
     agentClasses: classes,

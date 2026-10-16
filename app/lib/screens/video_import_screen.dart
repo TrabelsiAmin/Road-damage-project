@@ -8,6 +8,8 @@ import 'package:share_plus/share_plus.dart';
 import 'package:uuid/uuid.dart';
 import 'package:video_player/video_player.dart';
 import '../core/app_colors.dart';
+import '../core/constants.dart';
+import '../inference/preprocessing.dart';
 import '../models/observation.dart';
 import '../services/detection_service.dart';
 import '../services/frame_annotator.dart';
@@ -69,7 +71,7 @@ class _VideoImportScreenState extends State<VideoImportScreen> {
 
   // ── Services ───────────────────────────────────────────────────────────────
   final _extractor  = VideoFrameExtractor();
-  final _annotator  = FrameAnnotator();
+  final _annotator  = const FrameAnnotator();
   final _stitcher   = VideoStitcher();
   Directory? _tempDir;
 
@@ -114,6 +116,9 @@ class _VideoImportScreenState extends State<VideoImportScreen> {
         return;
       }
       await _loadVideoFile(File(picked.path));
+      if (mounted) {
+        await _processFrames();
+      }
     } catch (e) {
       setState(() { _picking = false; _status = 'Error: $e'; });
     }
@@ -154,10 +159,20 @@ class _VideoImportScreenState extends State<VideoImportScreen> {
       _outputCtrl = null;
     });
 
-    final durationSec     = _duration.inSeconds;
-    final frameTimestamps = <int>[];
+    final durationSec = _duration.inSeconds;
+    var frameTimestamps = <int>[];
     for (var t = 0; t < durationSec; t += _frameInterval) {
       frameTimestamps.add(t);
+    }
+    // Cap sampled frames (max 20 frames per inspection session)
+    const maxSampledFrames = 20;
+    if (frameTimestamps.length > maxSampledFrames) {
+      final step = (frameTimestamps.length / maxSampledFrames).ceil();
+      final capped = <int>[];
+      for (var i = 0; i < frameTimestamps.length && capped.length < maxSampledFrames; i += step) {
+        capped.add(frameTimestamps[i]);
+      }
+      frameTimestamps = capped;
     }
 
     setState(() {
@@ -205,6 +220,9 @@ class _VideoImportScreenState extends State<VideoImportScreen> {
             'Frame ${_framesProc + 1} / $_framesTotal  (${t}s) — annotating…');
           frameToStitch = await _annotator.annotateFrame(rawFrame, detections);
 
+          final frameBytes = await frameToStitch.readAsBytes();
+          final decoded = decodeAndOrient(frameBytes);
+
           // Save as observation
           final obs = Observation(
             id:          const Uuid().v4(),
@@ -216,7 +234,13 @@ class _VideoImportScreenState extends State<VideoImportScreen> {
             accuracyMeters: position?.accuracy,
             agentResults: agentResults,
             actor:       widget.actor,
+            imageWidth:  decoded.width,
+            imageHeight: decoded.height,
+            modelBundleVersion: TariqMapConstants.modelBundleVersion,
           );
+          debugPrint('[Pipeline:ResultObject] Video frame observation created: ${obs.id}, '
+              'detections: ${obs.detections.length}, size: ${decoded.width}x${decoded.height}');
+
           if (mounted) {
             setState(() => _results.add(_FrameResult(
               timestamp:   t,

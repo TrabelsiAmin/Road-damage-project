@@ -1,4 +1,8 @@
+import 'dart:io';
+import 'package:flutter/foundation.dart';
 import 'package:sqflite/sqflite.dart';
+import '../../core/constants.dart';
+import '../../inference/preprocessing.dart';
 import '../../models/observation.dart';
 import 'database.dart';
 
@@ -14,6 +18,8 @@ class ObservationDao {
   // ── Write ─────────────────────────────────────────────────────────────────
 
   Future<void> insert(Observation obs) async {
+    debugPrint(
+        '[Pipeline:DatabaseSave] Saving observation ${obs.id} with ${obs.detections.length} detections to SQLite');
     final db = await _db.database;
     await db.transaction((txn) async {
       // 1. Observations row
@@ -27,10 +33,10 @@ class ObservationDao {
       for (final r in obs.agentResults) {
         await txn.insert('agent_results', {
           'observation_id': obs.id,
-          'agent':          r.agent,
-          'error':          r.error,
-          'is_mock':        r.isMock ? 1 : 0,
-          'latency_ms':     r.latencyMs,
+          'agent': r.agent,
+          'error': r.error,
+          'is_mock': r.isMock ? 1 : 0,
+          'latency_ms': r.latencyMs,
         });
       }
 
@@ -38,25 +44,31 @@ class ObservationDao {
       for (final d in obs.detections) {
         await txn.insert('detections', {
           'observation_id': obs.id,
-          'agent':          d.agent,
-          'class_code':     d.classCode,
-          'confidence':     d.confidence,
-          'box_x':          d.box.x,
-          'box_y':          d.box.y,
-          'box_w':          d.box.width,
-          'box_h':          d.box.height,
-          'frame_index':    d.frameIndex,
-          'model_version':  d.modelBundleVersion,
-          'detected_at':    d.timestamp?.toUtc().toIso8601String(),
+          'agent': d.agent.isNotEmpty
+              ? d.agent
+              : (obs.agentResults.isNotEmpty
+                  ? obs.agentResults.first.agent
+                  : 'road_damage'),
+          'class_code': d.classCode,
+          'confidence': d.confidence,
+          'box_x': d.box.x,
+          'box_y': d.box.y,
+          'box_w': d.box.width,
+          'box_h': d.box.height,
+          'frame_index': d.frameIndex,
+          'model_version': d.modelBundleVersion.isNotEmpty
+              ? d.modelBundleVersion
+              : TariqMapConstants.modelBundleVersion,
+          'detected_at': d.timestamp?.toUtc().toIso8601String(),
         });
       }
 
       // 4. Audit
       await txn.insert('audit_log', {
         'observation_id': obs.id,
-        'event':          'created',
-        'detail':         '${obs.detections.length} detections',
-        'occurred_at':    DateTime.now().toUtc().toIso8601String(),
+        'event': 'created',
+        'detail': '${obs.detections.length} detections',
+        'occurred_at': DateTime.now().toUtc().toIso8601String(),
       });
     });
   }
@@ -86,9 +98,9 @@ class ObservationDao {
     );
     await db.insert('audit_log', {
       'observation_id': observationId,
-      'event':          'sync_status_changed',
-      'detail':         status.name + (error != null ? ': $error' : ''),
-      'occurred_at':    DateTime.now().toUtc().toIso8601String(),
+      'event': 'sync_status_changed',
+      'detail': status.name + (error != null ? ': $error' : ''),
+      'occurred_at': DateTime.now().toUtc().toIso8601String(),
     });
   }
 
@@ -102,11 +114,39 @@ class ObservationDao {
     );
   }
 
+  /// Deletes an observation and its related local rows.
+  Future<void> deleteById(String observationId) async {
+    final db = await _db.database;
+    await db.transaction((txn) async {
+      await txn.delete(
+        'detections',
+        where: 'observation_id = ?',
+        whereArgs: [observationId],
+      );
+      await txn.delete(
+        'agent_results',
+        where: 'observation_id = ?',
+        whereArgs: [observationId],
+      );
+      await txn.delete(
+        'observations',
+        where: 'id = ?',
+        whereArgs: [observationId],
+      );
+      await txn.insert('audit_log', {
+        'observation_id': observationId,
+        'event': 'deleted',
+        'detail': 'Observation deleted locally',
+        'occurred_at': DateTime.now().toUtc().toIso8601String(),
+      });
+    });
+  }
+
   // ── Read ──────────────────────────────────────────────────────────────────
 
   Future<List<Observation>> listAll({SyncStatus? status}) async {
     final db = await _db.database;
-    final where     = status != null ? 'sync_status = ?' : null;
+    final where = status != null ? 'sync_status = ?' : null;
     final whereArgs = status != null ? [status.name] : null;
 
     final rows = await db.query(
@@ -152,30 +192,44 @@ class ObservationDao {
 
   // ── Helpers ───────────────────────────────────────────────────────────────
 
-  Map<String, dynamic> _obsToRow(Observation obs) => {
-    'id':                  obs.id,
-    'capture_id':          obs.captureId,
-    'image_path':          obs.imagePath,
-    'annotated_image_path':obs.annotatedImagePath,
-    'created_at':          obs.createdAt.toUtc().toIso8601String(),
-    'latitude':            obs.latitude,
-    'longitude':           obs.longitude,
-    'gps_available':       obs.gpsAvailable ? 1 : 0,
-    'source_video_path':   obs.sourceVideoPath,
-    'frame_timestamp_ms':  obs.frameTimestampMs,
-    'accuracy_meters':     obs.accuracyMeters,
-    'actor':               obs.actor,
-    'sync_status':         obs.syncStatus.name,
-    'sync_error':          obs.syncError,
-    'upload_attempts':     obs.uploadAttempts,
-    'model_bundle_version':obs.modelBundleVersion,
-    'device_id':           obs.deviceId,
-    'image_width':         obs.imageWidth,
-    'image_height':        obs.imageHeight,
-    'priority_score':      obs.priorityScore,
-    'failed_agents':       obs.failedAgents,
-    'any_mock':            obs.anyMock ? 1 : 0,
-  };
+  Map<String, dynamic> _obsToRow(Observation obs) {
+    var width = obs.imageWidth;
+    var height = obs.imageHeight;
+    if (width == null || height == null) {
+      final f = File(obs.imagePath);
+      if (f.existsSync()) {
+        try {
+          final decoded = decodeAndOrient(f.readAsBytesSync());
+          width = decoded.width;
+          height = decoded.height;
+        } catch (_) {}
+      }
+    }
+    return {
+      'id': obs.id,
+      'capture_id': obs.captureId,
+      'image_path': obs.imagePath,
+      'annotated_image_path': obs.annotatedImagePath,
+      'created_at': obs.createdAt.toUtc().toIso8601String(),
+      'latitude': obs.latitude,
+      'longitude': obs.longitude,
+      'gps_available': obs.gpsAvailable ? 1 : 0,
+      'source_video_path': obs.sourceVideoPath,
+      'frame_timestamp_ms': obs.frameTimestampMs,
+      'accuracy_meters': obs.accuracyMeters,
+      'actor': obs.actor,
+      'sync_status': obs.syncStatus.name,
+      'sync_error': obs.syncError,
+      'upload_attempts': obs.uploadAttempts,
+      'model_bundle_version': obs.modelBundleVersion,
+      'device_id': obs.deviceId,
+      'image_width': width,
+      'image_height': height,
+      'priority_score': obs.priorityScore,
+      'failed_agents': obs.failedAgents,
+      'any_mock': obs.anyMock ? 1 : 0,
+    };
+  }
 
   Future<Observation> _rowToObs(dynamic db, Map<String, dynamic> row) async {
     final id = row['id'] as String;
@@ -198,18 +252,18 @@ class ObservationDao {
     for (final dr in dRows) {
       final agent = dr['agent'] as String;
       (detectionsByAgent[agent] ??= []).add(Detection(
-        agent:              agent,
-        classCode:          dr['class_code'] as String,
-        confidence:         (dr['confidence'] as num).toDouble(),
+        agent: agent,
+        classCode: dr['class_code'] as String,
+        confidence: (dr['confidence'] as num).toDouble(),
         box: BoundingBox(
-          x:      (dr['box_x'] as num).toDouble(),
-          y:      (dr['box_y'] as num).toDouble(),
-          width:  (dr['box_w'] as num).toDouble(),
+          x: (dr['box_x'] as num).toDouble(),
+          y: (dr['box_y'] as num).toDouble(),
+          width: (dr['box_w'] as num).toDouble(),
           height: (dr['box_h'] as num).toDouble(),
         ),
-        frameIndex:         dr['frame_index'] as int?,
+        frameIndex: dr['frame_index'] as int?,
         modelBundleVersion: (dr['model_version'] as String?) ?? '',
-        timestamp:          dr['detected_at'] != null
+        timestamp: dr['detected_at'] != null
             ? DateTime.tryParse(dr['detected_at'] as String)
             : null,
       ));
@@ -217,49 +271,77 @@ class ObservationDao {
 
     final agentResults = arRows.map((ar) {
       final agent = ar['agent'] as String;
+      var dets = detectionsByAgent[agent];
+      if ((dets == null || dets.isEmpty) && arRows.length == 1) {
+        // If there is only 1 agent result, all detections for this observation belong to it
+        dets = detectionsByAgent.values.expand((x) => x).toList();
+      } else if (dets == null || dets.isEmpty) {
+        // Prefix/suffix match fallback
+        dets = detectionsByAgent.entries
+            .where((e) => e.key.startsWith(agent) || agent.startsWith(e.key))
+            .expand((e) => e.value)
+            .toList();
+      }
       return AgentResult(
-        agent:      agent,
-        detections: detectionsByAgent[agent] ?? const [],
-        error:      ar['error'] as String?,
-        isMock:     (ar['is_mock'] as int?) == 1,
-        latencyMs:  ar['latency_ms'] as int?,
+        agent: agent,
+        detections: dets,
+        error: ar['error'] as String?,
+        isMock: (ar['is_mock'] as int?) == 1,
+        latencyMs: ar['latency_ms'] as int?,
       );
     }).toList();
 
-    return Observation(
-      id:                  id,
-      captureId:           row['capture_id'] as String,
-      imagePath:           row['image_path'] as String,
-      annotatedImagePath:  row['annotated_image_path'] as String?,
-      createdAt:           DateTime.parse(row['created_at'] as String),
-      latitude:            (row['latitude']  as num).toDouble(),
-      longitude:           (row['longitude'] as num).toDouble(),
-      gpsAvailable:        (row['gps_available'] as int?) != 0,
-      sourceVideoPath:     row['source_video_path'] as String?,
-      frameTimestampMs:    row['frame_timestamp_ms'] as int?,
-      accuracyMeters:      row['accuracy_meters'] != null
+    var imageWidth = row['image_width'] as int?;
+    var imageHeight = row['image_height'] as int?;
+    if (imageWidth == null || imageHeight == null) {
+      final f = File(row['image_path'] as String);
+      if (f.existsSync()) {
+        try {
+          final decoded = decodeAndOrient(f.readAsBytesSync());
+          imageWidth = decoded.width;
+          imageHeight = decoded.height;
+        } catch (_) {}
+      }
+    }
+
+    final obs = Observation(
+      id: id,
+      captureId: row['capture_id'] as String,
+      imagePath: row['image_path'] as String,
+      annotatedImagePath: row['annotated_image_path'] as String?,
+      createdAt: DateTime.parse(row['created_at'] as String),
+      latitude: (row['latitude'] as num).toDouble(),
+      longitude: (row['longitude'] as num).toDouble(),
+      gpsAvailable: (row['gps_available'] as int?) != 0,
+      sourceVideoPath: row['source_video_path'] as String?,
+      frameTimestampMs: row['frame_timestamp_ms'] as int?,
+      accuracyMeters: row['accuracy_meters'] != null
           ? (row['accuracy_meters'] as num).toDouble()
           : null,
-      actor:               row['actor'] as String,
-      agentResults:        agentResults,
-      syncStatus:          _parseSyncStatus(row['sync_status'] as String?),
-      syncError:           row['sync_error'] as String?,
-      uploadAttempts:      (row['upload_attempts'] as int?) ?? 0,
-      modelBundleVersion:  (row['model_bundle_version'] as String?) ?? '',
-      deviceId:            row['device_id'] as String?,
-      imageWidth:          row['image_width'] as int?,
-      imageHeight:         row['image_height'] as int?,
+      actor: row['actor'] as String,
+      agentResults: agentResults,
+      syncStatus: _parseSyncStatus(row['sync_status'] as String?),
+      syncError: row['sync_error'] as String?,
+      uploadAttempts: (row['upload_attempts'] as int?) ?? 0,
+      modelBundleVersion: (row['model_bundle_version'] as String?) ??
+          TariqMapConstants.modelBundleVersion,
+      deviceId: row['device_id'] as String?,
+      imageWidth: imageWidth,
+      imageHeight: imageHeight,
     );
+    debugPrint(
+        '[Pipeline:DatabaseLoad] Loaded observation $id with ${obs.detections.length} detections from SQLite');
+    return obs;
   }
 
   SyncStatus _parseSyncStatus(String? name) => switch (name) {
-    'pending'     => SyncStatus.pending,
-    'uploading'   => SyncStatus.uploading,
-    'synced'      => SyncStatus.synced,
-    'failed'      => SyncStatus.failed,
-    'needsReview' => SyncStatus.needsReview,
-    _             => SyncStatus.pending,
-  };
+        'pending' => SyncStatus.pending,
+        'uploading' => SyncStatus.uploading,
+        'synced' => SyncStatus.synced,
+        'failed' => SyncStatus.failed,
+        'needsReview' => SyncStatus.needsReview,
+        _ => SyncStatus.pending,
+      };
 
   // Returns the incremented attempt count synchronously
   int _incrementAttempts(dynamic db, String id) {

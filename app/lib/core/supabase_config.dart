@@ -28,6 +28,9 @@ class SupabaseCfg {
   /// Bucket for captured still images (annotated JPEGs).
   static const String imagesBucket = 'observation-images';
 
+  /// Bucket for public blurred thumbnails (max 300 KB, webp/jpeg only).
+  static const String publicPhotosBucket = 'public-photos';
+
   // ── Database tables ────────────────────────────────────────────────────────
 
   static const String tableObservations = 'observations';

@@ -1,119 +1,289 @@
-import React, { useState, useEffect, useMemo, useRef } from 'react';
+import React, { useState, useEffect, useMemo, useRef, useCallback } from 'react';
 import L from 'leaflet';
 import {
   DAMAGE_CLASSES,
   SEVERITY_COLORS,
   STATUS_LABELS,
   I18N,
+  MAP_CONFIG,
 } from './constants';
 import {
   fetchObservations,
   updateObservationStatus,
+  updateMultipleObservationsStatus,
   signIn,
   signOut,
   getCurrentUser,
   checkIsAuthority,
   getMediaUrl,
+  getSignedMediaUrl,
+  getPublicMediaUrl,
+  fetchMediaFilesForObservations,
+  fetchServerClusters,
+  supabase,
 } from './supabase';
-import { clusterObservations, calculateRoadHealthScore } from './utils/clustering';
+import { haversineDistanceMeters, calculateRoadHealthScore } from './utils/clustering';
+import { calculatePriorityScore, PRIORITY_CONFIG } from './utils/priorityScoring';
+import validationMetricsData from './data/validation_metrics.json';
 import {
   MapPin,
   AlertTriangle,
   FileSpreadsheet,
   Printer,
-  DollarSign,
-  Clock,
   Shield,
   ShieldCheck,
   ShieldAlert,
   Globe,
-  Layers,
   CheckCircle2,
   X,
-  ExternalLink,
-  ChevronRight,
-  Info,
   LogIn,
   LogOut,
-  Sliders,
   HelpCircle,
+  BarChart3,
+  ChevronRight,
+  ChevronLeft,
+  Eye,
+  Camera,
+  CameraOff,
+  Layers,
+  Wrench,
+  Clock,
+  ArrowRight,
+  Lock,
+  XCircle,
+  Trash2,
+  RotateCcw,
+  Info,
 } from 'lucide-react';
 
-function ClusterImageCard({ cluster, isAuthority }) {
-  const [signedUrl, setSignedUrl] = useState(null);
+// Priority Colors for Leaflet pins (v2: HIGH, MEDIUM, LOW)
+const PRIORITY_PIN_COLORS = {
+  HIGH: '#EF4444',     // Red
+  CRITICAL: '#EF4444', // Red fallback
+  MEDIUM: '#F59E0B',   // Amber
+  LOW: '#3B82F6',      // Blue
+};
+
+/**
+ * Score formatter: rounds to 1 decimal place.
+ */
+function formatScore(score) {
+  if (score === null || score === undefined || isNaN(score)) return '--';
+  return Number(score).toFixed(1);
+}
+
+/**
+ * Image Lightbox Modal: shows original image full-size with details on click.
+ */
+function ImageLightbox({ image, onClose }) {
+  useEffect(() => {
+    function handleKeyDown(e) {
+      if (e.key === 'Escape') onClose();
+    }
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [onClose]);
+
+  if (!image) return null;
+
+  return (
+    <div className="lightbox-backdrop" onClick={onClose}>
+      <div className="lightbox-content" onClick={(e) => e.stopPropagation()}>
+        <div className="lightbox-header">
+          <div className="lightbox-title-area">
+            <h4 className="lightbox-title">{image.title}</h4>
+            <span className="lightbox-badge">{image.badge}</span>
+          </div>
+          <button className="icon-btn" onClick={onClose} title="Fermer (Échap)">
+            <X size={20} />
+          </button>
+        </div>
+        <div className="lightbox-body">
+          <img src={image.url} alt={image.title} className="lightbox-image" />
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/**
+ * Report Image Card:
+ * - When Authority: fetches 10-minute signed URL from observation-images for original photo,
+ *   auto-refreshes 30s before expiry. Falls back to public thumbnail only if original is missing.
+ * - When Citizen / Logged Out: displays public thumbnail from public-photos if available.
+ * - Distinct UI states: loading ("Chargement de la photo..."), no photo uploaded ("Aucune photo enregistrée"),
+ *   load failure ("Échec du chargement" + Retry button), and not authority ("Photo réservée autorité").
+ * - Click-to-zoom into Lightbox.
+ */
+function ReportImageThumbnail({ obs, clusterMedia, isAuthority, onOpenLightbox }) {
+  const orig = clusterMedia?.original || obs?.original_media;
+  const thumb = clusterMedia?.thumbnail || obs?.thumbnail_media;
+
+  const [imageUrl, setImageUrl] = useState(null);
   const [loading, setLoading] = useState(false);
+  const [errorInfo, setErrorInfo] = useState(null);
+  const [retryKey, setRetryKey] = useState(0);
+
+  const hasOriginal = Boolean(orig?.storage_path);
+  const hasThumbnail = Boolean(thumb?.storage_path);
 
   useEffect(() => {
     let active = true;
-    if (isAuthority && cluster?.storagePath) {
-      setLoading(true);
-      getMediaUrl(cluster.storagePath, cluster.bucket || 'observation-images')
-        .then((url) => {
-          if (active) {
-            setSignedUrl(url);
-            setLoading(false);
-          }
-        })
-        .catch(() => {
-          if (active) {
-            setSignedUrl(null);
-            setLoading(false);
-          }
-        });
-    } else {
-      setSignedUrl(null);
-      setLoading(false);
-    }
-    return () => { active = false; };
-  }, [cluster?.storagePath, cluster?.bucket, isAuthority]);
+    let refreshTimer = null;
 
-  if (isAuthority && cluster?.storagePath) {
-    if (loading) {
-      return (
-        <div className="cluster-img-placeholder">
-          <div className="spinner-sm" style={{ width: '16px', height: '16px', border: '2px solid rgba(255,255,255,0.2)', borderTopColor: 'var(--teal-accent)', borderRadius: '50%', animation: 'spin 0.8s linear infinite' }} />
-          <span style={{ fontSize: '0.75rem' }}>Génération URL signée (sécurisée 5 min)...</span>
-        </div>
-      );
+    async function resolveImage() {
+      setErrorInfo(null);
+
+      // ── Case A: User is Authority ───────────────────────────────────────────
+      if (isAuthority) {
+        if (hasOriginal) {
+          setLoading(true);
+          try {
+            const res = await getSignedMediaUrl(orig.storage_path, 'observation-images', 600);
+            if (!active) return;
+            setImageUrl(res.signedUrl);
+            setLoading(false);
+
+            // Auto-refresh before 10min expiry (30s buffer)
+            const msUntilRefresh = Math.max(30000, res.expiresAt - Date.now());
+            refreshTimer = setTimeout(() => {
+              if (active) resolveImage();
+            }, msUntilRefresh);
+          } catch (err) {
+            if (!active) return;
+            console.error('[ReportImageThumbnail] Error creating signed URL:', err);
+            setErrorInfo(err?.message || 'Erreur d\'accès au stockage');
+            setImageUrl(null);
+            setLoading(false);
+          }
+          return;
+        }
+
+        // Fallback to public thumbnail only if original doesn't exist
+        if (hasThumbnail) {
+          const pubUrl = getPublicMediaUrl(thumb.storage_path, 'public-photos');
+          if (active) {
+            setImageUrl(pubUrl);
+            setLoading(false);
+          }
+          return;
+        }
+
+        if (active) {
+          setImageUrl(null);
+          setLoading(false);
+        }
+        return;
+      }
+
+      // ── Case B: User is NOT Authority (Anon / Logged out) ───────────────────
+      if (!isAuthority) {
+        if (hasThumbnail) {
+          const pubUrl = getPublicMediaUrl(thumb.storage_path, 'public-photos');
+          if (active) {
+            setImageUrl(pubUrl);
+            setLoading(false);
+          }
+          return;
+        }
+
+        if (active) {
+          setImageUrl(null);
+          setLoading(false);
+        }
+      }
     }
-    if (signedUrl) {
-      return (
-        <div className="cluster-img-container">
-          <img
-            src={signedUrl}
-            alt="Cliché chaussée"
-            className="cluster-img"
-            onError={() => setSignedUrl(null)}
-          />
-          <span className="cluster-img-badge">Cliché signé (Autorité)</span>
-        </div>
-      );
-    }
+
+    resolveImage();
+
+    return () => {
+      active = false;
+      if (refreshTimer) clearTimeout(refreshTimer);
+    };
+  }, [orig?.storage_path, thumb?.storage_path, isAuthority, retryKey]);
+
+  // State 1: Loading
+  if (loading) {
+    return (
+      <div className="report-img-placeholder">
+        <div className="spinner-sm" style={{ width: '16px', height: '16px', border: '2px solid rgba(255,255,255,0.2)', borderTopColor: 'var(--color-primary)', borderRadius: '50%', animation: 'spin 0.8s linear infinite' }} />
+        <span className="placeholder-text">Chargement de la photo...</span>
+      </div>
+    );
   }
 
-  // Neutral placeholder for anonymous users or records without storage_path
+  // State 2: Error with Retry button
+  if (errorInfo) {
+    return (
+      <div className="report-img-placeholder error">
+        <AlertTriangle size={18} />
+        <span className="placeholder-text error-text">Échec du chargement</span>
+        <button
+          className="btn-retry"
+          onClick={() => setRetryKey((k) => k + 1)}
+          title={errorInfo}
+        >
+          Réessayer
+        </button>
+      </div>
+    );
+  }
+
+  // State 3: Photo loaded successfully
+  if (imageUrl) {
+    const isOriginal = isAuthority && hasOriginal;
+    const badgeText = isOriginal ? 'Original HD (Signé 10 min)' : 'Aperçu public flouté';
+    const badgeClass = isOriginal ? 'badge-signed-hd' : 'badge-public-thumb';
+    const title = `#${obs.id.slice(0, 8)} • ${DAMAGE_CLASSES[obs.anomaly_type]?.fr || obs.anomaly_type || 'Anomalie'}`;
+
+    return (
+      <div
+        className="report-img-container"
+        onClick={() => onOpenLightbox && onOpenLightbox(imageUrl, title, badgeText)}
+        title="Cliquer pour agrandir dans la visionneuse"
+      >
+        <img
+          src={imageUrl}
+          alt={title}
+          className="report-img"
+          onError={() => setErrorInfo('Image introuvable')}
+        />
+        <div className="report-img-overlay">
+          <Eye size={20} />
+        </div>
+        <span className={`report-img-badge ${badgeClass}`}>{badgeText}</span>
+      </div>
+    );
+  }
+
+  // State 4: Not Authority (photo exists in private bucket, but user lacks authority rights)
+  if (!isAuthority && (hasOriginal || (!obs?.is_demo && !hasThumbnail))) {
+    return (
+      <div className="report-img-placeholder not-authority">
+        <Lock size={18} />
+        <span className="placeholder-text">Photo réservée autorité</span>
+      </div>
+    );
+  }
+
+  // State 5: No photo uploaded (or demo data)
   return (
-    <div className="cluster-img-placeholder neutral-privacy">
-      <Shield size={20} style={{ opacity: 0.8, color: 'var(--teal-accent)' }} />
-      <span style={{ fontWeight: 600, fontSize: '0.8rem' }}>Photo non publique</span>
-      <span style={{ fontSize: '0.72rem', color: 'var(--text-dim)', textAlign: 'center', maxWidth: '280px', lineHeight: 1.3 }}>
-        {isAuthority
-          ? "Aucun cliché photographique stocké pour cette observation."
-          : "Les clichés bruts sont réservés aux autorités habilitées (RGPD & sécurité voirie). Télémétrie géospatiale publique."}
-      </span>
+    <div className="report-img-placeholder">
+      <CameraOff size={18} />
+      <span className="placeholder-text">Aucune photo enregistrée</span>
     </div>
   );
 }
 
 export default function App() {
-  const [lang, setLang] = useState('fr');
-  const t = I18N[lang];
-
   const [observations, setObservations] = useState([]);
+  const [serverClusters, setServerClusters] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
+  const [lang, setLang] = useState('fr');
+  const [dataVersion, setDataVersion] = useState(0);
 
-  // Authentication State
+  // Auth State
   const [currentUser, setCurrentUser] = useState(null);
   const [isAuthorityUser, setIsAuthorityUser] = useState(false);
   const [showLoginModal, setShowLoginModal] = useState(false);
@@ -122,33 +292,47 @@ export default function App() {
   const [authLoading, setAuthLoading] = useState(false);
   const [authError, setAuthError] = useState(null);
 
-  // Filters
+  // Filters: class, priority, status
   const [classFilter, setClassFilter] = useState('all');
-  const [severityFilter, setSeverityFilter] = useState('all');
+  const [priorityFilter, setPriorityFilter] = useState('all');
   const [statusFilter, setStatusFilter] = useState('all');
 
-  // UI state
-  const [activeTab, setActiveTab] = useState('priority'); // priority | budget | accountability
+  // Selected Cluster & Side Panel
   const [selectedCluster, setSelectedCluster] = useState(null);
-  const [workOrderModal, setWorkOrderModal] = useState(null);
+  const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
+  const [clusterMediaMap, setClusterMediaMap] = useState({});
+
+  // Lightbox Image
+  const [lightboxImage, setLightboxImage] = useState(null); // { url, title, badge }
+
+  // Status Change Confirmation Modal
+  const [statusConfirmModal, setStatusConfirmModal] = useState(null); // { obsId, newStatus, currentStatus }
+  const [statusUpdating, setStatusUpdating] = useState(false);
+
+  // Honest Metrics Panel Modal
+  const [showMetricsPanel, setShowMetricsPanel] = useState(false);
+
+  // RHI Tooltip
   const [showRhiTooltip, setShowRhiTooltip] = useState(false);
-  const [showAssumptionsPanel, setShowAssumptionsPanel] = useState(true);
 
-  // Editable Budget Assumptions (Tunisian Dinars - Estimates only)
-  const [unitCosts, setUnitCosts] = useState({
-    D40: 180, // Pothole repair / milling & fill estimate (TND)
-    D20: 320, // Alligator fatigue patch estimate (TND)
-    D00: 45,  // Longitudinal crack sealing per linear meter estimate (TND)
-    D10: 45,  // Transverse crack sealing per linear meter estimate (TND)
-  });
-  const [budgetTnd, setBudgetTnd] = useState(3500);
+  // Active Sidebar View Tab ('clusters' | 'rejected')
+  const [activeSidebarTab, setActiveSidebarTab] = useState('clusters');
 
-  // Leaflet Map Reference
+  // Reject Confirmation Modals
+  const [rejectReportModal, setRejectReportModal] = useState(null); // observation to reject
+  const [rejectClusterModal, setRejectClusterModal] = useState(null); // cluster to reject
+
+  // Undo Toast state
+  const [undoState, setUndoState] = useState(null); // { message, previousStatuses }
+  const undoTimerRef = useRef(null);
+
   const mapRef = useRef(null);
   const mapInstanceRef = useRef(null);
   const markersLayerRef = useRef(null);
 
-  // ── 0. Initial Auth & Session Check ────────────────────────────────────────
+  const t = I18N[lang] || I18N.fr;
+
+  // ── 0. Check Auth Session on Mount & Listen to Changes ──────────────────────
   useEffect(() => {
     async function checkAuth() {
       try {
@@ -166,95 +350,214 @@ export default function App() {
       }
     }
     checkAuth();
-  }, []);
 
-  // ── 1. Fetch Observations from Supabase ────────────────────────────────────
-  useEffect(() => {
-    async function loadData() {
-      setLoading(true);
-      try {
-        const data = await fetchObservations();
-        setObservations(data);
-      } catch (err) {
-        setError(err.message || 'Error fetching data from Supabase');
-      } finally {
-        setLoading(false);
+    // Listen to token refresh, login, logout
+    const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
+      console.log('[Auth] State changed:', event, session?.user?.email);
+      const user = session?.user || null;
+      setCurrentUser(user);
+      if (user) {
+        const authOk = await checkIsAuthority();
+        setIsAuthorityUser(authOk);
+      } else {
+        setIsAuthorityUser(false);
       }
-    }
-    loadData();
+      // Trigger full observation refetch with the new token/context
+      setDataVersion((v) => v + 1);
+    });
+
+    return () => {
+      subscription?.unsubscribe();
+    };
   }, []);
 
-  // ── 2. Geospatial Distance Clustering (20m radius) ─────────────────────────
-  const clusters = useMemo(() => {
-    return clusterObservations(observations, 20, 30);
+  // ── 1. Fetch Observations & Server Clusters from Supabase ────────────────────
+  const loadData = useCallback(async () => {
+    setLoading(true);
+    try {
+      const [obsData, clusterData] = await Promise.all([
+        fetchObservations(),
+        fetchServerClusters(20, 1),
+      ]);
+      setObservations(obsData || []);
+      setServerClusters(clusterData || []);
+    } catch (err) {
+      setError(err.message || 'Error fetching data from Supabase');
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    loadData();
+  }, [loadData, dataVersion]);
+
+  // ── 1b. Refetch Media for Open Cluster when Cluster or Auth Changes ────────
+  useEffect(() => {
+    let active = true;
+    if (!selectedCluster || !selectedCluster.members || selectedCluster.members.length === 0) {
+      setClusterMediaMap({});
+      return;
+    }
+
+    const obsIds = selectedCluster.members.map((m) => m.id);
+    fetchMediaFilesForObservations(obsIds)
+      .then((res) => {
+        if (active) {
+          setClusterMediaMap(res);
+        }
+      })
+      .catch((err) => {
+        console.warn('[ClusterMedia] error:', err);
+      });
+
+    return () => {
+      active = false;
+    };
+  }, [selectedCluster?.id, isAuthorityUser, dataVersion]);
+
+  // ── 2. Partition Observations: Active vs Rejected & Excluded Counts ────────
+  const activeObservations = useMemo(() => {
+    return observations.filter((o) => o.status !== 'rejected');
   }, [observations]);
 
-  // Check if any demo records are present
-  const hasDemoData = useMemo(() => {
-    return observations.some((o) => o.is_demo);
+  const rejectedObservations = useMemo(() => {
+    return observations.filter((o) => o.status === 'rejected');
   }, [observations]);
+
+  // Count of observations excluded from the map & clusters because accuracy > 25m
+  const accuracyExcludedCount = useMemo(() => {
+    return observations.filter(
+      (o) => typeof o.accuracy_meters === 'number' && o.accuracy_meters > 25
+    ).length;
+  }, [observations]);
+
+  // Server Clusters (public.get_clusters() is the single source of truth)
+  // Each cluster's member reports are matched by location & radius (<= 30m covers 20m DBSCAN eps)
+  // and must satisfy the same filters (accuracy <= 25m, status <> 'rejected')
+  const clusters = useMemo(() => {
+    const validObs = observations.filter(
+      (o) => o.status !== 'rejected' && (o.accuracy_meters == null || o.accuracy_meters <= 25)
+    );
+
+    return serverClusters.map((sc) => {
+      // Find reports of this cluster by distance to centroid (<= 30m)
+      const members = validObs.filter(
+        (o) =>
+          haversineDistanceMeters(
+            sc.centroid_lat,
+            sc.centroid_lng,
+            o.latitude,
+            o.longitude
+          ) <= 30
+      );
+
+      // Dominant status hierarchy from status_counts or members:
+      // status_counts has { unconfirmed, confirmed, in_progress, repaired, rejected }
+      const scCounts = sc.status_counts || {};
+      const count = Number(sc.report_count);
+      let dominantStatus = 'unconfirmed';
+      if (scCounts.repaired > 0 && scCounts.repaired === count) {
+        dominantStatus = 'repaired';
+      } else if (scCounts.confirmed > 0 || scCounts.in_progress > 0) {
+        dominantStatus = 'confirmed';
+      } else if (scCounts.repaired > 0) {
+        dominantStatus = 'repaired';
+      }
+
+      const score = Number(sc.max_priority_score || 0);
+      const priorityLabel =
+        score >= PRIORITY_CONFIG.highThreshold
+          ? 'HIGH'
+          : score < PRIORITY_CONFIG.lowThreshold
+          ? 'LOW'
+          : 'MEDIUM';
+
+      return {
+        id: sc.cluster_id,
+        cluster_id: sc.cluster_id,
+        latitude: sc.centroid_lat,
+        longitude: sc.centroid_lng,
+        count,
+        dominantClass: sc.worst_class || 'D40',
+        maxPriorityScore: score,
+        priorityLabel,
+        oldestDate: sc.first_seen,
+        newestDate: sc.last_seen,
+        status: dominantStatus,
+        statusCounts: scCounts,
+        members,
+        realCount: Number(sc.real_count || 0),
+        demoCount: Number(sc.demo_count || 0),
+      };
+    });
+  }, [serverClusters, observations]);
+
+  const hasDemoData = useMemo(() => {
+    return (
+      serverClusters.some((c) => Number(c.demo_count || 0) > 0) ||
+      activeObservations.some((o) => o.is_demo)
+    );
+  }, [serverClusters, activeObservations]);
 
   // ── 3. Filtered Clusters for Display ───────────────────────────────────────
   const filteredClusters = useMemo(() => {
     return clusters.filter((c) => {
       if (classFilter !== 'all' && c.dominantClass !== classFilter) return false;
-      if (severityFilter !== 'all' && c.priorityLabel !== severityFilter) return false;
+      if (priorityFilter !== 'all' && c.priorityLabel !== priorityFilter) return false;
       if (statusFilter !== 'all' && c.status !== statusFilter) return false;
       return true;
     });
-  }, [clusters, classFilter, severityFilter, statusFilter]);
+  }, [clusters, classFilter, priorityFilter, statusFilter]);
 
-  // ── 4. Key Metrics ─────────────────────────────────────────────────────────
-  const totalDefects = filteredClusters.length;
-  const criticalCount = filteredClusters.filter((c) => c.priorityLabel === 'CRITICAL').length;
-  const healthScore = calculateRoadHealthScore(filteredClusters);
+  // ── 4. KPI Strip Metrics ───────────────────────────────────────────────────
+  const kpis = useMemo(() => {
+    const classCounts = { D40: 0, D20: 0, D10: 0, D00: 0 };
+    const priorityCounts = { HIGH: 0, MEDIUM: 0, LOW: 0 };
+    const statusCounts = { unconfirmed: 0, confirmed: 0, repaired: 0 };
 
-  // ── 5. Budget Allocation (Greedy Knapsack) ──────────────────────────────────
-  const budgetAllocation = useMemo(() => {
-    // Sort by priority score descending
-    const sorted = [...filteredClusters].sort(
-      (a, b) => b.maxPriorityScore - a.maxPriorityScore
-    );
-    let spent = 0;
-    const selected = [];
-    const deferred = [];
-
-    for (const c of sorted) {
-      const cost = unitCosts[c.dominantClass] || 150;
-      if (spent + cost <= budgetTnd) {
-        spent += cost;
-        selected.push({ ...c, cost });
-      } else {
-        deferred.push({ ...c, cost });
+    filteredClusters.forEach((c) => {
+      if (classCounts[c.dominantClass] !== undefined) {
+        classCounts[c.dominantClass] += c.count;
       }
-    }
-    return {
-      selected,
-      deferred,
-      totalSpent: spent,
-      remainingBudget: Math.max(0, budgetTnd - spent),
-    };
-  }, [filteredClusters, budgetTnd, unitCosts]);
+      if (priorityCounts[c.priorityLabel] !== undefined) {
+        priorityCounts[c.priorityLabel] += 1;
+      }
+      if (statusCounts[c.status] !== undefined) {
+        statusCounts[c.status] += 1;
+      }
+    });
 
-  // ── 6. Map Initialization & Marker Synchronization ────────────────────────
+    const totalReports = filteredClusters.reduce((sum, c) => sum + c.count, 0);
+    const healthScore = calculateRoadHealthScore(filteredClusters);
+
+    return {
+      totalClusters: filteredClusters.length,
+      totalReports,
+      classCounts,
+      priorityCounts,
+      statusCounts,
+      healthScore,
+    };
+  }, [filteredClusters]);
+
+  // ── 5. Leaflet Map Markers (colour = priority, size = report count) ────────
   useEffect(() => {
     if (!mapRef.current) return;
 
     if (!mapInstanceRef.current) {
-      // Default center: Grand Tunis / Avenue Habib Bourguiba
       const map = L.map(mapRef.current, {
-        center: [36.8065, 10.1815],
+        center: [36.8065, 10.1815], // Grand Tunis
         zoom: 12,
         zoomControl: false,
       });
 
       L.control.zoom({ position: 'bottomright' }).addTo(map);
 
-      // CartoDB Dark Matter tiles
-      L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', {
-        attribution: '&copy; OpenStreetMap &copy; CARTO',
-        subdomains: 'abcd',
-        maxZoom: 19,
+      L.tileLayer(MAP_CONFIG.tileUrl, {
+        attribution: MAP_CONFIG.tileAttribution,
+        maxZoom: MAP_CONFIG.maxZoom,
+        className: 'dark-tiles',
       }).addTo(map);
 
       const markersGroup = L.layerGroup().addTo(map);
@@ -267,32 +570,37 @@ export default function App() {
       markersGroup.clearLayers();
 
       filteredClusters.forEach((cluster) => {
-        const clsMeta = DAMAGE_CLASSES[cluster.dominantClass] || DAMAGE_CLASSES.D40;
-        const color = clsMeta.color;
+        // Colour = Priority
+        const pinColor = PRIORITY_PIN_COLORS[cluster.priorityLabel] || '#3B82F6';
+
+        // Size = Report Count (scaled smoothly from 28px to 54px)
+        const pinSize = Math.min(54, Math.max(28, 24 + cluster.count * 4));
 
         const customIcon = L.divIcon({
-          className: 'custom-cluster-icon',
+          className: 'custom-cluster-marker',
           html: `
             <div style="
-              width: 32px;
-              height: 32px;
+              width: ${pinSize}px;
+              height: ${pinSize}px;
               border-radius: 50%;
-              background: ${clsMeta.bgLight};
-              border: 2px solid ${color};
+              background: ${pinColor}25;
+              border: 2px solid ${pinColor};
               display: flex;
+              flex-direction: column;
               align-items: center;
               justify-content: center;
               color: #FFF;
-              font-size: 11px;
-              font-weight: 700;
-              box-shadow: 0 0 12px ${color}88;
+              font-size: ${pinSize > 36 ? '12px' : '10px'};
+              font-weight: 800;
+              box-shadow: 0 0 14px ${pinColor}88;
               cursor: pointer;
+              transition: transform 0.15s ease;
             ">
-              ${cluster.count > 1 ? cluster.count : '!'}
+              <span>${cluster.count}</span>
             </div>
           `,
-          iconSize: [32, 32],
-          iconAnchor: [16, 16],
+          iconSize: [pinSize, pinSize],
+          iconAnchor: [pinSize / 2, pinSize / 2],
         });
 
         const marker = L.marker([cluster.latitude, cluster.longitude], {
@@ -303,57 +611,225 @@ export default function App() {
           setSelectedCluster(cluster);
         });
 
-        const popupContent = `
-          <div style="font-family: inherit; font-size: 12px; line-height: 1.4; color: #1e293b; padding: 2px;">
-            <div style="font-weight: 700; color: ${color}; margin-bottom: 4px;">
-              ${cluster.dominantClass} (${clsMeta.fr})
-            </div>
-            <div><strong>Priorité:</strong> ${cluster.maxPriorityScore}/100 (${cluster.priorityLabel})</div>
-            <div><strong>Signalements:</strong> ${cluster.count} (20m)</div>
-            <div style="margin-top: 6px; font-size: 11px; color: #2563eb; font-weight: 600;">
-              Fiche détaillée ouverte ci-contre
-            </div>
-          </div>
-        `;
-        marker.bindPopup(popupContent, { offset: [0, -10] });
-
         marker.addTo(markersGroup);
       });
 
-      // Fit bounds if markers exist
       if (filteredClusters.length > 0 && mapInstanceRef.current) {
         const bounds = L.latLngBounds(
           filteredClusters.map((c) => [c.latitude, c.longitude])
         );
-        mapInstanceRef.current.fitBounds(bounds, { padding: [50, 50], maxZoom: 15 });
+        mapInstanceRef.current.fitBounds(bounds, { padding: [40, 40], maxZoom: 15 });
       }
     }
   }, [filteredClusters]);
 
-  // ── 7. Handle Status Change (Authority only) ───────────────────────────────
-  async function handleStatusChange(obsId, newStatus) {
+  // Keep selectedCluster in sync with updated observations; close panel if cluster becomes empty
+  useEffect(() => {
+    if (!selectedCluster) return;
+    const fresh = clusters.find((c) => c.id === selectedCluster.id);
+    if (fresh && fresh.members && fresh.members.length > 0) {
+      setSelectedCluster(fresh);
+    } else {
+      setSelectedCluster(null);
+    }
+  }, [clusters]);
+
+  // ── 6. Status Workflow Handler (unconfirmed → confirmed → repaired) ────────
+  function promptStatusUpdate(obsId, currentStatus, newStatus) {
     if (!isAuthorityUser) {
       setShowLoginModal(true);
       return;
     }
+    setStatusConfirmModal({ obsId, currentStatus, newStatus });
+  }
+
+  async function executeStatusUpdate() {
+    if (!statusConfirmModal) return;
+    const { obsId, newStatus } = statusConfirmModal;
+    setStatusUpdating(true);
     try {
       await updateObservationStatus(obsId, newStatus);
       // Refresh local observations
       setObservations((prev) =>
         prev.map((o) => (o.id === obsId ? { ...o, status: newStatus } : o))
       );
-      if (selectedCluster) {
-        setSelectedCluster((prev) => ({
-          ...prev,
-          status: newStatus,
-          observations: prev.observations.map((o) =>
-            o.id === obsId ? { ...o, status: newStatus } : o
-          ),
-        }));
-      }
+      setStatusConfirmModal(null);
+      setDataVersion((v) => v + 1);
     } catch (err) {
-      alert(`Erreur de modification (RLS rejeté): ${err.message}`);
+      alert(`Erreur de mise à jour: ${err.message}`);
+    } finally {
+      setStatusUpdating(false);
     }
+  }
+
+  // ── 6b. Reject Report Workflow (single report soft delete) ──────────────────
+  function promptRejectReport(obs) {
+    if (!isAuthorityUser) {
+      setShowLoginModal(true);
+      return;
+    }
+    setRejectReportModal(obs);
+  }
+
+  async function executeRejectReport() {
+    if (!rejectReportModal) return;
+    const obs = rejectReportModal;
+    const prevStatus = obs.status;
+    setRejectReportModal(null);
+
+    try {
+      await updateObservationStatus(obs.id, 'rejected');
+
+      // Update local state immediately
+      setObservations((prev) =>
+        prev.map((o) => (o.id === obs.id ? { ...o, status: 'rejected' } : o))
+      );
+
+      // Trigger 8-second Undo toast
+      showUndoToast(
+        `Signalement #${obs.id.slice(0, 8)} rejeté (pas d'anomalie)`,
+        [{ id: obs.id, previousStatus: prevStatus }]
+      );
+
+      setDataVersion((v) => v + 1);
+    } catch (err) {
+      alert(`Erreur lors du rejet du signalement : ${err.message}`);
+    }
+  }
+
+  // ── 6c. Reject Entire Cluster Workflow (batch soft delete with id=in.(...)) ─
+  function promptRejectCluster(cluster) {
+    if (!isAuthorityUser) {
+      setShowLoginModal(true);
+      return;
+    }
+    setRejectClusterModal(cluster);
+  }
+
+  async function executeRejectCluster() {
+    if (!rejectClusterModal) return;
+    const cluster = rejectClusterModal;
+    const members = cluster.members || [];
+    const ids = members.map((m) => m.id);
+    const previousStatuses = members.map((m) => ({ id: m.id, previousStatus: m.status }));
+    setRejectClusterModal(null);
+
+    try {
+      await updateMultipleObservationsStatus(ids, 'rejected');
+
+      // Update local state immediately
+      const idSet = new Set(ids);
+      setObservations((prev) =>
+        prev.map((o) => (idSet.has(o.id) ? { ...o, status: 'rejected' } : o))
+      );
+
+      // Close the open cluster panel
+      setSelectedCluster(null);
+
+      // Trigger 8-second Undo toast
+      showUndoToast(
+        `Cluster rejeté (${ids.length} signalements)`,
+        previousStatuses
+      );
+
+      setDataVersion((v) => v + 1);
+    } catch (err) {
+      alert(`Erreur lors du rejet du cluster : ${err.message}`);
+    }
+  }
+
+  // ── 6d. Undo Reject Handler (restores previous status) ───────────────────────
+  function showUndoToast(message, previousStatuses) {
+    if (undoTimerRef.current) clearTimeout(undoTimerRef.current);
+    setUndoState({ message, previousStatuses });
+    undoTimerRef.current = setTimeout(() => {
+      setUndoState(null);
+    }, 8000);
+  }
+
+  async function handleUndoReject() {
+    if (!undoState || !undoState.previousStatuses) return;
+    if (undoTimerRef.current) clearTimeout(undoTimerRef.current);
+    const items = undoState.previousStatuses;
+    setUndoState(null);
+
+    try {
+      const groups = {};
+      items.forEach(({ id, previousStatus }) => {
+        const st = previousStatus || 'unconfirmed';
+        if (!groups[st]) groups[st] = [];
+        groups[st].push(id);
+      });
+
+      for (const [status, ids] of Object.entries(groups)) {
+        if (ids.length === 1) {
+          await updateObservationStatus(ids[0], status);
+        } else {
+          await updateMultipleObservationsStatus(ids, status);
+        }
+      }
+
+      setDataVersion((v) => v + 1);
+    } catch (err) {
+      alert(`Erreur lors de l'annulation du rejet : ${err.message}`);
+    }
+  }
+
+  // ── 6e. Restore Single Report from 'Rejetés' view ───────────────────────────
+  async function handleRestoreReport(obsId) {
+    if (!isAuthorityUser) return;
+    try {
+      await updateObservationStatus(obsId, 'unconfirmed');
+      setObservations((prev) =>
+        prev.map((o) => (o.id === obsId ? { ...o, status: 'unconfirmed' } : o))
+      );
+      setDataVersion((v) => v + 1);
+    } catch (err) {
+      alert(`Erreur lors de la restauration : ${err.message}`);
+    }
+  }
+
+  // ── 7. CSV Export (Strictly omitting device_id) ────────────────────────────
+  function handleExportCsv() {
+    const headers = [
+      'ClusterID',
+      'DominantClass',
+      'ReportCount',
+      'MaxPriorityScore',
+      'PriorityLabel',
+      'Status',
+      'CentroidLatitude',
+      'CentroidLongitude',
+      'FirstSeen',
+      'LastSeen',
+    ];
+
+    const rows = filteredClusters.map((c) => [
+      `"${c.id}"`,
+      `"${c.dominantClass}"`,
+      c.count,
+      c.maxPriorityScore,
+      `"${c.priorityLabel}"`,
+      `"${c.status}"`,
+      c.latitude.toFixed(7),
+      c.longitude.toFixed(7),
+      `"${c.oldestDate}"`,
+      `"${c.newestDate}"`,
+    ]);
+
+    const csvContent =
+      'data:text/csv;charset=utf-8,' +
+      [headers.join(','), ...rows.map((e) => e.join(','))].join('\n');
+    const encodedUri = encodeURI(csvContent);
+    const link = document.createElement('a');
+    link.setAttribute('href', encodedUri);
+    link.setAttribute(
+      'download',
+      `tariqmap_clusters_${new Date().toISOString().slice(0, 10)}.csv`
+    );
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
   }
 
   // ── 8. Login Handler ───────────────────────────────────────────────────────
@@ -368,9 +844,10 @@ export default function App() {
       setIsAuthorityUser(isAuth);
       setShowLoginModal(false);
       setAuthPassword('');
+      setDataVersion((v) => v + 1);
       if (!isAuth) {
         alert(
-          'Compte connecté, mais non enregistré dans authority_users. Accès en lecture seule conservé.'
+          'Compte authentifié, mais absent de la table authority_users. Accès en lecture seule conservé.'
         );
       }
     } catch (err) {
@@ -385,45 +862,10 @@ export default function App() {
       await signOut();
       setCurrentUser(null);
       setIsAuthorityUser(false);
+      setDataVersion((v) => v + 1);
     } catch (err) {
       console.error(err);
     }
-  }
-
-  // ── 9. Export CSV ──────────────────────────────────────────────────────────
-  function handleExportCsv() {
-    const headers = [
-      'ClusterID',
-      'DominantClass',
-      'PriorityScore',
-      'PriorityLabel',
-      'Status',
-      'Latitude',
-      'Longitude',
-      'SightingsCount',
-      'FirstObserved',
-    ];
-    const rows = filteredClusters.map((c) => [
-      c.id,
-      c.dominantClass,
-      c.maxPriorityScore,
-      c.priorityLabel,
-      c.status,
-      c.latitude.toFixed(6),
-      c.longitude.toFixed(6),
-      c.count,
-      c.firstObserved,
-    ]);
-    const csvContent =
-      'data:text/csv;charset=utf-8,' +
-      [headers.join(','), ...rows.map((e) => e.join(','))].join('\n');
-    const encodedUri = encodeURI(csvContent);
-    const link = document.createElement('a');
-    link.setAttribute('href', encodedUri);
-    link.setAttribute('download', `tariqmap_export_${new Date().toISOString().slice(0, 10)}.csv`);
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
   }
 
   return (
@@ -432,11 +874,11 @@ export default function App() {
       {hasDemoData && (
         <div className="demo-banner">
           <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-            <AlertTriangle size={18} />
+            <AlertTriangle size={16} />
             <span>{t.demoBanner}</span>
           </div>
-          <span className="mono" style={{ fontSize: '0.75rem' }}>
-            Flag: <code>is_demo = true</code>
+          <span className="mono" style={{ fontSize: '0.72rem' }}>
+            <code>is_demo = true</code>
           </span>
         </div>
       )}
@@ -444,133 +886,216 @@ export default function App() {
       {/* ── Top Navigation Bar ───────────────────────────────────────────────── */}
       <header className="topbar">
         <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-          <div
-            style={{
-              width: '34px',
-              height: '34px',
-              borderRadius: '8px',
-              background: 'linear-gradient(135deg, var(--teal-accent), #3B82F6)',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              fontWeight: 900,
-              color: '#000',
-            }}
-          >
-            TM
-          </div>
+          <div className="brand-badge">TM</div>
           <div>
             <h1 className="topbar-title">{t.title}</h1>
-            <p className="topbar-subtitle">{t.subtitle}</p>
+            <p className="topbar-subtitle">
+              {lang === 'fr'
+                ? 'Tableau de Bord Autorité • Priorisation & Diagnostic Voirie'
+                : 'Authority Dashboard • Road Anomaly Triage & Verification'}
+            </p>
           </div>
         </div>
 
-        <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '10px', flexWrap: 'wrap' }}>
+          {/* Honest Metrics Button */}
+          <button
+            className="btn btn-secondary"
+            onClick={() => setShowMetricsPanel(true)}
+            title="Consulter les métriques de validation du modèle"
+          >
+            <BarChart3 size={15} color="var(--color-primary)" />
+            <span>Métriques IA & Limites</span>
+          </button>
+
+          {/* Export CSV Button */}
+          <button className="btn btn-secondary" onClick={handleExportCsv} title="Exporter les clusters en CSV">
+            <FileSpreadsheet size={15} />
+            <span className="hide-on-mobile">Exporter CSV</span>
+          </button>
+
           {/* Authority / Public Status Badge */}
           {currentUser ? (
             <div
+              className="auth-badge"
               style={{
-                display: 'flex',
-                alignItems: 'center',
-                gap: '8px',
-                padding: '6px 12px',
-                borderRadius: 'var(--radius-sm)',
-                background: isAuthorityUser
-                  ? 'rgba(16, 185, 129, 0.15)'
-                  : 'rgba(234, 179, 8, 0.15)',
-                border: `1px solid ${
-                  isAuthorityUser ? 'var(--emerald-accent)' : 'var(--amber-accent)'
-                }`,
-                fontSize: '0.8rem',
+                background: isAuthorityUser ? 'rgba(16, 185, 129, 0.15)' : 'rgba(245, 158, 11, 0.15)',
+                borderColor: isAuthorityUser ? 'var(--color-success)' : 'var(--color-warning)',
               }}
             >
               {isAuthorityUser ? (
-                <ShieldCheck size={16} color="var(--emerald-accent)" />
+                <ShieldCheck size={16} color="var(--color-success)" />
               ) : (
-                <ShieldAlert size={16} color="var(--amber-accent)" />
+                <ShieldAlert size={16} color="var(--color-warning)" />
               )}
-              <span style={{ fontWeight: 600 }}>
-                {isAuthorityUser ? 'AUTORITÉ COMMUNE' : 'UTILISATEUR AUTH'}
+              <span style={{ fontWeight: 700, fontSize: '0.78rem' }}>
+                {isAuthorityUser ? 'AUTORITÉ VOIRIE' : 'UTILISATEUR'}
               </span>
               <button
                 onClick={handleLogout}
-                style={{
-                  background: 'none',
-                  border: 'none',
-                  color: 'var(--text-muted)',
-                  cursor: 'pointer',
-                  marginLeft: '6px',
-                  display: 'flex',
-                  alignItems: 'center',
-                }}
+                style={{ background: 'none', border: 'none', color: 'var(--text-muted)', cursor: 'pointer', display: 'flex' }}
                 title="Déconnexion"
               >
                 <LogOut size={14} />
               </button>
             </div>
           ) : (
-            <button className="btn" onClick={() => setShowLoginModal(true)}>
+            <button className="btn btn-primary" onClick={() => setShowLoginModal(true)}>
               <LogIn size={15} />
               <span>Connexion Autorité</span>
             </button>
           )}
 
           {/* Language Toggle */}
-          <button
-            className="btn"
-            onClick={() => setLang(lang === 'fr' ? 'en' : 'fr')}
-          >
-            <Globe size={15} />
-            <span>{t.switchLang}</span>
+          <button className="btn btn-secondary" onClick={() => setLang(lang === 'fr' ? 'en' : 'fr')}>
+            <Globe size={14} />
+            <span>{lang.toUpperCase()}</span>
           </button>
         </div>
       </header>
 
-      {/* ── Main Layout (Map + Sidebar) ─────────────────────────────────────── */}
-      <div className="main-layout">
+      {/* ── KPI Strip (Class, Priority, Status Breakdown) ────────────────────── */}
+      <section className="kpi-strip">
+        {/* Class Counts */}
+        <div className="kpi-group">
+          <span className="kpi-group-title">CLASSES D'ANOMALIES</span>
+          <div className="kpi-items">
+            <div className="kpi-pill" title="D40 Pothole">
+              <span className="dot" style={{ background: DAMAGE_CLASSES.D40.color }} />
+              <span className="label">D40 Nid-de-poule</span>
+              <strong className="val mono">{kpis.classCounts.D40}</strong>
+            </div>
+            <div className="kpi-pill" title="D20 Alligator Crack">
+              <span className="dot" style={{ background: DAMAGE_CLASSES.D20.color }} />
+              <span className="label">D20 Faïençage</span>
+              <strong className="val mono">{kpis.classCounts.D20}</strong>
+            </div>
+            <div className="kpi-pill" title="D10 Transverse Crack">
+              <span className="dot" style={{ background: DAMAGE_CLASSES.D10.color }} />
+              <span className="label">D10 Transversale</span>
+              <strong className="val mono">{kpis.classCounts.D10}</strong>
+            </div>
+            <div className="kpi-pill" title="D00 Longitudinal Crack">
+              <span className="dot" style={{ background: DAMAGE_CLASSES.D00.color }} />
+              <span className="label">D00 Longitudinale</span>
+              <strong className="val mono">{kpis.classCounts.D00}</strong>
+            </div>
+          </div>
+        </div>
+
+        {/* Priority Counts */}
+        <div className="kpi-group">
+          <span className="kpi-group-title">NIVEAU DE PRIORITÉ</span>
+          <div className="kpi-items">
+            <div className="kpi-pill">
+              <span className="dot" style={{ background: PRIORITY_PIN_COLORS.HIGH }} />
+              <span className="label">HIGH (&gt;65)</span>
+              <strong className="val mono" style={{ color: PRIORITY_PIN_COLORS.HIGH }}>
+                {kpis.priorityCounts.HIGH}
+              </strong>
+            </div>
+            <div className="kpi-pill">
+              <span className="dot" style={{ background: PRIORITY_PIN_COLORS.MEDIUM }} />
+              <span className="label">MEDIUM (35–65)</span>
+              <strong className="val mono" style={{ color: PRIORITY_PIN_COLORS.MEDIUM }}>
+                {kpis.priorityCounts.MEDIUM}
+              </strong>
+            </div>
+            <div className="kpi-pill">
+              <span className="dot" style={{ background: PRIORITY_PIN_COLORS.LOW }} />
+              <span className="label">LOW (&lt;35)</span>
+              <strong className="val mono" style={{ color: PRIORITY_PIN_COLORS.LOW }}>
+                {kpis.priorityCounts.LOW}
+              </strong>
+            </div>
+          </div>
+        </div>
+
+        {/* Status Counts */}
+        <div className="kpi-group">
+          <span className="kpi-group-title">WORKFLOW AUTORITÉ</span>
+          <div className="kpi-items">
+            <div className="kpi-pill">
+              <span className="dot" style={{ background: '#9CA3AF' }} />
+              <span className="label">Non confirmé</span>
+              <strong className="val mono">{kpis.statusCounts.unconfirmed}</strong>
+            </div>
+            <div className="kpi-pill">
+              <span className="dot" style={{ background: '#F59E0B' }} />
+              <span className="label">Confirmé</span>
+              <strong className="val mono" style={{ color: '#F59E0B' }}>
+                {kpis.statusCounts.confirmed}
+              </strong>
+            </div>
+            <div className="kpi-pill">
+              <span className="dot" style={{ background: '#10B981' }} />
+              <span className="label">Réparé</span>
+              <strong className="val mono" style={{ color: '#10B981' }}>
+                {kpis.statusCounts.repaired}
+              </strong>
+            </div>
+            {isAuthorityUser && (
+              <div
+                className={`kpi-pill kpi-pill-actionable ${activeSidebarTab === 'rejected' ? 'active' : ''}`}
+                onClick={() => {
+                  setActiveSidebarTab(activeSidebarTab === 'rejected' ? 'clusters' : 'rejected');
+                  setSelectedCluster(null);
+                  setIsSidebarCollapsed(false);
+                }}
+                title="Afficher les signalements rejetés (exclus de la carte)"
+              >
+                <span className="dot" style={{ background: '#EF4444' }} />
+                <span className="label">Rejetés</span>
+                <strong className="val mono" style={{ color: '#EF4444' }}>
+                  {rejectedObservations.length}
+                </strong>
+              </div>
+            )}
+          </div>
+        </div>
+      </section>
+
+      {/* ── Main Layout: Map + Side Panel ───────────────────────────────────── */}
+      <div className={`main-layout ${isSidebarCollapsed ? 'sidebar-collapsed' : ''}`}>
         {/* Left Map View */}
         <div className="map-wrapper">
           <div ref={mapRef} style={{ width: '100%', height: '100%' }} />
 
-          {/* Quick Map Overlay Filter Controls */}
-          <div
-            style={{
-              position: 'absolute',
-              top: '16px',
-              left: '16px',
-              zIndex: 1000,
-              display: 'flex',
-              gap: '8px',
-              background: 'rgba(18, 26, 43, 0.85)',
-              backdropFilter: 'blur(8px)',
-              padding: '8px',
-              borderRadius: 'var(--radius-md)',
-              border: '1px solid var(--border-subtle)',
-            }}
-          >
+          {/* Expand Sidebar Button (when collapsed) */}
+          {isSidebarCollapsed && (
+            <button
+              className="sidebar-expand-btn"
+              onClick={() => setIsSidebarCollapsed(false)}
+              title="Ouvrir le panneau d'inspection"
+            >
+              <ChevronLeft size={16} />
+              <span>{selectedCluster ? 'Détails cluster' : 'File prioritaire'}</span>
+            </button>
+          )}
+
+          {/* Quick Filters Overlay */}
+          <div className="map-filter-overlay">
             <select
               className="select-input"
               value={classFilter}
               onChange={(e) => setClassFilter(e.target.value)}
             >
-              <option value="all">{t.filterClass}: {t.all}</option>
-              {Object.keys(DAMAGE_CLASSES).map((k) => (
-                <option key={k} value={k}>
-                  {k} ({lang === 'fr' ? DAMAGE_CLASSES[k].fr : DAMAGE_CLASSES[k].en})
-                </option>
-              ))}
+              <option value="all">Classe: Tous</option>
+              <option value="D40">D40 (Nid-de-poule)</option>
+              <option value="D20">D20 (Faïençage)</option>
+              <option value="D10">D10 (Transversale)</option>
+              <option value="D00">D00 (Longitudinale)</option>
             </select>
 
             <select
               className="select-input"
-              value={severityFilter}
-              onChange={(e) => setSeverityFilter(e.target.value)}
+              value={priorityFilter}
+              onChange={(e) => setPriorityFilter(e.target.value)}
             >
-              <option value="all">{t.filterSeverity}: {t.all}</option>
-              <option value="CRITICAL">CRITICAL</option>
-              <option value="HIGH">HIGH</option>
-              <option value="MEDIUM">MEDIUM</option>
-              <option value="LOW">LOW</option>
+              <option value="all">Priorité: Tous</option>
+              <option value="HIGH">HIGH (&gt;65)</option>
+              <option value="MEDIUM">MEDIUM (35–65)</option>
+              <option value="LOW">LOW (&lt;35)</option>
             </select>
 
             <select
@@ -578,523 +1103,533 @@ export default function App() {
               value={statusFilter}
               onChange={(e) => setStatusFilter(e.target.value)}
             >
-              <option value="all">{t.filterStatus}: {t.all}</option>
-              {Object.keys(STATUS_LABELS).map((st) => (
-                <option key={st} value={st}>
-                  {lang === 'fr' ? STATUS_LABELS[st].fr : STATUS_LABELS[st].en}
-                </option>
-              ))}
+              <option value="all">Statut: Tous</option>
+              <option value="unconfirmed">Non confirmé</option>
+              <option value="confirmed">Confirmé</option>
+              <option value="repaired">Réparé</option>
             </select>
           </div>
 
-          {/* Map Legend */}
+          {/* Map Legend & GPS Accuracy Note */}
           <div className="map-legend">
-            <span style={{ fontSize: '0.75rem', fontWeight: 700, color: 'var(--text-muted)' }}>
-              LÉGENDE DÉGÂTS (20m DENSITY)
+            <span style={{ fontSize: '0.72rem', fontWeight: 800, color: 'var(--text-muted)' }}>
+              LÉGENDE CARTE (COULEUR = PRIORITÉ • TAILLE = SÉVÉRITÉ)
             </span>
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '6px', marginTop: '6px' }}>
-              {Object.values(DAMAGE_CLASSES).map((cls) => (
-                <div key={cls.code} style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '0.8rem' }}>
-                  <span
-                    style={{
-                      width: '10px',
-                      height: '10px',
-                      borderRadius: '50%',
-                      background: cls.color,
-                      display: 'inline-block',
-                    }}
-                  />
-                  <span>
-                    <strong>{cls.code}</strong> — {lang === 'fr' ? cls.fr : cls.en}
-                  </span>
-                </div>
-              ))}
+            <div style={{ display: 'flex', gap: '14px', marginTop: '6px', flexWrap: 'wrap' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '0.75rem' }}>
+                <span style={{ width: '12px', height: '12px', borderRadius: '50%', background: PRIORITY_PIN_COLORS.HIGH, display: 'inline-block' }} />
+                <span>HIGH (&gt;65)</span>
+              </div>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '0.75rem' }}>
+                <span style={{ width: '12px', height: '12px', borderRadius: '50%', background: PRIORITY_PIN_COLORS.MEDIUM, display: 'inline-block' }} />
+                <span>MEDIUM (35–65)</span>
+              </div>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '0.75rem' }}>
+                <span style={{ width: '12px', height: '12px', borderRadius: '50%', background: PRIORITY_PIN_COLORS.LOW, display: 'inline-block' }} />
+                <span>LOW (&lt;35)</span>
+              </div>
+            </div>
+            <div style={{ marginTop: '8px', paddingTop: '6px', borderTop: '1px solid var(--border-subtle)', fontSize: '0.70rem', color: 'var(--text-dim)', lineHeight: 1.3 }}>
+              <span>Positions avec précision &gt; 25 m non affichées ({accuracyExcludedCount} signalements exclus)</span>
             </div>
           </div>
+        </div>
 
-          {/* Floating Anomaly Detail Card on Pin Tap */}
-          {selectedCluster && (
-            <div className="map-floating-card">
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                  <span
-                    style={{
-                      background: DAMAGE_CLASSES[selectedCluster.dominantClass]?.color || 'var(--red-accent)',
-                      color: '#fff',
-                      fontWeight: 800,
-                      fontSize: '0.8rem',
-                      padding: '2px 8px',
-                      borderRadius: '4px',
-                    }}
-                  >
-                    {selectedCluster.dominantClass}
-                  </span>
-                  <span style={{ fontWeight: 700, fontSize: '0.85rem' }}>
-                    {lang === 'fr'
-                      ? DAMAGE_CLASSES[selectedCluster.dominantClass]?.fr
-                      : DAMAGE_CLASSES[selectedCluster.dominantClass]?.en}
-                  </span>
+        {/* Right Side Panel: Cluster Details & Report List */}
+        <aside className="sidebar">
+          {activeSidebarTab === 'rejected' && isAuthorityUser ? (
+            <div className="rejected-view">
+              <div className="rejected-header">
+                <div>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                    <span style={{ width: '8px', height: '8px', borderRadius: '50%', background: '#EF4444' }} />
+                    <h2 style={{ fontSize: '1rem', fontWeight: 800 }}>Signalements rejetés</h2>
+                  </div>
+                  <p style={{ fontSize: '0.74rem', color: 'var(--text-muted)', marginTop: '4px' }}>
+                    {rejectedObservations.length} signalement{rejectedObservations.length > 1 ? 's' : ''} exclu{rejectedObservations.length > 1 ? 's' : ''} de la carte publique
+                  </p>
                 </div>
-                <button
-                  style={{ background: 'transparent', border: 'none', color: 'var(--text-muted)', cursor: 'pointer' }}
-                  onClick={() => setSelectedCluster(null)}
-                >
-                  <X size={16} />
-                </button>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
+                  <button
+                    className="icon-btn"
+                    onClick={() => setIsSidebarCollapsed(true)}
+                    title="Masquer le panneau"
+                  >
+                    <ChevronRight size={18} />
+                  </button>
+                  <button
+                    className="icon-btn"
+                    onClick={() => setActiveSidebarTab('clusters')}
+                    title="Retour aux clusters"
+                  >
+                    <X size={16} />
+                  </button>
+                </div>
               </div>
 
-              {/* All Anon-Readable Telemetry Fields: class, confidence, priority, date, status, position */}
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px', fontSize: '0.78rem' }}>
-                <div style={{ background: 'rgba(255,255,255,0.02)', padding: '6px 8px', borderRadius: '4px' }}>
-                  <span style={{ color: 'var(--text-dim)', display: 'block', fontSize: '0.7rem' }}>CONFIANCE IA</span>
-                  <strong style={{ color: 'var(--emerald-accent)' }}>
-                    {selectedCluster.members?.[0]?.detections?.[0]?.confidence
-                      ? `${(selectedCluster.members[0].detections[0].confidence * 100).toFixed(0)}%`
-                      : 'Élevée'}
+              {rejectedObservations.length === 0 ? (
+                <div className="panel-empty-state" style={{ height: '240px' }}>
+                  <CheckCircle2 size={32} color="var(--color-success)" style={{ opacity: 0.6 }} />
+                  <h4 style={{ fontSize: '0.9rem', fontWeight: 700, marginTop: '8px' }}>
+                    Aucun signalement rejeté
+                  </h4>
+                  <p style={{ fontSize: '0.75rem', color: 'var(--text-muted)', textAlign: 'center', maxWidth: '240px', marginTop: '4px' }}>
+                    Tous les signalements enregistrés sont actifs sur le réseau.
+                  </p>
+                </div>
+              ) : (
+                <div className="report-items-list" style={{ overflowY: 'auto' }}>
+                  {rejectedObservations.map((obs, idx) => {
+                    const det = obs.detections?.[0];
+                    const classCode = obs.anomaly_type || det?.class_code || 'D40';
+
+                    return (
+                      <div key={obs.id} className="report-card" style={{ borderColor: 'rgba(239, 68, 68, 0.3)' }}>
+                        <div style={{ display: 'flex', gap: '14px', alignItems: 'flex-start' }}>
+                          <ReportImageThumbnail
+                            obs={obs}
+                            clusterMedia={clusterMediaMap[obs.id]}
+                            isAuthority={isAuthorityUser}
+                            onOpenLightbox={(url, title, badge) =>
+                              setLightboxImage({ url, title, badge })
+                            }
+                          />
+
+                          <div style={{ flex: 1, minWidth: 0 }}>
+                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: '6px' }}>
+                              <div style={{ display: 'flex', alignItems: 'center', gap: '6px', flexWrap: 'wrap' }}>
+                                <span style={{ fontWeight: 700, fontSize: '0.82rem', color: DAMAGE_CLASSES[classCode]?.color }}>
+                                  #{idx + 1} {classCode} ({DAMAGE_CLASSES[classCode]?.fr})
+                                </span>
+                                {obs.is_demo ? (
+                                  <span className="badge badge-demo">DEMO</span>
+                                ) : (
+                                  <span className="badge badge-real">RÉEL</span>
+                                )}
+                              </div>
+                              <span className="badge" style={{ fontSize: '0.65rem', background: 'rgba(239, 68, 68, 0.15)', color: '#f87171', border: '1px solid rgba(239, 68, 68, 0.3)' }}>
+                                Rejeté
+                              </span>
+                            </div>
+
+                            <div style={{ display: 'flex', gap: '12px', fontSize: '0.72rem', color: 'var(--text-muted)', marginTop: '4px' }}>
+                              <div>
+                                <span style={{ color: 'var(--text-dim)' }}>ID: </span>
+                                <span className="mono">{obs.id.slice(0, 8)}</span>
+                              </div>
+                              <div>
+                                <span style={{ color: 'var(--text-dim)' }}>Score: </span>
+                                <strong className="mono">{formatScore(obs.priority_score)}</strong>
+                              </div>
+                            </div>
+
+                            <div style={{ fontSize: '0.72rem', color: 'var(--text-muted)', marginTop: '4px' }}>
+                              {new Date(obs.created_at).toLocaleString()}
+                            </div>
+
+                            <div style={{ marginTop: '8px' }}>
+                              <button
+                                className="btn-status btn-restore"
+                                onClick={() => handleRestoreReport(obs.id)}
+                                title="Restaurer comme non confirmé"
+                              >
+                                <RotateCcw size={12} />
+                                <span>Restaurer</span>
+                              </button>
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+          ) : selectedCluster ? (
+            <div className="cluster-detail-panel">
+              {/* Cluster Header */}
+              <div className="panel-header">
+                <div>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                    <span
+                      className="class-badge"
+                      style={{
+                        background: DAMAGE_CLASSES[selectedCluster.dominantClass]?.color || '#EF4444',
+                      }}
+                    >
+                      {selectedCluster.dominantClass}
+                    </span>
+                    <h2 style={{ fontSize: '1rem', fontWeight: 800 }}>
+                      {DAMAGE_CLASSES[selectedCluster.dominantClass]?.fr || 'Anomalie'}
+                    </h2>
+                  </div>
+                  <p className="mono" style={{ fontSize: '0.74rem', color: 'var(--text-dim)', marginTop: '4px' }}>
+                    {selectedCluster.latitude.toFixed(6)}, {selectedCluster.longitude.toFixed(6)}
+                  </p>
+                  {isAuthorityUser && (
+                    <button
+                      className="btn-danger-subtle"
+                      onClick={() => promptRejectCluster(selectedCluster)}
+                      title="Rejeter tous les signalements de ce cluster (pas d'anomalie)"
+                      style={{ marginTop: '8px' }}
+                    >
+                      <Trash2 size={13} />
+                      <span>Rejeter tout le cluster</span>
+                    </button>
+                  )}
+                </div>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
+                  <button
+                    className="icon-btn"
+                    onClick={() => setIsSidebarCollapsed(true)}
+                    title="Masquer le panneau"
+                  >
+                    <ChevronRight size={18} />
+                  </button>
+                  <button
+                    className="icon-btn"
+                    onClick={() => setSelectedCluster(null)}
+                    title="Fermer la sélection"
+                  >
+                    <X size={16} />
+                  </button>
+                </div>
+              </div>
+
+              {/* Cluster KPI Grid */}
+              <div className="cluster-kpi-grid">
+                <div className="cluster-kpi-card">
+                  <span className="lbl">SCORE MAX</span>
+                  <strong
+                    className="val mono"
+                    style={{
+                      color: PRIORITY_PIN_COLORS[selectedCluster.priorityLabel],
+                    }}
+                  >
+                    {formatScore(selectedCluster.maxPriorityScore)} ({selectedCluster.priorityLabel})
                   </strong>
                 </div>
-                <div style={{ background: 'rgba(255,255,255,0.02)', padding: '6px 8px', borderRadius: '4px' }}>
-                  <span style={{ color: 'var(--text-dim)', display: 'block', fontSize: '0.7rem' }}>PRIORITÉ</span>
-                  <strong style={{ color: selectedCluster.maxPriorityScore >= 70 ? 'var(--red-accent)' : 'var(--amber-accent)' }}>
-                    {selectedCluster.maxPriorityScore}/100 ({selectedCluster.priorityLabel})
-                  </strong>
+                <div className="cluster-kpi-card">
+                  <span className="lbl">SIGNALEMENTS (20M)</span>
+                  <strong className="val mono">{selectedCluster.count}</strong>
                 </div>
-                <div style={{ background: 'rgba(255,255,255,0.02)', padding: '6px 8px', borderRadius: '4px' }}>
-                  <span style={{ color: 'var(--text-dim)', display: 'block', fontSize: '0.7rem' }}>DATE</span>
-                  <span style={{ color: 'var(--text-main)' }}>
+                <div className="cluster-kpi-card">
+                  <span className="lbl">STATUT CLUSTER</span>
+                  <span
+                    className={`badge ${STATUS_LABELS[selectedCluster.status]?.badge || 'badge-gray'}`}
+                    style={{ fontSize: '0.72rem', alignSelf: 'flex-start', marginTop: '2px' }}
+                  >
+                    {STATUS_LABELS[selectedCluster.status]?.fr || selectedCluster.status}
+                  </span>
+                </div>
+                <div className="cluster-kpi-card">
+                  <span className="lbl">DERNIER PASSAGE</span>
+                  <span style={{ fontSize: '0.75rem', color: 'var(--text-main)', marginTop: '2px' }}>
                     {new Date(selectedCluster.newestDate).toLocaleDateString()}
                   </span>
                 </div>
-                <div style={{ background: 'rgba(255,255,255,0.02)', padding: '6px 8px', borderRadius: '4px' }}>
-                  <span style={{ color: 'var(--text-dim)', display: 'block', fontSize: '0.7rem' }}>STATUT</span>
-                  <span className={`badge ${STATUS_LABELS[selectedCluster.status]?.badge || 'badge-gray'}`} style={{ fontSize: '0.7rem' }}>
-                    {lang === 'fr'
-                      ? STATUS_LABELS[selectedCluster.status]?.fr
-                      : STATUS_LABELS[selectedCluster.status]?.en}
+              </div>
+
+              {/* Reports in Cluster Section */}
+              <div className="reports-section">
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
+                  <h3 style={{ fontSize: '0.85rem', fontWeight: 700, textTransform: 'uppercase', color: 'var(--text-muted)' }}>
+                    Rapports du cluster ({selectedCluster.members.length})
+                  </h3>
+                  <span style={{ fontSize: '0.72rem', color: 'var(--text-dim)' }}>
+                    Rayon DBSCAN 20m
                   </span>
                 </div>
-              </div>
 
-              <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>
-                <span>Position: </span>
-                <span className="mono" style={{ color: 'var(--text-main)' }}>
-                  {selectedCluster.latitude.toFixed(6)}, {selectedCluster.longitude.toFixed(6)}
-                </span>
-                <span style={{ color: 'var(--text-dim)', marginLeft: '6px' }}>({selectedCluster.count} signalements)</span>
-              </div>
+                <div className="report-items-list">
+                  {selectedCluster.members.map((obs, idx) => {
+                    const det = obs.detections?.[0];
+                    const classCode = obs.anomaly_type || det?.class_code || 'D40';
+                    const conf = det?.confidence !== undefined ? det.confidence : null;
 
-              {/* Image Section: Signed URL for Authority / Neutral Privacy Placeholder for Anon */}
-              <ClusterImageCard cluster={selectedCluster} isAuthority={isAuthorityUser} />
-
-              {/* Authority Actions */}
-              {isAuthorityUser && (
-                <div style={{ display: 'flex', gap: '8px', marginTop: '4px' }}>
-                  <select
-                    className="select-input"
-                    value={selectedCluster.status}
-                    onChange={(e) => handleStatusChange(selectedCluster.members?.[0]?.id, e.target.value)}
-                    style={{ flex: 1, fontSize: '0.75rem', padding: '4px 8px' }}
-                  >
-                    {Object.keys(STATUS_LABELS).map((st) => (
-                      <option key={st} value={st}>
-                        {lang === 'fr' ? STATUS_LABELS[st].fr : STATUS_LABELS[st].en}
-                      </option>
-                    ))}
-                  </select>
-                  <button
-                    className="btn btn-primary"
-                    style={{ fontSize: '0.75rem', padding: '4px 10px' }}
-                    onClick={() => setWorkOrderModal(selectedCluster)}
-                  >
-                    <Printer size={13} />
-                    <span>Ordre</span>
-                  </button>
-                </div>
-              )}
-            </div>
-          )}
-        </div>
-
-        {/* Right Decision Support Sidebar */}
-        <div className="sidebar">
-          {/* Key Metrics Row */}
-          <div className="metrics-row">
-            <div className="metric-card">
-              <span className="metric-label">{t.totalDefects}</span>
-              <span className="metric-value mono">{totalDefects}</span>
-            </div>
-            <div className="metric-card">
-              <span className="metric-label">{t.criticalCount}</span>
-              <span className="metric-value mono" style={{ color: 'var(--red-accent)' }}>
-                {criticalCount}
-              </span>
-            </div>
-            <div className="metric-card" style={{ position: 'relative' }}>
-              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                <span className="metric-label">{t.healthScore}</span>
-                <HelpCircle
-                  size={14}
-                  style={{ color: 'var(--text-muted)', cursor: 'pointer' }}
-                  onClick={() => setShowRhiTooltip(!showRhiTooltip)}
-                />
-              </div>
-              <span
-                className="metric-value mono"
-                style={{
-                  color:
-                    healthScore > 75
-                      ? 'var(--emerald-accent)'
-                      : healthScore > 50
-                      ? 'var(--amber-accent)'
-                      : 'var(--red-accent)',
-                }}
-              >
-                {healthScore}
-                <span style={{ fontSize: '0.9rem', color: 'var(--text-muted)' }}>/100</span>
-              </span>
-
-              {/* RHI Formula Tooltip */}
-              {showRhiTooltip && (
-                <div
-                  style={{
-                    position: 'absolute',
-                    top: '100%',
-                    right: 0,
-                    zIndex: 1100,
-                    width: '280px',
-                    padding: '12px',
-                    background: 'var(--bg-card)',
-                    border: '1px solid var(--border-medium)',
-                    borderRadius: 'var(--radius-sm)',
-                    boxShadow: 'var(--shadow-card)',
-                    fontSize: '0.78rem',
-                    color: 'var(--text-main)',
-                    marginTop: '6px',
-                  }}
-                >
-                  <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '6px' }}>
-                    <strong>Formule de l'Indice RHI</strong>
-                    <X size={12} style={{ cursor: 'pointer' }} onClick={() => setShowRhiTooltip(false)} />
-                  </div>
-                  <p style={{ fontFamily: 'monospace', color: 'var(--teal-accent)', marginBottom: '6px' }}>
-                    RHI = max(0, 100 - min(100, Σ (PriorityScore_i × ClassWeight_i) / N))
-                  </p>
-                  <p style={{ color: 'var(--text-muted)', lineHeight: 1.4 }}>
-                    Pondération géodésique sur PostGIS/Haversine (20m). 100 = chaussée intacte. Décroissance proportionnelle à la densité et criticité des nids-de-poule et faïençages.
-                  </p>
-                </div>
-              )}
-            </div>
-          </div>
-
-          {/* Tabs Navigation */}
-          <div className="tabs-header">
-            <button
-              className={`tab-btn ${activeTab === 'priority' ? 'active' : ''}`}
-              onClick={() => setActiveTab('priority')}
-            >
-              {t.priorityRankedList}
-            </button>
-            <button
-              className={`tab-btn ${activeTab === 'budget' ? 'active' : ''}`}
-              onClick={() => setActiveTab('budget')}
-            >
-              {t.budgetOptimizer}
-            </button>
-            <button
-              className={`tab-btn ${activeTab === 'accountability' ? 'active' : ''}`}
-              onClick={() => setActiveTab('accountability')}
-            >
-              {t.accountability}
-            </button>
-          </div>
-
-          {/* Tab Content Area */}
-          <div className="tab-body">
-            {/* ── Tab 1: Priority Queue ─────────────────────────────────────── */}
-            {activeTab === 'priority' && (
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                  <span style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>
-                    {filteredClusters.length} clusters identifiés
-                  </span>
-                  <button className="btn" onClick={handleExportCsv}>
-                    <FileSpreadsheet size={14} />
-                    <span>{t.exportCsv}</span>
-                  </button>
-                </div>
-
-                <div className="queue-list">
-                  {filteredClusters.map((cluster, idx) => {
-                    const clsMeta = DAMAGE_CLASSES[cluster.dominantClass] || DAMAGE_CLASSES.D40;
                     return (
-                      <div
-                        key={cluster.id}
-                        className={`queue-item ${selectedCluster?.id === cluster.id ? 'selected' : ''}`}
-                        onClick={() => setSelectedCluster(cluster)}
-                      >
-                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
-                          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                            <span className="mono" style={{ color: 'var(--text-dim)', fontSize: '0.8rem' }}>
-                              #{idx + 1}
-                            </span>
-                            <span
-                              style={{
-                                color: clsMeta.color,
-                                fontWeight: 700,
-                                fontSize: '0.9rem',
-                              }}
-                            >
-                              {cluster.dominantClass}
-                            </span>
-                            <span style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>
-                              ({lang === 'fr' ? clsMeta.fr : clsMeta.en})
-                            </span>
+                      <div key={obs.id} className="report-card">
+                        <div style={{ display: 'flex', gap: '14px', alignItems: 'flex-start' }}>
+                          {/* Image thumbnail (150x110px with lightbox) */}
+                          <ReportImageThumbnail
+                            obs={obs}
+                            clusterMedia={clusterMediaMap[obs.id]}
+                            isAuthority={isAuthorityUser}
+                            onOpenLightbox={(url, title, badge) =>
+                              setLightboxImage({ url, title, badge })
+                            }
+                          />
+
+                          {/* Report metadata */}
+                          <div style={{ flex: 1, minWidth: 0 }}>
+                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: '6px' }}>
+                              <div style={{ display: 'flex', alignItems: 'center', gap: '6px', flexWrap: 'wrap' }}>
+                                <span style={{ fontWeight: 700, fontSize: '0.82rem', color: DAMAGE_CLASSES[classCode]?.color }}>
+                                  #{idx + 1} {classCode} ({DAMAGE_CLASSES[classCode]?.fr})
+                                </span>
+                                {obs.is_demo ? (
+                                  <span className="badge badge-demo">DEMO</span>
+                                ) : (
+                                  <span className="badge badge-real">RÉEL</span>
+                                )}
+                              </div>
+                              <span className={`badge ${STATUS_LABELS[obs.status]?.badge || 'badge-gray'}`} style={{ fontSize: '0.68rem' }}>
+                                {STATUS_LABELS[obs.status]?.fr || obs.status}
+                              </span>
+                            </div>
+
+                            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '4px', marginTop: '6px', fontSize: '0.74rem' }}>
+                              <div>
+                                <span style={{ color: 'var(--text-dim)' }}>Confiance IA: </span>
+                                <strong style={{ color: conf && conf >= 0.7 ? 'var(--color-success)' : 'var(--text-muted)' }}>
+                                  {conf !== null ? `${Math.round(conf * 100)}%` : '--'}
+                                </strong>
+                              </div>
+                              <div>
+                                <span style={{ color: 'var(--text-dim)' }}>Score: </span>
+                                <strong className="mono">{formatScore(obs.priority_score)}</strong>
+                              </div>
+                            </div>
+
+                            <div style={{ fontSize: '0.72rem', color: 'var(--text-muted)', marginTop: '4px' }}>
+                              {new Date(obs.created_at).toLocaleString()}
+                            </div>
+
+                            {/* Authority Status Workflow Actions */}
+                            {isAuthorityUser && (
+                              <div style={{ display: 'flex', gap: '6px', marginTop: '8px', flexWrap: 'wrap' }}>
+                                {obs.status === 'unconfirmed' && (
+                                  <button
+                                    className="btn-status btn-confirm"
+                                    onClick={() => promptStatusUpdate(obs.id, 'unconfirmed', 'confirmed')}
+                                  >
+                                    <CheckCircle2 size={12} />
+                                    <span>Confirmer anomalie</span>
+                                  </button>
+                                )}
+                                {obs.status === 'confirmed' && (
+                                  <button
+                                    className="btn-status btn-repair"
+                                    onClick={() => promptStatusUpdate(obs.id, 'confirmed', 'repaired')}
+                                  >
+                                    <Wrench size={12} />
+                                    <span>Marquer réparé</span>
+                                  </button>
+                                )}
+                                {obs.status === 'repaired' && (
+                                  <span style={{ fontSize: '0.7rem', color: 'var(--color-success)', display: 'flex', alignItems: 'center', gap: '4px' }}>
+                                    <CheckCircle2 size={12} /> Réparé & Validé
+                                  </span>
+                                )}
+                                <button
+                                  className="btn-status btn-reject"
+                                  onClick={() => promptRejectReport(obs)}
+                                  title="Rejeter ce signalement (pas d'anomalie)"
+                                >
+                                  <XCircle size={12} />
+                                  <span>Rejeter (pas d'anomalie)</span>
+                                </button>
+                              </div>
+                            )}
                           </div>
-
-                          <span className={`badge ${STATUS_LABELS[cluster.status]?.badge || 'badge-gray'}`}>
-                            {lang === 'fr'
-                              ? STATUS_LABELS[cluster.status]?.fr
-                              : STATUS_LABELS[cluster.status]?.en}
-                          </span>
                         </div>
-
-                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: '6px' }}>
-                          <span className="mono" style={{ fontSize: '0.8rem' }}>
-                            Score: <strong>{cluster.maxPriorityScore}</strong> / 100
-                          </span>
-                          <span style={{ fontSize: '0.75rem', color: 'var(--text-dim)' }}>
-                            {cluster.count} {cluster.count > 1 ? 'passages' : 'passage'} (20m)
-                          </span>
-                        </div>
-
-                        {selectedCluster?.id === cluster.id && (
-                          <div
-                            style={{
-                              marginTop: '10px',
-                              paddingTop: '10px',
-                              borderTop: '1px solid var(--border-subtle)',
-                              display: 'flex',
-                              justifyContent: 'space-between',
-                              alignItems: 'center',
-                            }}
-                          >
-                            <select
-                              className="select-input"
-                              value={cluster.status}
-                              onChange={(e) => handleStatusChange(cluster.observations[0]?.id, e.target.value)}
-                              disabled={!isAuthorityUser}
-                              style={{ fontSize: '0.75rem', padding: '4px 8px' }}
-                            >
-                              {Object.keys(STATUS_LABELS).map((st) => (
-                                <option key={st} value={st}>
-                                  {lang === 'fr' ? STATUS_LABELS[st].fr : STATUS_LABELS[st].en}
-                                </option>
-                              ))}
-                            </select>
-
-                            <button
-                              className="btn"
-                              style={{ fontSize: '0.75rem', padding: '4px 10px' }}
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                setWorkOrderModal(cluster);
-                              }}
-                            >
-                              <Printer size={13} />
-                              <span>Ordre Travaux</span>
-                            </button>
-                          </div>
-                        )}
                       </div>
                     );
                   })}
                 </div>
               </div>
-            )}
-
-            {/* ── Tab 2: Budget Optimizer ───────────────────────────────────── */}
-            {activeTab === 'budget' && (
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
-                {/* Assumptions Panel Toggle */}
-                <div
-                  style={{
-                    padding: '12px',
-                    background: 'rgba(234, 179, 8, 0.08)',
-                    borderRadius: 'var(--radius-sm)',
-                    border: '1px solid rgba(234, 179, 8, 0.25)',
-                  }}
+            </div>
+          ) : (
+            <div className="panel-empty-state">
+              <div style={{ width: '100%', display: 'flex', justifyContent: 'flex-end', marginBottom: '8px' }}>
+                <button
+                  className="icon-btn"
+                  onClick={() => setIsSidebarCollapsed(true)}
+                  title="Masquer le panneau"
                 >
-                  <div
-                    style={{
-                      display: 'flex',
-                      justifyContent: 'space-between',
-                      alignItems: 'center',
-                      cursor: 'pointer',
-                    }}
-                    onClick={() => setShowAssumptionsPanel(!showAssumptionsPanel)}
-                  >
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                      <Sliders size={16} color="var(--amber-accent)" />
-                      <span style={{ fontSize: '0.85rem', fontWeight: 700, color: 'var(--amber-accent)' }}>
-                        Panneau des Hypothèses de Coûts (Estimations)
-                      </span>
-                    </div>
-                    <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>
-                      {showAssumptionsPanel ? 'Masquer' : 'Ajuster'}
-                    </span>
-                  </div>
+                  <ChevronRight size={18} />
+                </button>
+              </div>
+              <Layers size={36} style={{ opacity: 0.4, color: 'var(--color-primary)' }} />
+              <h3 style={{ fontSize: '0.95rem', fontWeight: 700, marginTop: '8px' }}>
+                Sélectionnez un cluster sur la carte
+              </h3>
+              <p style={{ fontSize: '0.78rem', color: 'var(--text-muted)', textAlign: 'center', maxWidth: '280px', lineHeight: 1.4, marginTop: '4px' }}>
+                Cliquez sur n'importe quel marqueur géodésique pour afficher les signalements concordants, les clichés certifiés et le workflow de réparation.
+              </p>
 
-                  <p style={{ fontSize: '0.74rem', color: 'var(--text-muted)', marginTop: '4px' }}>
-                    *Estimations paramétrables - non contractuelles / non officielles.
-                  </p>
-
-                  {showAssumptionsPanel && (
-                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px', marginTop: '10px' }}>
-                      <div>
-                        <label style={{ fontSize: '0.72rem', color: 'var(--text-muted)' }}>D40 Pothole (TND)</label>
-                        <input
-                          type="number"
-                          className="select-input"
-                          style={{ width: '100%', marginTop: '2px' }}
-                          value={unitCosts.D40}
-                          onChange={(e) => setUnitCosts({ ...unitCosts, D40: Number(e.target.value) || 0 })}
-                        />
-                      </div>
-                      <div>
-                        <label style={{ fontSize: '0.72rem', color: 'var(--text-muted)' }}>D20 Alligator (TND)</label>
-                        <input
-                          type="number"
-                          className="select-input"
-                          style={{ width: '100%', marginTop: '2px' }}
-                          value={unitCosts.D20}
-                          onChange={(e) => setUnitCosts({ ...unitCosts, D20: Number(e.target.value) || 0 })}
-                        />
-                      </div>
-                      <div>
-                        <label style={{ fontSize: '0.72rem', color: 'var(--text-muted)' }}>D00 Long. Crack (TND/m)</label>
-                        <input
-                          type="number"
-                          className="select-input"
-                          style={{ width: '100%', marginTop: '2px' }}
-                          value={unitCosts.D00}
-                          onChange={(e) => setUnitCosts({ ...unitCosts, D00: Number(e.target.value) || 0 })}
-                        />
-                      </div>
-                      <div>
-                        <label style={{ fontSize: '0.72rem', color: 'var(--text-muted)' }}>D10 Trans. Crack (TND/m)</label>
-                        <input
-                          type="number"
-                          className="select-input"
-                          style={{ width: '100%', marginTop: '2px' }}
-                          value={unitCosts.D10}
-                          onChange={(e) => setUnitCosts({ ...unitCosts, D10: Number(e.target.value) || 0 })}
-                        />
-                      </div>
-                    </div>
+              {/* Cluster Ranked List in Empty State */}
+              <div style={{ width: '100%', marginTop: '16px' }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
+                  <span style={{ fontSize: '0.72rem', fontWeight: 800, color: 'var(--text-dim)', textTransform: 'uppercase' }}>
+                    Top clusters prioritaires ({filteredClusters.length})
+                  </span>
+                  {isAuthorityUser && rejectedObservations.length > 0 && (
+                    <button
+                      className="btn-status btn-reject"
+                      style={{ fontSize: '0.68rem', padding: '2px 8px' }}
+                      onClick={() => setActiveSidebarTab('rejected')}
+                    >
+                      <span>Rejetés ({rejectedObservations.length})</span>
+                    </button>
                   )}
                 </div>
-
-                {/* Municipal Budget Input */}
-                <div className="metric-card">
-                  <span className="metric-label">{t.budgetInput}</span>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginTop: '8px' }}>
-                    <input
-                      type="number"
-                      className="select-input mono"
-                      style={{ flex: 1, fontSize: '1rem', fontWeight: 700 }}
-                      value={budgetTnd}
-                      onChange={(e) => setBudgetTnd(Number(e.target.value) || 0)}
-                    />
-                    <span className="mono" style={{ color: 'var(--text-muted)' }}>TND</span>
-                  </div>
-                </div>
-
-                {/* Knapsack Summary */}
-                <div style={{ padding: '12px', background: 'var(--bg-card)', borderRadius: 'var(--radius-sm)', border: '1px solid var(--border-subtle)' }}>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.85rem', marginBottom: '6px' }}>
-                    <span>Réparations finançables:</span>
-                    <span className="mono" style={{ fontWeight: 700, color: 'var(--emerald-accent)' }}>
-                      {budgetAllocation.selected.length} / {filteredClusters.length}
-                    </span>
-                  </div>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.85rem', marginBottom: '6px' }}>
-                    <span>{t.cumulativeCost}:</span>
-                    <span className="mono" style={{ fontWeight: 700 }}>
-                      {budgetAllocation.totalSpent.toLocaleString()} TND (Est.)
-                    </span>
-                  </div>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.8rem', color: 'var(--text-muted)' }}>
-                    <span>Reliquat budgétaire:</span>
-                    <span className="mono">{budgetAllocation.remainingBudget.toLocaleString()} TND</span>
-                  </div>
-                </div>
-
-                <div style={{ maxHeight: '240px', overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: '6px' }}>
-                  {budgetAllocation.selected.map((item, idx) => (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '6px', maxHeight: '340px', overflowY: 'auto' }}>
+                  {filteredClusters.map((c, i) => (
                     <div
-                      key={item.id}
-                      style={{
-                        padding: '6px 10px',
-                        background: 'rgba(255, 255, 255, 0.02)',
-                        border: '1px solid var(--border-subtle)',
-                        borderRadius: 'var(--radius-sm)',
-                        display: 'flex',
-                        justifyContent: 'space-between',
-                        alignItems: 'center',
-                        fontSize: '0.8rem',
-                      }}
+                      key={c.id}
+                      className="cluster-list-row"
+                      onClick={() => setSelectedCluster(c)}
                     >
                       <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                        <span className="mono" style={{ color: 'var(--text-dim)' }}>#{idx + 1}</span>
-                        <span style={{ fontWeight: 600, color: DAMAGE_CLASSES[item.dominantClass]?.color }}>
-                          {item.dominantClass}
+                        <span className="mono" style={{ fontSize: '0.75rem', color: 'var(--text-dim)' }}>#{i + 1}</span>
+                        <span style={{ fontWeight: 700, fontSize: '0.8rem', color: DAMAGE_CLASSES[c.dominantClass]?.color }}>
+                          {c.dominantClass}
                         </span>
-                        <span>Score: {item.maxPriorityScore}</span>
+                        <span style={{ fontSize: '0.74rem', color: 'var(--text-muted)' }}>
+                          {c.count} {c.count > 1 ? 'passages' : 'passage'}
+                        </span>
                       </div>
-                      <span className="mono" style={{ color: 'var(--text-muted)' }}>
-                        {item.cost} TND
-                      </span>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                        <strong className="mono" style={{ fontSize: '0.8rem', color: PRIORITY_PIN_COLORS[c.priorityLabel] }}>
+                          {formatScore(c.maxPriorityScore)}
+                        </strong>
+                        <ChevronRight size={14} color="var(--text-dim)" />
+                      </div>
                     </div>
                   ))}
                 </div>
               </div>
-            )}
+            </div>
+          )}
+        </aside>
+      </div>
 
-            {/* ── Tab 3: Accountability & Verification ──────────────────────── */}
-            {activeTab === 'accountability' && (
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
-                <div className="metric-card">
-                  <span className="metric-label">Boucle de Vérification (Phase 3)</span>
-                  <div
-                    style={{
-                      marginTop: '12px',
-                      padding: '12px',
-                      background: 'rgba(59, 130, 246, 0.08)',
-                      borderRadius: 'var(--radius-sm)',
-                      border: '1px solid rgba(59, 130, 246, 0.2)',
-                    }}
-                  >
-                    <p style={{ fontSize: '0.82rem', color: 'var(--text-main)', lineHeight: 1.5 }}>
-                      Lorsqu'un véhicule citoyen ou municipal traverse le centroïde d'un nid-de-poule réparé sans détecter de choc ou dégradation visuelle, le système enregistre un événement de validation.
-                    </p>
-                    <p style={{ fontSize: '0.78rem', color: 'var(--text-muted)', marginTop: '8px' }}>
-                      {t.repairCycleNote}
-                    </p>
-                  </div>
-                </div>
-
-                <div className="metric-card">
-                  <span className="metric-label">Délai Moyen de Réparation (MTTR)</span>
-                  <span className="metric-value mono" style={{ fontSize: '1.2rem', color: 'var(--text-muted)' }}>
-                    -- jours (En attente des journaux Phase 3)
-                  </span>
-                </div>
+      {/* ── Status Change Confirmation Modal ────────────────────────────────── */}
+      {statusConfirmModal && (
+        <div className="modal-overlay" onClick={() => setStatusConfirmModal(null)}>
+          <div className="modal-card" style={{ maxWidth: '420px' }} onClick={(e) => e.stopPropagation()}>
+            <div style={{ padding: '24px' }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '14px' }}>
+                <h3 style={{ fontSize: '1.05rem', fontWeight: 800, color: 'var(--text-main)' }}>
+                  Confirmation du changement de statut
+                </h3>
+                <X size={18} style={{ cursor: 'pointer' }} onClick={() => setStatusConfirmModal(null)} />
               </div>
-            )}
+
+              <p style={{ fontSize: '0.84rem', color: 'var(--text-muted)', lineHeight: 1.5, marginBottom: '16px' }}>
+                Voulez-vous modifier le statut de cette observation :
+              </p>
+
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '14px', padding: '12px', background: 'rgba(255,255,255,0.03)', borderRadius: 'var(--radius-sm)', marginBottom: '18px' }}>
+                <span className={`badge ${STATUS_LABELS[statusConfirmModal.currentStatus]?.badge || 'badge-gray'}`}>
+                  {STATUS_LABELS[statusConfirmModal.currentStatus]?.fr || statusConfirmModal.currentStatus}
+                </span>
+                <ArrowRight size={16} color="var(--text-dim)" />
+                <span className={`badge ${STATUS_LABELS[statusConfirmModal.newStatus]?.badge || 'badge-gray'}`}>
+                  {STATUS_LABELS[statusConfirmModal.newStatus]?.fr || statusConfirmModal.newStatus}
+                </span>
+              </div>
+
+              <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '10px' }}>
+                <button
+                  className="btn btn-secondary"
+                  onClick={() => setStatusConfirmModal(null)}
+                  disabled={statusUpdating}
+                >
+                  Annuler
+                </button>
+                <button
+                  className="btn btn-primary"
+                  onClick={executeStatusUpdate}
+                  disabled={statusUpdating}
+                >
+                  {statusUpdating ? 'Mise à jour en cours...' : 'Confirmer la modification'}
+                </button>
+              </div>
+            </div>
           </div>
         </div>
-      </div>
+      )}
+
+      {/* ── Honest Metrics Panel Modal (Loaded from JSON file) ──────────────── */}
+      {showMetricsPanel && (
+        <div className="modal-overlay" onClick={() => setShowMetricsPanel(false)}>
+          <div className="modal-card" style={{ maxWidth: '640px' }} onClick={(e) => e.stopPropagation()}>
+            <div style={{ padding: '24px' }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
+                <div>
+                  <h3 style={{ fontSize: '1.15rem', fontWeight: 800, color: 'var(--text-main)' }}>
+                    Métriques d'Évaluation Honnêtes & Limites IA
+                  </h3>
+                  <span style={{ fontSize: '0.75rem', color: 'var(--text-dim)' }}>
+                    Source: {validationMetricsData.model_name} • {validationMetricsData.evaluation_split}
+                  </span>
+                </div>
+                <X size={18} style={{ cursor: 'pointer' }} onClick={() => setShowMetricsPanel(false)} />
+              </div>
+
+              {/* Warning Statement Banner */}
+              <div style={{ padding: '12px 14px', background: 'rgba(239, 68, 68, 0.12)', border: '1px solid rgba(239, 68, 68, 0.3)', borderRadius: 'var(--radius-sm)', marginBottom: '18px' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '8px', color: 'var(--color-critical)', fontWeight: 700, fontSize: '0.85rem' }}>
+                  <AlertTriangle size={16} />
+                  <span>{validationMetricsData.warning_highlight}</span>
+                </div>
+                <p style={{ fontSize: '0.8rem', color: 'var(--text-main)', marginTop: '6px', lineHeight: 1.45 }}>
+                  {validationMetricsData.statement}
+                </p>
+              </div>
+
+              {/* Validation Metrics Table */}
+              <table className="metrics-table">
+                <thead>
+                  <tr>
+                    <th>Classe</th>
+                    <th>Nom</th>
+                    <th>Précision</th>
+                    <th>Rappel</th>
+                    <th>mAP50</th>
+                    <th>Fiabilité</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {validationMetricsData.per_class_metrics.map((row) => (
+                    <tr key={row.class_code}>
+                      <td>
+                        <span className="mono" style={{ fontWeight: 800, color: DAMAGE_CLASSES[row.class_code]?.color }}>
+                          {row.class_code}
+                        </span>
+                      </td>
+                      <td>{row.class_name_fr}</td>
+                      <td className="mono">{row.precision.toFixed(3)}</td>
+                      <td className="mono">{row.recall.toFixed(3)}</td>
+                      <td className="mono">{row.map50.toFixed(4)}</td>
+                      <td>
+                        <span
+                          className="badge"
+                          style={{
+                            background: row.reliability === 'Low' ? 'rgba(239,68,68,0.2)' : 'rgba(16,185,129,0.2)',
+                            color: row.reliability === 'Low' ? 'var(--color-critical)' : 'var(--color-success)',
+                            fontSize: '0.7rem',
+                          }}
+                        >
+                          {row.assessment}
+                        </span>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+
+              <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: '20px' }}>
+                <button className="btn btn-secondary" onClick={() => setShowMetricsPanel(false)}>
+                  Fermer
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* ── Authority Login Modal ────────────────────────────────────────────── */}
       {showLoginModal && (
@@ -1111,7 +1646,7 @@ export default function App() {
               </p>
 
               {authError && (
-                <div style={{ padding: '8px', background: 'rgba(239, 68, 68, 0.15)', border: '1px solid var(--red-accent)', borderRadius: 'var(--radius-sm)', color: '#FFF', fontSize: '0.78rem', marginBottom: '12px' }}>
+                <div style={{ padding: '8px', background: 'rgba(239, 68, 68, 0.15)', border: '1px solid var(--color-critical)', borderRadius: 'var(--radius-sm)', color: '#FFF', fontSize: '0.78rem', marginBottom: '12px' }}>
                   {authError}
                 </div>
               )}
@@ -1145,7 +1680,7 @@ export default function App() {
 
                 <button
                   type="submit"
-                  className="btn"
+                  className="btn btn-primary"
                   disabled={authLoading}
                   style={{ width: '100%', justifyContent: 'center', marginTop: '8px' }}
                 >
@@ -1157,92 +1692,136 @@ export default function App() {
         </div>
       )}
 
-      {/* ── Printable Work Order Modal ──────────────────────────────────────── */}
-      {workOrderModal && (
-        <div className="modal-overlay" onClick={() => setWorkOrderModal(null)}>
-          <div className="modal-card" onClick={(e) => e.stopPropagation()}>
+      {/* ── Reject Single Report Modal ────────────────────────────────────── */}
+      {rejectReportModal && (
+        <div className="modal-overlay" onClick={() => setRejectReportModal(null)}>
+          <div className="modal-card" style={{ maxWidth: '440px' }} onClick={(e) => e.stopPropagation()}>
             <div style={{ padding: '24px' }}>
-              <div
-                style={{
-                  display: 'flex',
-                  justifyContent: 'space-between',
-                  alignItems: 'flex-start',
-                  borderBottom: '2px solid #000',
-                  paddingBottom: '16px',
-                  marginBottom: '20px',
-                }}
-              >
-                <div>
-                  <h2 style={{ fontSize: '1.2rem', fontWeight: 800 }}>{t.workOrderTitle}</h2>
-                  <p style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>
-                    RÉPUBLIQUE TUNISIENNE • DIRECTION RÉGIONALE DE L'ÉQUIPEMENT
-                  </p>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '14px' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                  <AlertTriangle size={20} color="#EF4444" />
+                  <h3 style={{ fontSize: '1.05rem', fontWeight: 800, color: 'var(--text-main)' }}>
+                    Rejeter le signalement
+                  </h3>
                 </div>
-                <button className="btn" onClick={() => window.print()}>
-                  <Printer size={15} />
-                  <span>Imprimer / PDF</span>
+                <X size={18} style={{ cursor: 'pointer' }} onClick={() => setRejectReportModal(null)} />
+              </div>
+
+              <p style={{ fontSize: '0.84rem', color: 'var(--text-muted)', lineHeight: 1.5, marginBottom: '16px' }}>
+                Ce signalement sera qualifié comme « sans anomalie » (soft-delete). Il sera retiré de la carte publique, des clusters géodésiques et des compteurs de voirie.
+              </p>
+
+              <div style={{ padding: '12px', background: 'rgba(255,255,255,0.03)', border: '1px solid var(--border-subtle)', borderRadius: 'var(--radius-sm)', marginBottom: '20px' }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                  <span style={{ fontWeight: 700, fontSize: '0.82rem' }}>
+                    #{rejectReportModal.id.slice(0, 8)} • {rejectReportModal.anomaly_type || 'Anomalie'}
+                  </span>
+                  {rejectReportModal.is_demo ? (
+                    <span className="badge badge-demo">DEMO</span>
+                  ) : (
+                    <span className="badge badge-real">RÉEL</span>
+                  )}
+                </div>
+                <div style={{ fontSize: '0.75rem', color: 'var(--text-dim)', marginTop: '4px' }}>
+                  Score calculé : {formatScore(rejectReportModal.priority_score)} • Statut actuel : {rejectReportModal.status}
+                </div>
+              </div>
+
+              <div style={{ display: 'flex', gap: '10px', justifyContent: 'flex-end' }}>
+                <button className="btn btn-secondary" onClick={() => setRejectReportModal(null)}>
+                  Annuler
                 </button>
-              </div>
-
-              <div style={{ marginBottom: '16px' }}>
-                <ClusterImageCard cluster={workOrderModal} isAuthority={isAuthorityUser} />
-              </div>
-
-              <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.85rem', marginBottom: '24px' }}>
-                <tbody>
-                  <tr style={{ borderBottom: '1px solid var(--border-subtle)' }}>
-                    <td style={{ padding: '8px 0', color: 'var(--text-muted)' }}>{t.defectType}:</td>
-                    <td style={{ padding: '8px 0', fontWeight: 700 }}>
-                      {workOrderModal.dominantClass} - {lang === 'fr' ? DAMAGE_CLASSES[workOrderModal.dominantClass]?.fr : DAMAGE_CLASSES[workOrderModal.dominantClass]?.en}
-                    </td>
-                  </tr>
-                  <tr style={{ borderBottom: '1px solid var(--border-subtle)' }}>
-                    <td style={{ padding: '8px 0', color: 'var(--text-muted)' }}>Niveau d'Urgence:</td>
-                    <td style={{ padding: '8px 0', fontWeight: 700 }}>
-                      {workOrderModal.maxPriorityScore} / 100 ({workOrderModal.priorityLabel})
-                    </td>
-                  </tr>
-                  <tr style={{ borderBottom: '1px solid var(--border-subtle)' }}>
-                    <td style={{ padding: '8px 0', color: 'var(--text-muted)' }}>{t.gpsCoords}:</td>
-                    <td style={{ padding: '8px 0' }} className="mono">
-                      {workOrderModal.latitude.toFixed(6)}, {workOrderModal.longitude.toFixed(6)}
-                    </td>
-                  </tr>
-                  <tr style={{ borderBottom: '1px solid var(--border-subtle)' }}>
-                    <td style={{ padding: '8px 0', color: 'var(--text-muted)' }}>{t.sightings}:</td>
-                    <td style={{ padding: '8px 0' }}>{workOrderModal.count} signalements concordants (Rayon 20m)</td>
-                  </tr>
-                  <tr style={{ borderBottom: '1px solid var(--border-subtle)' }}>
-                    <td style={{ padding: '8px 0', color: 'var(--text-muted)' }}>Coût estimatif d'intervention:</td>
-                    <td style={{ padding: '8px 0' }} className="mono">
-                      {unitCosts[workOrderModal.dominantClass] || 150} TND (Estimation non officielle)
-                    </td>
-                  </tr>
-                  {/* Engineer prescription blank line */}
-                  <tr style={{ borderBottom: '1px solid var(--border-subtle)' }}>
-                    <td style={{ padding: '8px 0', color: 'var(--text-muted)' }}>Prescription technique d'enrobé:</td>
-                    <td style={{ padding: '8px 0', fontStyle: 'italic', color: 'var(--text-dim)' }}>
-                      ___________________________________ (À définir par l'ingénieur subdivisionnaire)
-                    </td>
-                  </tr>
-                  <tr>
-                    <td style={{ padding: '8px 0', color: 'var(--text-muted)' }}>Visa & Approbation Technique:</td>
-                    <td style={{ padding: '8px 0', fontStyle: 'italic', color: 'var(--text-dim)' }}>
-                      Date: _______________ Signature: ___________________
-                    </td>
-                  </tr>
-                </tbody>
-              </table>
-
-              <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '12px' }}>
-                <button className="btn" onClick={() => setWorkOrderModal(null)}>
-                  {t.close}
+                <button
+                  className="btn btn-primary"
+                  style={{ background: '#EF4444', borderColor: '#EF4444' }}
+                  onClick={executeRejectReport}
+                >
+                  Confirmer le rejet
                 </button>
               </div>
             </div>
           </div>
         </div>
       )}
+
+      {/* ── Reject Entire Cluster Modal ────────────────────────────────────── */}
+      {rejectClusterModal && (() => {
+        const members = rejectClusterModal.members || [];
+        const realCount = members.filter((m) => !m.is_demo).length;
+        const demoCount = members.filter((m) => m.is_demo).length;
+
+        return (
+          <div className="modal-overlay" onClick={() => setRejectClusterModal(null)}>
+            <div className="modal-card" style={{ maxWidth: '460px' }} onClick={(e) => e.stopPropagation()}>
+              <div style={{ padding: '24px' }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '14px' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                    <Trash2 size={20} color="#EF4444" />
+                    <h3 style={{ fontSize: '1.05rem', fontWeight: 800, color: 'var(--text-main)' }}>
+                      Rejeter tout le cluster
+                    </h3>
+                  </div>
+                  <X size={18} style={{ cursor: 'pointer' }} onClick={() => setRejectClusterModal(null)} />
+                </div>
+
+                <p style={{ fontSize: '0.84rem', color: 'var(--text-muted)', lineHeight: 1.5, marginBottom: '16px' }}>
+                  Cette action appliquera le statut <code>rejected</code> à l'ensemble des signalements du cluster.
+                </p>
+
+                <div style={{ padding: '12px', background: 'rgba(239, 68, 68, 0.08)', border: '1px solid rgba(239, 68, 68, 0.3)', borderRadius: 'var(--radius-sm)', marginBottom: '20px' }}>
+                  <div style={{ fontWeight: 700, fontSize: '0.85rem', color: '#f87171', marginBottom: '6px' }}>
+                    {members.length} signalement{members.length > 1 ? 's' : ''} au total
+                  </div>
+                  <div style={{ display: 'flex', gap: '12px', fontSize: '0.78rem' }}>
+                    <span>
+                      Réels : <strong style={{ color: '#10B981' }}>{realCount}</strong>
+                    </span>
+                    <span>
+                      Démo : <strong style={{ color: '#F59E0B' }}>{demoCount}</strong>
+                    </span>
+                  </div>
+                  <div style={{ fontSize: '0.72rem', color: 'var(--text-dim)', marginTop: '6px' }}>
+                    Coordonnées : {rejectClusterModal.latitude.toFixed(6)}, {rejectClusterModal.longitude.toFixed(6)}
+                  </div>
+                </div>
+
+                <div style={{ display: 'flex', gap: '10px', justifyContent: 'flex-end' }}>
+                  <button className="btn btn-secondary" onClick={() => setRejectClusterModal(null)}>
+                    Annuler
+                  </button>
+                  <button
+                    className="btn btn-primary"
+                    style={{ background: '#EF4444', borderColor: '#EF4444' }}
+                    onClick={executeRejectCluster}
+                  >
+                    Rejeter tout le cluster
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+        );
+      })()}
+
+      {/* ── Undo Reject Toast (8s notification) ────────────────────────────── */}
+      {undoState && (
+        <div className="toast-undo">
+          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+            <Info size={16} color="#3B82F6" />
+            <span>{undoState.message}</span>
+          </div>
+          <button className="btn-undo" onClick={handleUndoReject}>
+            <RotateCcw size={13} />
+            <span>Annuler</span>
+          </button>
+        </div>
+      )}
+
+      {/* ── Image Lightbox Modal ────────────────────────────────────────── */}
+      <ImageLightbox
+        image={lightboxImage}
+        onClose={() => setLightboxImage(null)}
+      />
     </div>
   );
 }

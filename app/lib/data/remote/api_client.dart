@@ -8,6 +8,7 @@ import '../../inference/preprocessing.dart';
 import '../../models/observation.dart';
 import '../../services/image_compressor.dart';
 import '../../services/observation_repository.dart';
+import '../../services/thumbnail_service.dart';
 
 class ApiClient implements ObservationSyncClient {
   ApiClient();
@@ -244,6 +245,30 @@ class ApiClient implements ObservationSyncClient {
         debugPrint('[ApiClient] Image upload or media_files record error: $e');
         rethrow;
       }
+
+      // 4b. Public Blurred Thumbnail Step (Option A: Crop-and-Blur Path)
+      // Only executes after the existing full-resolution sync step succeeds.
+      // Skips when there are no detections or when toggle is OFF.
+      cancelToken?.throwIfCancelled();
+      final shouldUpload = await ThumbnailService.shouldUploadPublicThumbnail(
+        detections: obs.detections,
+      );
+      if (shouldUpload) {
+        final originalBytes = await imageFile.readAsBytes();
+        final thumbBytes = await ThumbnailService.createDetectionCropThumbnail(
+          originalBytes: originalBytes,
+          detections: obs.detections,
+        );
+        if (thumbBytes != null && thumbBytes.lengthInBytes <= ThumbnailService.maxFileSizeBytes) {
+          // Failure or cancellation here bubbles up to SyncCoordinator
+          // ensuring a failed/cancelled upload never leaves observation marked synced.
+          await uploadPublicThumbnail(
+            observationId: obs.id,
+            thumbnailBytes: thumbBytes,
+            cancelToken: cancelToken,
+          );
+        }
+      }
     }
 
     cancelToken?.throwIfCancelled();
@@ -258,5 +283,102 @@ class ApiClient implements ObservationSyncClient {
       },
       cancelToken: cancelToken,
     );
+  }
+
+  /// Uploads a public cropped & blurred thumbnail to bucket `public-photos`.
+  /// Bucket path policy requires:
+  ///   bucket_id = 'public-photos' and name ~ '^[0-9a-f-]{36}/[0-9a-f-]{36}\.(webp|jpg)$'
+  ///
+  /// Uses a deterministic object name `<observation_id>/<uuid_v5>.webp`, derived via
+  /// UUID v5 from the observation ID using [Namespace.url.value].
+  /// This ensures retries never create orphan files and avoids random UUID accumulation.
+  ///
+  /// Order:
+  ///   1. Plain insert (upsert: false) to storage at `<observation_id>/<uuid_v5>.webp`.
+  ///      Logs HTTP status; treats 409 conflict as success.
+  ///   2. Check cancellation (on cancel, just stop; orphan file with no media_files row is harmless).
+  ///   3. Plain insert into `media_files` with `bucket='public-photos', media_type='thumbnail', is_demo=false`.
+  ///      Logs HTTP status; treats 409 conflict as success; does NOT swallow other errors.
+  Future<String?> uploadPublicThumbnail({
+    required String observationId,
+    required Uint8List thumbnailBytes,
+    String mimeType = 'image/webp',
+    SyncCancelToken? cancelToken,
+  }) async {
+    cancelToken?.throwIfCancelled();
+
+    final client = Supabase.instance.client;
+    // Stable UUID v5 derived deterministically from observationId
+    final fileUuid = _uuid.v5(Namespace.url.value, observationId);
+    final storagePath = '$observationId/$fileUuid.webp';
+
+    // 1. Plain upload to public-photos storage (upsert: false)
+    try {
+      await client.storage
+          .from(SupabaseCfg.publicPhotosBucket)
+          .uploadBinary(
+            storagePath,
+            thumbnailBytes,
+            fileOptions: FileOptions(
+              contentType: mimeType,
+              upsert: false,
+            ),
+          );
+      debugPrint('[ThumbnailUpload] Storage upload succeeded: HTTP 200/201 path=$storagePath');
+    } on StorageException catch (e) {
+      if (e.statusCode == '409' ||
+          e.message.toLowerCase().contains('already exists') ||
+          e.message.toLowerCase().contains('duplicate')) {
+        debugPrint('[ThumbnailUpload] Storage upload duplicate (treated as success): HTTP 409 path=$storagePath');
+      } else {
+        debugPrint('[ThumbnailUpload] Storage upload failed: HTTP ${e.statusCode} ${e.message} path=$storagePath');
+        rethrow;
+      }
+    } catch (e) {
+      debugPrint('[ThumbnailUpload] Storage upload failed: $e path=$storagePath');
+      rethrow;
+    }
+
+    // Cancellation check immediately after storage upload:
+    // Phone has no delete permissions; on cancel, just stop (orphan storage object is harmless without media_files row)
+    cancelToken?.throwIfCancelled();
+
+    final publicUrl = client.storage
+        .from(SupabaseCfg.publicPhotosBucket)
+        .getPublicUrl(storagePath);
+
+    // 2. Insert media_files row (plain insert, 409 treated as success)
+    final mediaId = _uuid.v5(Namespace.url.value, '$observationId:thumbnail');
+    try {
+      await _safeInsert(
+        SupabaseCfg.tableMediaFiles,
+        {
+          "id": mediaId,
+          "observation_id": observationId,
+          "bucket": SupabaseCfg.publicPhotosBucket,
+          "storage_path": storagePath,
+          "public_url": publicUrl,
+          "media_type": "thumbnail",
+          "mime_type": mimeType,
+          "file_size_bytes": thumbnailBytes.lengthInBytes,
+          "uploaded_at": DateTime.now().toUtc().toIso8601String(),
+          "is_demo": false,
+        },
+        cancelToken: cancelToken,
+      );
+      debugPrint('[ThumbnailUpload] media_files insert succeeded: HTTP 201 row=$mediaId');
+    } on PostgrestException catch (e) {
+      if (_isConflict(e)) {
+        debugPrint('[ThumbnailUpload] media_files duplicate (treated as success): HTTP 409 code=${e.code} row=$mediaId');
+      } else {
+        debugPrint('[ThumbnailUpload] media_files insert failed: HTTP ${e.code ?? "error"} ${e.message} row=$mediaId');
+        rethrow;
+      }
+    } catch (e) {
+      debugPrint('[ThumbnailUpload] media_files insert failed: $e row=$mediaId');
+      rethrow;
+    }
+
+    return publicUrl;
   }
 }

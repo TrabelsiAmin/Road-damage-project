@@ -17,12 +17,14 @@ class DashboardMap extends StatefulWidget {
     this.initialObservations,
     this.initialLocations,
     this.initialDetections,
+    this.initialMediaFiles,
   });
 
   final ObservationRepository? repository;
   final List<Map<String, dynamic>>? initialObservations;
   final List<Map<String, dynamic>>? initialLocations;
   final List<Map<String, dynamic>>? initialDetections;
+  final List<Map<String, dynamic>>? initialMediaFiles;
 
   @override
   State<DashboardMap> createState() => _DashboardMapState();
@@ -65,6 +67,7 @@ class _DashboardMapState extends State<DashboardMap> {
       List<dynamic> obsData;
       List<dynamic> locData;
       List<dynamic> detData;
+      List<dynamic> mediaData;
 
       if (widget.initialObservations != null &&
           widget.initialLocations != null &&
@@ -72,17 +75,28 @@ class _DashboardMapState extends State<DashboardMap> {
         obsData = widget.initialObservations!;
         locData = widget.initialLocations!;
         detData = widget.initialDetections!;
+        mediaData = widget.initialMediaFiles ?? [];
       } else {
         final client = Supabase.instance.client;
         obsData = await client
             .from('observations')
-            .select('id, capture_id, anomaly_type, priority_score, priority_label, status, created_at, captured_at');
+            .select('id, capture_id, anomaly_type, priority_score, priority_label, status, created_at, captured_at')
+            .neq('status', 'rejected');
         locData = await client
             .from('locations')
             .select('observation_id, latitude, longitude, accuracy_meters');
         detData = await client
             .from('detections')
             .select('observation_id, class_code, confidence, box_x, box_y, box_w, box_h');
+        try {
+          mediaData = await client
+              .from('media_files')
+              .select('observation_id, bucket, storage_path, public_url, media_type')
+              .eq('bucket', 'public-photos');
+        } catch (e) {
+          debugPrint('[DashboardMap] Could not fetch public-photos media_files: $e');
+          mediaData = [];
+        }
       }
 
       final locMap = <String, Map<String, dynamic>>{};
@@ -103,6 +117,15 @@ class _DashboardMapState extends State<DashboardMap> {
         }
       }
 
+      final mediaMap = <String, Map<String, dynamic>>{};
+      for (final m in mediaData) {
+        final obsId = m['observation_id']?.toString() ?? '';
+        final bucket = m['bucket']?.toString() ?? '';
+        if (obsId.isNotEmpty && bucket == 'public-photos' && !mediaMap.containsKey(obsId)) {
+          mediaMap[obsId] = Map<String, dynamic>.from(m as Map);
+        }
+      }
+
       // Group by proximity (approx 11-20 meters)
       final Map<String, _Cluster> clusters = {};
 
@@ -117,18 +140,35 @@ class _DashboardMapState extends State<DashboardMap> {
         final gridKey = '${lat.toStringAsFixed(4)}_${lng.toStringAsFixed(4)}';
 
         final dets = detMap[obsId] ?? [];
-        String dominantClass = 'D40';
+        final bool hasAnomaly = dets.isNotEmpty ||
+            (obs['anomaly_type'] != null &&
+                TariqMapConstants.allCodes.contains(obs['anomaly_type']));
+
+        String dominantClass = 'NONE';
         double highestConfidence = 0.0;
 
         if (dets.isNotEmpty) {
           dets.sort((a, b) =>
               ((b['confidence'] as num?) ?? 0).compareTo((a['confidence'] as num?) ?? 0));
-          dominantClass = dets.first['class_code']?.toString() ?? 'D40';
+          dominantClass = dets.first['class_code']?.toString() ?? 'NONE';
           highestConfidence = ((dets.first['confidence'] as num?) ?? 0).toDouble();
-        } else if (TariqMapConstants.allCodes.contains(obs['anomaly_type'])) {
+        } else if (obs['anomaly_type'] != null &&
+            TariqMapConstants.allCodes.contains(obs['anomaly_type'])) {
           dominantClass = obs['anomaly_type'] as String;
-        } else if (TariqMapConstants.allCodes.contains(obs['priority_label'])) {
-          dominantClass = obs['priority_label'] as String;
+        }
+
+        final media = mediaMap[obsId];
+        String? publicThumbnailUrl;
+        if (media != null) {
+          final storagePath = media['storage_path']?.toString();
+          if (storagePath != null && storagePath.isNotEmpty) {
+            try {
+              publicThumbnailUrl = Supabase.instance.client.storage
+                  .from('public-photos')
+                  .getPublicUrl(storagePath);
+            } catch (_) {}
+          }
+          publicThumbnailUrl ??= media['public_url']?.toString();
         }
 
         final enrichedObs = {
@@ -136,20 +176,28 @@ class _DashboardMapState extends State<DashboardMap> {
           'latitude': lat,
           'longitude': lng,
           'accuracy_meters': loc['accuracy_meters'],
+          'has_anomaly': hasAnomaly,
           'dominant_class': dominantClass,
           'highest_confidence': highestConfidence,
           'detections': dets,
+          'public_thumbnail_url': publicThumbnailUrl,
         };
 
         if (clusters.containsKey(gridKey)) {
-          clusters[gridKey]!.count++;
-          clusters[gridKey]!.observations.add(enrichedObs);
+          final c = clusters[gridKey]!;
+          c.observations.add(enrichedObs);
+          if (hasAnomaly) {
+            c.count++;
+            if (c.dominantClass == 'NONE') {
+              c.dominantClass = dominantClass;
+            }
+          }
         } else {
           clusters[gridKey] = _Cluster(
             lat: lat,
             lng: lng,
             dominantClass: dominantClass,
-            count: 1,
+            count: hasAnomaly ? 1 : 0,
             observations: [enrichedObs],
           );
         }
@@ -182,16 +230,23 @@ class _DashboardMapState extends State<DashboardMap> {
   }
 
   Widget _buildMarkerWidget(_Cluster cluster) {
-    final color = AppColors.forClassCode(cluster.dominantClass);
+    final color = cluster.dominantClass == 'NONE'
+        ? Colors.grey.shade600
+        : AppColors.forClassCode(cluster.dominantClass);
     final icon = switch (cluster.dominantClass) {
       'D00' || 'D10' => Icons.timeline,
       'D20' => Icons.grid_4x4,
       'D40' => Icons.radio_button_unchecked,
+      'NONE' => Icons.check_circle_outline,
       _ => Icons.warning_amber_rounded,
     };
 
+    final label = cluster.dominantClass == 'NONE'
+        ? 'Map pin (No anomaly detected)'
+        : 'Map pin ${cluster.dominantClass} (${cluster.count})';
+
     return Semantics(
-      label: 'Map pin ${cluster.dominantClass} (${cluster.count})',
+      label: label,
       button: true,
       child: MouseRegion(
         cursor: SystemMouseCursors.click,
@@ -393,7 +448,7 @@ class _DashboardMapState extends State<DashboardMap> {
 class _Cluster {
   final double lat;
   final double lng;
-  final String dominantClass;
+  String dominantClass;
   int count;
   final List<Map<String, dynamic>> observations;
 
@@ -417,7 +472,9 @@ class _ClusterDetailsSheet extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final title = '${cluster.count} Anomaly Record${cluster.count > 1 ? 's' : ''}';
+    final title = cluster.count == 0
+        ? 'No Anomaly Detected'
+        : '${cluster.count} Anomaly Record${cluster.count > 1 ? 's' : ''}';
 
     return Container(
       height: MediaQuery.of(context).size.height * 0.78,
@@ -489,9 +546,20 @@ class _ObservationCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final obsId = obs['id']?.toString() ?? '';
-    final classCode = obs['dominant_class']?.toString() ?? 'D40';
-    final classLabel = TariqMapConstants.labelFor(classCode);
-    final color = AppColors.forClassCode(classCode);
+    final hasAnomaly = (obs['has_anomaly'] as bool?) ??
+        ((obs['detections'] as List?)?.isNotEmpty ?? false) ||
+        (obs['anomaly_type'] != null &&
+            TariqMapConstants.allCodes.contains(obs['anomaly_type']));
+
+    final classCode = hasAnomaly
+        ? (obs['dominant_class']?.toString() ?? 'D40')
+        : 'NONE';
+    final classLabel = hasAnomaly
+        ? TariqMapConstants.labelFor(classCode)
+        : 'No anomaly detected';
+    final color = hasAnomaly
+        ? AppColors.forClassCode(classCode)
+        : Colors.grey.shade600;
 
     final priorityScore = (obs['priority_score'] as num?)?.toDouble() ?? 0.0;
     final priorityLabel = obs['priority_label']?.toString() ??
@@ -552,7 +620,7 @@ class _ObservationCard extends StatelessWidget {
                         borderRadius: BorderRadius.circular(6),
                       ),
                       child: Text(
-                        classCode,
+                        hasAnomaly ? classCode : 'NONE',
                         style: const TextStyle(
                           color: Colors.white,
                           fontWeight: FontWeight.bold,
@@ -601,16 +669,18 @@ class _ObservationCard extends StatelessWidget {
                     Expanded(
                       child: _buildMetricTile(
                         label: 'CONFIDENCE',
-                        value: confidenceText,
-                        valueColor: AppColors.teal,
+                        value: hasAnomaly ? confidenceText : 'None',
+                        valueColor: hasAnomaly ? AppColors.teal : Colors.grey.shade700,
                       ),
                     ),
                     const SizedBox(width: 12),
                     Expanded(
                       child: _buildMetricTile(
                         label: 'PRIORITY',
-                        value: '${priorityScore.toStringAsFixed(0)} ($priorityLabel)',
-                        valueColor: color,
+                        value: hasAnomaly
+                            ? '${priorityScore.toStringAsFixed(0)} ($priorityLabel)'
+                            : 'None',
+                        valueColor: hasAnomaly ? color : Colors.grey.shade700,
                       ),
                     ),
                   ],
@@ -651,11 +721,12 @@ class _ObservationCard extends StatelessWidget {
             ),
           ),
 
-          // ── Image Section (Local Image if on device / Neutral Placeholder otherwise) ──
+          // ── Image Section (3-Tier Fallback: Public Thumbnail -> Local Image -> Neutral Placeholder) ──
           _ObservationImageSection(
             observationId: obsId,
             repository: repository,
             remoteDetections: (obs['detections'] as List?) ?? [],
+            publicThumbnailUrl: obs['public_thumbnail_url'] as String?,
           ),
         ],
       ),
@@ -703,25 +774,34 @@ class _ObservationCard extends StatelessWidget {
   }
 }
 
-class _ObservationImageSection extends StatelessWidget {
+class _ObservationImageSection extends StatefulWidget {
   final String observationId;
   final ObservationRepository repository;
   final List<dynamic> remoteDetections;
+  final String? publicThumbnailUrl;
 
   const _ObservationImageSection({
     required this.observationId,
     required this.repository,
     required this.remoteDetections,
+    this.publicThumbnailUrl,
   });
 
   @override
+  State<_ObservationImageSection> createState() => _ObservationImageSectionState();
+}
+
+class _ObservationImageSectionState extends State<_ObservationImageSection> {
+  bool _networkError = false;
+
+  @override
   Widget build(BuildContext context) {
-    if (observationId.isEmpty) {
+    if (widget.observationId.isEmpty) {
       return _buildNeutralPlaceholder();
     }
 
     return FutureBuilder<Observation?>(
-      future: repository.findById(observationId),
+      future: widget.repository.findById(widget.observationId),
       builder: (ctx, snapshot) {
         if (snapshot.connectionState == ConnectionState.waiting) {
           return Container(
@@ -738,35 +818,46 @@ class _ObservationImageSection extends StatelessWidget {
 
         final localObs = snapshot.data;
         final localPath = localObs?.annotatedImagePath ?? localObs?.imagePath;
+        final hasLocalImage = localPath != null && File(localPath).existsSync();
 
-        if (localPath != null && File(localPath).existsSync()) {
-          // Captured on this device: show local image with bounding boxes
-          final detections = localObs?.detections.isNotEmpty == true
-              ? localObs!.detections
-              : remoteDetections.map((d) {
-                  final map = Map<String, dynamic>.from(d as Map);
-                  return Detection(
-                    agent: 'road_damage',
-                    classCode: map['class_code']?.toString() ?? 'D40',
-                    confidence: ((map['confidence'] as num?) ?? 0.0).toDouble(),
-                    box: BoundingBox(
-                      x: ((map['box_x'] as num?) ?? 0.0).toDouble(),
-                      y: ((map['box_y'] as num?) ?? 0.0).toDouble(),
-                      width: ((map['box_w'] as num?) ?? 0.0).toDouble(),
-                      height: ((map['box_h'] as num?) ?? 0.0).toDouble(),
-                    ),
-                  );
-                }).toList();
-
+        // ── 1. Public Thumbnail (via getPublicUrl for 'public-photos' bucket) ──
+        if (widget.publicThumbnailUrl != null &&
+            widget.publicThumbnailUrl!.isNotEmpty &&
+            !_networkError) {
           return Container(
+            key: const ValueKey('public_thumbnail_container'),
             height: 220,
             color: Colors.black,
             child: Stack(
               children: [
                 Positioned.fill(
-                  child: AnnotatedImageWidget(
-                    imagePath: localPath,
-                    detections: detections,
+                  child: Image.network(
+                    widget.publicThumbnailUrl!,
+                    fit: BoxFit.cover,
+                    loadingBuilder: (context, child, loadingProgress) {
+                      if (loadingProgress == null) return child;
+                      return Container(
+                        color: Colors.grey.shade900,
+                        alignment: Alignment.center,
+                        child: const SizedBox(
+                          width: 24,
+                          height: 24,
+                          child: CircularProgressIndicator(
+                            strokeWidth: 2,
+                            color: AppColors.teal,
+                          ),
+                        ),
+                      );
+                    },
+                    errorBuilder: (context, error, stackTrace) {
+                      debugPrint('[DashboardMap] Failed to load thumbnail from network, falling back: $error');
+                      WidgetsBinding.instance.addPostFrameCallback((_) {
+                        if (mounted) setState(() => _networkError = true);
+                      });
+                      return hasLocalImage
+                          ? _buildLocalImage(localPath, localObs)
+                          : _buildNeutralPlaceholder();
+                    },
                   ),
                 ),
                 Positioned(
@@ -778,13 +869,20 @@ class _ObservationImageSection extends StatelessWidget {
                       color: AppColors.teal.withAlpha(220),
                       borderRadius: BorderRadius.circular(4),
                     ),
-                    child: const Text(
-                      'Local capture (on device)',
-                      style: TextStyle(
-                        color: Colors.white,
-                        fontSize: 10,
-                        fontWeight: FontWeight.bold,
-                      ),
+                    child: const Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Icon(Icons.public, color: Colors.white, size: 11),
+                        SizedBox(width: 4),
+                        Text(
+                          'Public preview (cropped to the damage)',
+                          style: TextStyle(
+                            color: Colors.white,
+                            fontSize: 10,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                      ],
                     ),
                   ),
                 ),
@@ -793,14 +891,74 @@ class _ObservationImageSection extends StatelessWidget {
           );
         }
 
-        // From another device: neutral "photo not public" placeholder
+        // ── 2. Local Image (own captures on device with bounding boxes) ──
+        if (hasLocalImage) {
+          return _buildLocalImage(localPath, localObs);
+        }
+
+        // ── 3. Neutral Placeholder ("Photo not public") ──
         return _buildNeutralPlaceholder();
       },
     );
   }
 
+  Widget _buildLocalImage(String localPath, Observation? localObs) {
+    final detections = localObs?.detections.isNotEmpty == true
+        ? localObs!.detections
+        : widget.remoteDetections.map((d) {
+            final map = Map<String, dynamic>.from(d as Map);
+            return Detection(
+              agent: 'road_damage',
+              classCode: map['class_code']?.toString() ?? 'D40',
+              confidence: ((map['confidence'] as num?) ?? 0.0).toDouble(),
+              box: BoundingBox(
+                x: ((map['box_x'] as num?) ?? 0.0).toDouble(),
+                y: ((map['box_y'] as num?) ?? 0.0).toDouble(),
+                width: ((map['box_w'] as num?) ?? 0.0).toDouble(),
+                height: ((map['box_h'] as num?) ?? 0.0).toDouble(),
+              ),
+            );
+          }).toList();
+
+    return Container(
+      key: const ValueKey('local_image_container'),
+      height: 220,
+      color: Colors.black,
+      child: Stack(
+        children: [
+          Positioned.fill(
+            child: AnnotatedImageWidget(
+              imagePath: localPath,
+              detections: detections,
+            ),
+          ),
+          Positioned(
+            top: 8,
+            left: 8,
+            child: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+              decoration: BoxDecoration(
+                color: AppColors.teal.withAlpha(220),
+                borderRadius: BorderRadius.circular(4),
+              ),
+              child: const Text(
+                'Local capture (on device)',
+                style: TextStyle(
+                  color: Colors.white,
+                  fontSize: 10,
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
   Widget _buildNeutralPlaceholder() {
     return Container(
+      key: const ValueKey('neutral_placeholder_container'),
       height: 130,
       margin: const EdgeInsets.fromLTRB(14, 0, 14, 14),
       decoration: BoxDecoration(
@@ -824,10 +982,10 @@ class _ObservationImageSection extends StatelessWidget {
           ),
           SizedBox(height: 4),
           Text(
-            'Municipal privacy policy restricts raw imagery to authorized road authorities. Anomaly telemetry and AI bounding boxes are public.',
+            'Photo not shared publicly.',
             textAlign: TextAlign.center,
             style: TextStyle(
-              fontSize: 10.5,
+              fontSize: 11,
               color: Color(0xFF64748B),
               height: 1.25,
             ),

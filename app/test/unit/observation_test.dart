@@ -38,14 +38,14 @@ void main() {
 
     test('single D40 (pothole) at 100% confidence → high score', () {
       final obs = _obs([_result('D40', 1.0)]);
-      // weight 1.0 * conf 1.0 / 1 * 100 = 100
-      expect(obs.priorityScore, closeTo(100.0, 0.1));
+      expect(obs.priorityScore, greaterThan(65.0));
+      expect(obs.priorityLabel, equals('HIGH'));
     });
 
-    test('single D60 (faded lane) at 50% confidence → low score', () {
-      final obs = _obs([_result('D60', 0.5)]);
-      // weight 0.5 * conf 0.5 / 1 * 100 = 25
-      expect(obs.priorityScore, closeTo(25.0, 0.1));
+    test('single D00 (crack) at 50% confidence → low score', () {
+      final obs = _obs([_result('D00', 0.5)]);
+      expect(obs.priorityScore, lessThan(35.0));
+      expect(obs.priorityLabel, equals('LOW'));
     });
 
     test('priorityScore is clamped to [0..100]', () {
@@ -54,13 +54,13 @@ void main() {
       expect(obs.priorityScore, greaterThanOrEqualTo(0.0));
     });
 
-    test('priorityLabel: CRITICAL for score >= 70', () {
+    test('priorityLabel: HIGH for score > 65', () {
       final obs = _obs([_result('D40', 1.0)]);
-      expect(obs.priorityLabel, equals('CRITICAL'));
+      expect(obs.priorityLabel, equals('HIGH'));
     });
 
-    test('priorityLabel: LOW for score < 20', () {
-      final obs = _obs([_result('D60', 0.1)]);
+    test('priorityLabel: LOW for score < 35', () {
+      final obs = _obs([_result('D00', 0.3)]);
       expect(obs.priorityLabel, equals('LOW'));
     });
   });

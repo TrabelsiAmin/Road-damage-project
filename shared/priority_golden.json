@@ -1,0 +1,304 @@
+[
+  {
+    "description": "Empty detections list returns 0 score and LOW label",
+    "detections": [],
+    "expectedScore": 0.0,
+    "expectedLabel": "LOW"
+  },
+  {
+    "description": "All detections below 0.25 confidence are ignored",
+    "detections": [
+      {
+        "classCode": "D40",
+        "confidence": 0.24,
+        "box": {
+          "x": 0.1,
+          "y": 0.1,
+          "width": 0.3,
+          "height": 0.3
+        }
+      },
+      {
+        "classCode": "D20",
+        "confidence": 0.2,
+        "box": {
+          "x": 0.2,
+          "y": 0.2,
+          "width": 0.4,
+          "height": 0.4
+        }
+      }
+    ],
+    "expectedScore": 0.0,
+    "expectedLabel": "LOW"
+  },
+  {
+    "description": "Single D40 at 0.41 confidence is not HIGH",
+    "detections": [
+      {
+        "classCode": "D40",
+        "confidence": 0.41,
+        "box": {
+          "x": 0.1,
+          "y": 0.1,
+          "width": 0.32,
+          "height": 0.32
+        }
+      }
+    ],
+    "expectedScore": 41.0,
+    "expectedLabel": "MEDIUM"
+  },
+  {
+    "description": "D40 at 0.49 confidence with bonuses stays in MEDIUM (never HIGH)",
+    "detections": [
+      {
+        "classCode": "D40",
+        "confidence": 0.49,
+        "box": {
+          "x": 0.1,
+          "y": 0.1,
+          "width": 0.4,
+          "height": 0.4
+        }
+      },
+      {
+        "classCode": "D10",
+        "confidence": 0.45,
+        "box": {
+          "x": 0.1,
+          "y": 0.1,
+          "width": 0.3,
+          "height": 0.3
+        }
+      },
+      {
+        "classCode": "D00",
+        "confidence": 0.4,
+        "box": {
+          "x": 0.1,
+          "y": 0.1,
+          "width": 0.3,
+          "height": 0.3
+        }
+      }
+    ],
+    "expectedScore": 49.96,
+    "expectedLabel": "MEDIUM"
+  },
+  {
+    "description": "One pothole at 0.9 confidence beats nine faint cracks at 0.3 confidence",
+    "detections": [
+      {
+        "classCode": "D40",
+        "confidence": 0.9,
+        "box": {
+          "x": 0.1,
+          "y": 0.1,
+          "width": 0.35,
+          "height": 0.35
+        }
+      }
+    ],
+    "expectedScore": 90.0,
+    "expectedLabel": "HIGH"
+  },
+  {
+    "description": "Nine faint cracks at 0.3 confidence resulting in low score",
+    "detections": [
+      {
+        "classCode": "D10",
+        "confidence": 0.3,
+        "box": {
+          "x": 0.1,
+          "y": 0.1,
+          "width": 0.1,
+          "height": 0.1
+        }
+      },
+      {
+        "classCode": "D10",
+        "confidence": 0.3,
+        "box": {
+          "x": 0.1,
+          "y": 0.1,
+          "width": 0.1,
+          "height": 0.1
+        }
+      },
+      {
+        "classCode": "D00",
+        "confidence": 0.3,
+        "box": {
+          "x": 0.1,
+          "y": 0.1,
+          "width": 0.1,
+          "height": 0.1
+        }
+      },
+      {
+        "classCode": "D00",
+        "confidence": 0.3,
+        "box": {
+          "x": 0.1,
+          "y": 0.1,
+          "width": 0.1,
+          "height": 0.1
+        }
+      },
+      {
+        "classCode": "D10",
+        "confidence": 0.3,
+        "box": {
+          "x": 0.1,
+          "y": 0.1,
+          "width": 0.1,
+          "height": 0.1
+        }
+      },
+      {
+        "classCode": "D10",
+        "confidence": 0.3,
+        "box": {
+          "x": 0.1,
+          "y": 0.1,
+          "width": 0.1,
+          "height": 0.1
+        }
+      },
+      {
+        "classCode": "D00",
+        "confidence": 0.3,
+        "box": {
+          "x": 0.1,
+          "y": 0.1,
+          "width": 0.1,
+          "height": 0.1
+        }
+      },
+      {
+        "classCode": "D00",
+        "confidence": 0.3,
+        "box": {
+          "x": 0.1,
+          "y": 0.1,
+          "width": 0.1,
+          "height": 0.1
+        }
+      },
+      {
+        "classCode": "D10",
+        "confidence": 0.3,
+        "box": {
+          "x": 0.1,
+          "y": 0.1,
+          "width": 0.1,
+          "height": 0.1
+        }
+      }
+    ],
+    "expectedScore": 7.44,
+    "expectedLabel": "LOW"
+  },
+  {
+    "description": "Single D20 alligator crack at 0.85 confidence",
+    "detections": [
+      {
+        "classCode": "D20",
+        "confidence": 0.85,
+        "box": {
+          "x": 0.2,
+          "y": 0.2,
+          "width": 0.4,
+          "height": 0.4
+        }
+      }
+    ],
+    "expectedScore": 72.25,
+    "expectedLabel": "HIGH"
+  },
+  {
+    "description": "Small box area factor reduces severity",
+    "detections": [
+      {
+        "classCode": "D40",
+        "confidence": 0.8,
+        "box": {
+          "x": 0.1,
+          "y": 0.1,
+          "width": 0.05,
+          "height": 0.05
+        }
+      }
+    ],
+    "expectedScore": 12.65,
+    "expectedLabel": "LOW"
+  },
+  {
+    "description": "Max count bonus capped at 10 and total score capped at 100",
+    "detections": [
+      {
+        "classCode": "D40",
+        "confidence": 0.98,
+        "box": {
+          "x": 0.1,
+          "y": 0.1,
+          "width": 0.5,
+          "height": 0.5
+        }
+      },
+      {
+        "classCode": "D20",
+        "confidence": 0.95,
+        "box": {
+          "x": 0.1,
+          "y": 0.1,
+          "width": 0.4,
+          "height": 0.4
+        }
+      },
+      {
+        "classCode": "D20",
+        "confidence": 0.95,
+        "box": {
+          "x": 0.1,
+          "y": 0.1,
+          "width": 0.4,
+          "height": 0.4
+        }
+      },
+      {
+        "classCode": "D40",
+        "confidence": 0.95,
+        "box": {
+          "x": 0.1,
+          "y": 0.1,
+          "width": 0.4,
+          "height": 0.4
+        }
+      },
+      {
+        "classCode": "D40",
+        "confidence": 0.95,
+        "box": {
+          "x": 0.1,
+          "y": 0.1,
+          "width": 0.4,
+          "height": 0.4
+        }
+      },
+      {
+        "classCode": "D40",
+        "confidence": 0.95,
+        "box": {
+          "x": 0.1,
+          "y": 0.1,
+          "width": 0.4,
+          "height": 0.4
+        }
+      }
+    ],
+    "expectedScore": 100.0,
+    "expectedLabel": "HIGH"
+  }
+]

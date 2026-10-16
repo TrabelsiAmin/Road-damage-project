@@ -119,3 +119,14 @@ export const I18N = {
     close: 'Fermer',
   },
 };
+
+// ── Basemap Configuration (Standard OpenStreetMap with env overrides) ────────
+export const DEFAULT_TILE_URL = 'https://tile.openstreetmap.org/{z}/{x}/{y}.png';
+export const DEFAULT_TILE_ATTRIBUTION = '© OpenStreetMap contributors';
+
+export const MAP_CONFIG = {
+  tileUrl: import.meta.env.VITE_TILE_URL || DEFAULT_TILE_URL,
+  tileAttribution: import.meta.env.VITE_TILE_ATTRIBUTION || DEFAULT_TILE_ATTRIBUTION,
+  maxZoom: 19,
+};
+

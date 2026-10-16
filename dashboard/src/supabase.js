@@ -2,9 +2,9 @@ import { createClient } from '@supabase/supabase-js';
 
 // Read from Vite environment or fall back to staging/default
 const SUPABASE_URL =
-  import.meta.env.VITE_SUPABASE_URL || 'https://lendqcjihusqkmxansbl.supabase.co';
+  import.meta.env?.VITE_SUPABASE_URL || 'https://lendqcjihusqkmxansbl.supabase.co';
 const SUPABASE_ANON_KEY =
-  import.meta.env.VITE_SUPABASE_ANON_KEY ||
+  import.meta.env?.VITE_SUPABASE_ANON_KEY ||
   'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImxlbmRxY2ppaHVzcWtteGFuc2JsIiwicm9sZSI6ImFub24iLCJpYXQiOjE3OTAyODA3ODYsImV4cCI6MjEwNTg1Njc4Nn0.F1FS2HZNf7qEbTx14WBSAOHeCWTGsA5OMZghgw_YNNs';
 
 export const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
@@ -48,30 +48,110 @@ export async function checkIsAuthority() {
 }
 
 /**
- * Generates signed URL for private observation-images bucket (short expiry: 300s = 5m).
- * Never uses getPublicUrl for observation-images.
- * For demo-images bucket only, returns direct public URL.
+ * Generates signed URL for private observation-images bucket (10-minute expiry: 600s).
+ * Strictly uses createSignedUrl for observation-images.
+ * Returns { signedUrl, expiresAt }.
+ */
+export async function getSignedMediaUrl(storagePath, bucket = 'observation-images', expiresInSeconds = 600) {
+  if (!storagePath) throw new Error('storagePath is required');
+  const { data, error } = await supabase.storage
+    .from(bucket)
+    .createSignedUrl(storagePath, expiresInSeconds);
+
+  if (error || !data?.signedUrl) {
+    throw error || new Error('Failed to create signed URL from storage');
+  }
+
+  return {
+    signedUrl: data.signedUrl,
+    expiresAt: Date.now() + (expiresInSeconds - 30) * 1000, // Refresh 30s before expiry
+  };
+}
+
+/**
+ * Returns public URL for public-photos or demo-images.
+ */
+export function getPublicMediaUrl(storagePath, bucket = 'public-photos') {
+  if (!storagePath) return null;
+  const { data } = supabase.storage.from(bucket).getPublicUrl(storagePath);
+  return data?.publicUrl || null;
+}
+
+/**
+ * Backwards-compatible getMediaUrl.
  */
 export async function getMediaUrl(storagePath, bucket = 'observation-images', isDemo = false) {
   if (!storagePath) return null;
-  if (bucket === 'demo-images') {
-    const { data } = supabase.storage.from('demo-images').getPublicUrl(storagePath);
-    return data?.publicUrl || null;
+  if (bucket === 'demo-images' || bucket === 'public-photos') {
+    return getPublicMediaUrl(storagePath, bucket);
   }
-  // observation-images is private: strictly use createSignedUrl with short expiry
   try {
-    const { data, error } = await supabase.storage
-      .from('observation-images')
-      .createSignedUrl(storagePath, 300); // 300 seconds (5 min short expiry)
-    if (error || !data) {
-      console.warn('[Supabase] createSignedUrl failed:', error?.message);
-      return null;
-    }
-    return data.signedUrl;
+    const res = await getSignedMediaUrl(storagePath, bucket, 600);
+    return res.signedUrl;
   } catch (err) {
-    console.warn('[Supabase] createSignedUrl error:', err);
+    console.warn('[Supabase] getMediaUrl failed:', err);
     return null;
   }
+}
+
+/**
+ * Fetches fresh media_files rows for a specific set of observation IDs.
+ * Used whenever a cluster is opened or auth session state changes.
+ */
+export async function fetchMediaFilesForObservations(obsIds) {
+  if (!obsIds || obsIds.length === 0) return {};
+  try {
+    const { data, error } = await supabase
+      .from('media_files')
+      .select('id, observation_id, bucket, storage_path, media_type, is_demo, public_url')
+      .in('observation_id', obsIds);
+
+    if (error) {
+      console.warn('[Supabase] fetchMediaFilesForObservations failed:', error.message);
+      return {};
+    }
+
+    const result = {};
+    obsIds.forEach((id) => {
+      result[id] = { original: null, thumbnail: null };
+    });
+
+    (data || []).forEach((row) => {
+      if (!result[row.observation_id]) {
+        result[row.observation_id] = { original: null, thumbnail: null };
+      }
+      if (row.bucket === 'observation-images' && (row.media_type === 'image' || row.media_type === 'frame')) {
+        result[row.observation_id].original = row;
+      } else if (row.bucket === 'public-photos' || row.media_type === 'thumbnail') {
+        result[row.observation_id].thumbnail = row;
+      } else {
+        result[row.observation_id].original = row;
+      }
+    });
+
+    return result;
+  } catch (err) {
+    console.warn('[Supabase] fetchMediaFilesForObservations error:', err);
+    return {};
+  }
+}
+
+/**
+ * Fetches server-calculated clusters via public.get_clusters() RPC.
+ * Server is the single source of truth (DBSCAN 20m, accuracy <= 25m, status <> 'rejected').
+ */
+export async function fetchServerClusters(epsMeters = 20, minPoints = 1) {
+  const { data, error } = await supabase.rpc('get_clusters', {
+    eps_meters: epsMeters,
+    min_points: minPoints,
+  });
+
+  if (error) {
+    console.error('[Supabase] get_clusters RPC failed:', error);
+    throw error;
+  }
+
+  return data || [];
 }
 
 /**
@@ -119,10 +199,13 @@ export async function fetchObservations() {
       detMap.set(d.observation_id, arr);
     });
 
-    const mediaMap = new Map();
+    const mediaOriginalMap = new Map();
+    const mediaThumbMap = new Map();
     (mediaData || []).forEach((m) => {
-      if (!mediaMap.has(m.observation_id)) {
-        mediaMap.set(m.observation_id, m);
+      if (m.bucket === 'observation-images') {
+        mediaOriginalMap.set(m.observation_id, m);
+      } else if (m.bucket === 'public-photos') {
+        mediaThumbMap.set(m.observation_id, m);
       }
     });
 
@@ -130,7 +213,8 @@ export async function fetchObservations() {
     return obsData.map((obs) => {
       const loc = locMap.get(obs.id) || { latitude: 0, longitude: 0, accuracy_meters: null };
       const dets = detMap.get(obs.id) || [];
-      const media = mediaMap.get(obs.id) || null;
+      const orig = mediaOriginalMap.get(obs.id) || null;
+      const thumb = mediaThumbMap.get(obs.id) || null;
 
       return {
         ...obs,
@@ -138,9 +222,10 @@ export async function fetchObservations() {
         longitude: Number(loc.longitude) || 0,
         accuracy_meters: loc.accuracy_meters,
         detections: dets,
-        photo_url: null, // Private bucket: never populate unauthenticated public_url
-        storage_path: media?.storage_path || null,
-        bucket: media?.bucket || 'observation-images',
+        original_media: orig,
+        thumbnail_media: thumb,
+        storage_path: orig?.storage_path || thumb?.storage_path || null,
+        bucket: orig?.bucket || thumb?.bucket || 'observation-images',
       };
     }).filter((o) => o.latitude !== 0 && o.longitude !== 0);
   } catch (err) {
@@ -150,15 +235,39 @@ export async function fetchObservations() {
 }
 
 /**
- * Updates status of an observation (requires authenticated authority operator).
+ * Updates status of a single observation (requires authenticated authority operator).
+ * Strictly verifies that exactly 1 row was updated under RLS.
  */
 export async function updateObservationStatus(id, newStatus) {
   const { data, error } = await supabase
     .from('observations')
     .update({ status: newStatus })
     .eq('id', id)
-    .select('id, status, assigned_contractor, budget_estimate_tnd');
+    .select('id, status');
 
   if (error) throw error;
+  if (!data || data.length !== 1) {
+    throw new Error('Échec de la mise à jour (0 ligne modifiée). Vérifiez les permissions RLS d\'autorité.');
+  }
+  return data[0];
+}
+
+/**
+ * Updates status of multiple observations in a single query with id=in.(...).
+ * Strictly verifies that the returned row count matches the requested IDs count.
+ */
+export async function updateMultipleObservationsStatus(ids, newStatus) {
+  if (!ids || ids.length === 0) return [];
+  const { data, error } = await supabase
+    .from('observations')
+    .update({ status: newStatus })
+    .in('id', ids)
+    .select('id, status');
+
+  if (error) throw error;
+  if (!data || data.length !== ids.length) {
+    throw new Error(`Échec de la mise à jour par lot : ${data?.length || 0}/${ids.length} lignes modifiées.`);
+  }
   return data;
 }
+

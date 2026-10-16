@@ -22,7 +22,16 @@ import {
   fetchServerClusters,
   supabase,
 } from './supabase';
-import { haversineDistanceMeters, calculateRoadHealthScore } from './utils/clustering';
+import { haversineDistanceMeters } from './utils/clustering';
+import { MinistryOverview } from './components/MinistryOverview';
+import {
+  buildMinistryOverview,
+  isWithinPeriod,
+  matchesObservationFilters,
+  observationClass,
+  observationPriority,
+  observationTime,
+} from './utils/ministryAnalytics';
 import { calculatePriorityScore, PRIORITY_CONFIG } from './utils/priorityScoring';
 import validationMetricsData from './data/validation_metrics.json';
 import {
@@ -296,6 +305,7 @@ export default function App() {
   const [classFilter, setClassFilter] = useState('all');
   const [priorityFilter, setPriorityFilter] = useState('all');
   const [statusFilter, setStatusFilter] = useState('all');
+  const [period, setPeriod] = useState('all');
 
   // Selected Cluster & Side Panel
   const [selectedCluster, setSelectedCluster] = useState(null);
@@ -329,6 +339,9 @@ export default function App() {
   const mapRef = useRef(null);
   const mapInstanceRef = useRef(null);
   const markersLayerRef = useRef(null);
+  const focusMarkerRef = useRef(null);
+  const [mapFocus, setMapFocus] = useState(null);
+  const [mapReady, setMapReady] = useState(false);
 
   const t = I18N[lang] || I18N.fr;
 
@@ -374,6 +387,7 @@ export default function App() {
   // ── 1. Fetch Observations & Server Clusters from Supabase ────────────────────
   const loadData = useCallback(async () => {
     setLoading(true);
+    setError(null);
     try {
       const [obsData, clusterData] = await Promise.all([
         fetchObservations(),
@@ -457,11 +471,16 @@ export default function App() {
       const scCounts = sc.status_counts || {};
       const count = Number(sc.report_count);
       let dominantStatus = 'unconfirmed';
-      if (scCounts.repaired > 0 && scCounts.repaired === count) {
+      const repairedCount = Number(scCounts.repaired || 0);
+      const confirmedCount = Number(scCounts.confirmed || 0);
+      const progressCount = Number(scCounts.in_progress || 0);
+      if (repairedCount > 0 && repairedCount === count) {
         dominantStatus = 'repaired';
-      } else if (scCounts.confirmed > 0 || scCounts.in_progress > 0) {
+      } else if (progressCount > 0 && confirmedCount === 0) {
+        dominantStatus = 'in_progress';
+      } else if (confirmedCount > 0 || progressCount > 0) {
         dominantStatus = 'confirmed';
-      } else if (scCounts.repaired > 0) {
+      } else if (repairedCount > 0) {
         dominantStatus = 'repaired';
       }
 
@@ -479,7 +498,7 @@ export default function App() {
         latitude: sc.centroid_lat,
         longitude: sc.centroid_lng,
         count,
-        dominantClass: sc.worst_class || 'D40',
+        dominantClass: sc.worst_class || null,
         maxPriorityScore: score,
         priorityLabel,
         oldestDate: sc.first_seen,
@@ -503,43 +522,57 @@ export default function App() {
   // ── 3. Filtered Clusters for Display ───────────────────────────────────────
   const filteredClusters = useMemo(() => {
     return clusters.filter((c) => {
-      if (classFilter !== 'all' && c.dominantClass !== classFilter) return false;
-      if (priorityFilter !== 'all' && c.priorityLabel !== priorityFilter) return false;
-      if (statusFilter !== 'all' && c.status !== statusFilter) return false;
+      if (classFilter !== 'all') {
+        const memberClass = c.members.some((member) => observationClass(member) === classFilter);
+        if (c.dominantClass !== classFilter && !memberClass) return false;
+      }
+      if (priorityFilter !== 'all') {
+        const memberPriority = c.members.some((member) => observationPriority(member) === priorityFilter);
+        if (c.priorityLabel !== priorityFilter && !memberPriority) return false;
+      }
+      if (statusFilter !== 'all') {
+        const counted = Number(c.statusCounts?.[statusFilter] || 0) > 0;
+        const memberStatus = c.members.some((member) => (member.status || 'unconfirmed') === statusFilter);
+        if (c.status !== statusFilter && !counted && !memberStatus) return false;
+      }
+      if (period !== 'all') {
+        const memberInPeriod = c.members.some((member) => {
+          const timestamp = observationTime(member);
+          return timestamp != null && isWithinPeriod(timestamp, period);
+        });
+        const clusterInPeriod = c.members.length === 0 && isWithinPeriod(c.newestDate, period);
+        if (!memberInPeriod && !clusterInPeriod) return false;
+      }
       return true;
     });
-  }, [clusters, classFilter, priorityFilter, statusFilter]);
+  }, [clusters, classFilter, priorityFilter, statusFilter, period]);
 
-  // ── 4. KPI Strip Metrics ───────────────────────────────────────────────────
-  const kpis = useMemo(() => {
-    const classCounts = { D40: 0, D20: 0, D10: 0, D00: 0 };
-    const priorityCounts = { HIGH: 0, MEDIUM: 0, LOW: 0 };
-    const statusCounts = { unconfirmed: 0, confirmed: 0, repaired: 0 };
+  const ministry = useMemo(() => {
+    const scoped = observations.filter((obs) => matchesObservationFilters(obs, {
+      classFilter,
+      priorityFilter,
+      statusFilter,
+    }));
+    return buildMinistryOverview(scoped, { period });
+  }, [observations, classFilter, priorityFilter, statusFilter, period]);
 
-    filteredClusters.forEach((c) => {
-      if (classCounts[c.dominantClass] !== undefined) {
-        classCounts[c.dominantClass] += c.count;
-      }
-      if (priorityCounts[c.priorityLabel] !== undefined) {
-        priorityCounts[c.priorityLabel] += 1;
-      }
-      if (statusCounts[c.status] !== undefined) {
-        statusCounts[c.status] += 1;
-      }
-    });
-
-    const totalReports = filteredClusters.reduce((sum, c) => sum + c.count, 0);
-    const healthScore = calculateRoadHealthScore(filteredClusters);
-
-    return {
-      totalClusters: filteredClusters.length,
-      totalReports,
-      classCounts,
-      priorityCounts,
-      statusCounts,
-      healthScore,
-    };
-  }, [filteredClusters]);
+  function openObservation(observationId) {
+    const observation = observations.find((item) => item.id === observationId);
+    const cluster = clusters.find((item) =>
+      item.members.some((member) => member.id === observationId)
+    );
+    if (cluster) {
+      setActiveSidebarTab('clusters');
+      setSelectedCluster(cluster);
+      setIsSidebarCollapsed(false);
+    }
+    const latitude = Number(cluster?.latitude ?? observation?.latitude);
+    const longitude = Number(cluster?.longitude ?? observation?.longitude);
+    if (!Number.isFinite(latitude) || !Number.isFinite(longitude)) return;
+    if (latitude === 0 && longitude === 0) return;
+    setMapFocus({ id: observationId, lat: latitude, lng: longitude });
+    document.getElementById('ministry-map')?.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+  }
 
   // ── 5. Leaflet Map Markers (colour = priority, size = report count) ────────
   useEffect(() => {
@@ -557,12 +590,12 @@ export default function App() {
       L.tileLayer(MAP_CONFIG.tileUrl, {
         attribution: MAP_CONFIG.tileAttribution,
         maxZoom: MAP_CONFIG.maxZoom,
-        className: 'dark-tiles',
       }).addTo(map);
 
       const markersGroup = L.layerGroup().addTo(map);
       markersLayerRef.current = markersGroup;
       mapInstanceRef.current = map;
+      setMapReady(true);
     }
 
     const markersGroup = markersLayerRef.current;
@@ -622,6 +655,30 @@ export default function App() {
       }
     }
   }, [filteredClusters]);
+
+  useEffect(() => {
+    const map = mapInstanceRef.current;
+    if (focusMarkerRef.current) {
+      focusMarkerRef.current.remove();
+      focusMarkerRef.current = null;
+    }
+    if (!map || !mapFocus || !mapReady) return undefined;
+    map.invalidateSize();
+    const marker = L.circleMarker([mapFocus.lat, mapFocus.lng], {
+      radius: 16,
+      color: '#0b1f33',
+      weight: 3,
+      fillColor: '#1d4ed8',
+      fillOpacity: 0.18,
+      interactive: false,
+    }).addTo(map);
+    focusMarkerRef.current = marker;
+    map.flyTo([mapFocus.lat, mapFocus.lng], Math.max(map.getZoom(), 15), { duration: 0.45 });
+    return () => {
+      marker.remove();
+      if (focusMarkerRef.current === marker) focusMarkerRef.current = null;
+    };
+  }, [mapFocus, mapReady]);
 
   // Keep selectedCluster in sync with updated observations; close panel if cluster becomes empty
   useEffect(() => {
@@ -806,7 +863,7 @@ export default function App() {
 
     const rows = filteredClusters.map((c) => [
       `"${c.id}"`,
-      `"${c.dominantClass}"`,
+      `"${c.dominantClass || ''}"`,
       c.count,
       c.maxPriorityScore,
       `"${c.priorityLabel}"`,
@@ -889,11 +946,7 @@ export default function App() {
           <div className="brand-badge">TM</div>
           <div>
             <h1 className="topbar-title">{t.title}</h1>
-            <p className="topbar-subtitle">
-              {lang === 'fr'
-                ? 'Tableau de Bord Autorité • Priorisation & Diagnostic Voirie'
-                : 'Authority Dashboard • Road Anomaly Triage & Verification'}
-            </p>
+            <p className="topbar-subtitle">{t.subtitle}</p>
           </div>
         </div>
 
@@ -954,109 +1007,28 @@ export default function App() {
         </div>
       </header>
 
-      {/* ── KPI Strip (Class, Priority, Status Breakdown) ────────────────────── */}
-      <section className="kpi-strip">
-        {/* Class Counts */}
-        <div className="kpi-group">
-          <span className="kpi-group-title">CLASSES D'ANOMALIES</span>
-          <div className="kpi-items">
-            <div className="kpi-pill" title="D40 Pothole">
-              <span className="dot" style={{ background: DAMAGE_CLASSES.D40.color }} />
-              <span className="label">D40 Nid-de-poule</span>
-              <strong className="val mono">{kpis.classCounts.D40}</strong>
-            </div>
-            <div className="kpi-pill" title="D20 Alligator Crack">
-              <span className="dot" style={{ background: DAMAGE_CLASSES.D20.color }} />
-              <span className="label">D20 Faïençage</span>
-              <strong className="val mono">{kpis.classCounts.D20}</strong>
-            </div>
-            <div className="kpi-pill" title="D10 Transverse Crack">
-              <span className="dot" style={{ background: DAMAGE_CLASSES.D10.color }} />
-              <span className="label">D10 Transversale</span>
-              <strong className="val mono">{kpis.classCounts.D10}</strong>
-            </div>
-            <div className="kpi-pill" title="D00 Longitudinal Crack">
-              <span className="dot" style={{ background: DAMAGE_CLASSES.D00.color }} />
-              <span className="label">D00 Longitudinale</span>
-              <strong className="val mono">{kpis.classCounts.D00}</strong>
-            </div>
-          </div>
-        </div>
+      <MinistryOverview
+        overview={ministry}
+        lang={lang}
+        period={period}
+        onPeriodChange={setPeriod}
+        loading={loading && observations.length === 0}
+        error={error}
+        onRetry={loadData}
+        onOpenObservation={openObservation}
+      />
 
-        {/* Priority Counts */}
-        <div className="kpi-group">
-          <span className="kpi-group-title">NIVEAU DE PRIORITÉ</span>
-          <div className="kpi-items">
-            <div className="kpi-pill">
-              <span className="dot" style={{ background: PRIORITY_PIN_COLORS.HIGH }} />
-              <span className="label">HIGH (&gt;65)</span>
-              <strong className="val mono" style={{ color: PRIORITY_PIN_COLORS.HIGH }}>
-                {kpis.priorityCounts.HIGH}
-              </strong>
-            </div>
-            <div className="kpi-pill">
-              <span className="dot" style={{ background: PRIORITY_PIN_COLORS.MEDIUM }} />
-              <span className="label">MEDIUM (35–65)</span>
-              <strong className="val mono" style={{ color: PRIORITY_PIN_COLORS.MEDIUM }}>
-                {kpis.priorityCounts.MEDIUM}
-              </strong>
-            </div>
-            <div className="kpi-pill">
-              <span className="dot" style={{ background: PRIORITY_PIN_COLORS.LOW }} />
-              <span className="label">LOW (&lt;35)</span>
-              <strong className="val mono" style={{ color: PRIORITY_PIN_COLORS.LOW }}>
-                {kpis.priorityCounts.LOW}
-              </strong>
-            </div>
-          </div>
-        </div>
-
-        {/* Status Counts */}
-        <div className="kpi-group">
-          <span className="kpi-group-title">WORKFLOW AUTORITÉ</span>
-          <div className="kpi-items">
-            <div className="kpi-pill">
-              <span className="dot" style={{ background: '#9CA3AF' }} />
-              <span className="label">Non confirmé</span>
-              <strong className="val mono">{kpis.statusCounts.unconfirmed}</strong>
-            </div>
-            <div className="kpi-pill">
-              <span className="dot" style={{ background: '#F59E0B' }} />
-              <span className="label">Confirmé</span>
-              <strong className="val mono" style={{ color: '#F59E0B' }}>
-                {kpis.statusCounts.confirmed}
-              </strong>
-            </div>
-            <div className="kpi-pill">
-              <span className="dot" style={{ background: '#10B981' }} />
-              <span className="label">Réparé</span>
-              <strong className="val mono" style={{ color: '#10B981' }}>
-                {kpis.statusCounts.repaired}
-              </strong>
-            </div>
-            {isAuthorityUser && (
-              <div
-                className={`kpi-pill kpi-pill-actionable ${activeSidebarTab === 'rejected' ? 'active' : ''}`}
-                onClick={() => {
-                  setActiveSidebarTab(activeSidebarTab === 'rejected' ? 'clusters' : 'rejected');
-                  setSelectedCluster(null);
-                  setIsSidebarCollapsed(false);
-                }}
-                title="Afficher les signalements rejetés (exclus de la carte)"
-              >
-                <span className="dot" style={{ background: '#EF4444' }} />
-                <span className="label">Rejetés</span>
-                <strong className="val mono" style={{ color: '#EF4444' }}>
-                  {rejectedObservations.length}
-                </strong>
-              </div>
-            )}
-          </div>
-        </div>
-      </section>
+      <div className="ministry-map-heading">
+        <h2>{lang === 'fr' ? 'Intelligence géographique' : 'Geographic intelligence'}</h2>
+        <p>
+          {lang === 'fr'
+            ? 'Agrégats serveur à 20 m. La couleur suit le score de priorité le plus élevé, la taille le nombre de signalements.'
+            : 'Server clusters at 20 m. Colour follows the highest priority score. Size is the number of reports.'}
+        </p>
+      </div>
 
       {/* ── Main Layout: Map + Side Panel ───────────────────────────────────── */}
-      <div className={`main-layout ${isSidebarCollapsed ? 'sidebar-collapsed' : ''}`}>
+      <div id="ministry-map" className={`main-layout ${isSidebarCollapsed ? 'sidebar-collapsed' : ''}`}>
         {/* Left Map View */}
         <div className="map-wrapper">
           <div ref={mapRef} style={{ width: '100%', height: '100%' }} />
@@ -1079,41 +1051,49 @@ export default function App() {
               className="select-input"
               value={classFilter}
               onChange={(e) => setClassFilter(e.target.value)}
+              aria-label={lang === 'fr' ? 'Classe de dégradation' : 'Damage class'}
             >
-              <option value="all">Classe: Tous</option>
-              <option value="D40">D40 (Nid-de-poule)</option>
-              <option value="D20">D20 (Faïençage)</option>
-              <option value="D10">D10 (Transversale)</option>
-              <option value="D00">D00 (Longitudinale)</option>
+              <option value="all">{lang === 'fr' ? 'Classe: Tous' : 'Class: All'}</option>
+              {['D40', 'D20', 'D10', 'D00'].map((code) => (
+                <option key={code} value={code}>
+                  {code} ({lang === 'fr' ? DAMAGE_CLASSES[code].fr : DAMAGE_CLASSES[code].en})
+                </option>
+              ))}
             </select>
 
             <select
               className="select-input"
               value={priorityFilter}
               onChange={(e) => setPriorityFilter(e.target.value)}
+              aria-label={lang === 'fr' ? 'Priorité' : 'Priority'}
             >
-              <option value="all">Priorité: Tous</option>
-              <option value="HIGH">HIGH (&gt;65)</option>
-              <option value="MEDIUM">MEDIUM (35–65)</option>
-              <option value="LOW">LOW (&lt;35)</option>
+              <option value="all">{lang === 'fr' ? 'Priorité: Tous' : 'Priority: All'}</option>
+              <option value="HIGH">HIGH</option>
+              <option value="MEDIUM">MEDIUM</option>
+              <option value="LOW">LOW</option>
             </select>
 
             <select
               className="select-input"
               value={statusFilter}
               onChange={(e) => setStatusFilter(e.target.value)}
+              aria-label={lang === 'fr' ? 'Statut' : 'Status'}
             >
-              <option value="all">Statut: Tous</option>
-              <option value="unconfirmed">Non confirmé</option>
-              <option value="confirmed">Confirmé</option>
-              <option value="repaired">Réparé</option>
+              <option value="all">{lang === 'fr' ? 'Statut: Tous' : 'Status: All'}</option>
+              {['unconfirmed', 'confirmed', 'in_progress', 'repaired'].map((key) => (
+                <option key={key} value={key}>
+                  {lang === 'fr' ? STATUS_LABELS[key].fr : STATUS_LABELS[key].en}
+                </option>
+              ))}
             </select>
           </div>
 
           {/* Map Legend & GPS Accuracy Note */}
           <div className="map-legend">
             <span style={{ fontSize: '0.72rem', fontWeight: 800, color: 'var(--text-muted)' }}>
-              LÉGENDE CARTE (COULEUR = PRIORITÉ • TAILLE = SÉVÉRITÉ)
+              {lang === 'fr'
+                ? 'LÉGENDE (COULEUR = SCORE DE PRIORITÉ • TAILLE = SIGNALEMENTS)'
+                : 'LEGEND (COLOUR = PRIORITY SCORE • SIZE = REPORTS)'}
             </span>
             <div style={{ display: 'flex', gap: '14px', marginTop: '6px', flexWrap: 'wrap' }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '0.75rem' }}>
@@ -1181,7 +1161,7 @@ export default function App() {
                 <div className="report-items-list" style={{ overflowY: 'auto' }}>
                   {rejectedObservations.map((obs, idx) => {
                     const det = obs.detections?.[0];
-                    const classCode = obs.anomaly_type || det?.class_code || 'D40';
+                    const classCode = obs.anomaly_type || det?.class_code || null;
 
                     return (
                       <div key={obs.id} className="report-card" style={{ borderColor: 'rgba(239, 68, 68, 0.3)' }}>
@@ -1198,8 +1178,8 @@ export default function App() {
                           <div style={{ flex: 1, minWidth: 0 }}>
                             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: '6px' }}>
                               <div style={{ display: 'flex', alignItems: 'center', gap: '6px', flexWrap: 'wrap' }}>
-                                <span style={{ fontWeight: 700, fontSize: '0.82rem', color: DAMAGE_CLASSES[classCode]?.color }}>
-                                  #{idx + 1} {classCode} ({DAMAGE_CLASSES[classCode]?.fr})
+                                <span style={{ fontWeight: 700, fontSize: '0.82rem', color: DAMAGE_CLASSES[classCode]?.color || '#64748b' }}>
+                                  #{idx + 1} {classCode || 'Non classé'}{DAMAGE_CLASSES[classCode] ? ` (${DAMAGE_CLASSES[classCode].fr})` : ''}
                                 </span>
                                 {obs.is_demo ? (
                                   <span className="badge badge-demo">DEMO</span>
@@ -1254,13 +1234,13 @@ export default function App() {
                     <span
                       className="class-badge"
                       style={{
-                        background: DAMAGE_CLASSES[selectedCluster.dominantClass]?.color || '#EF4444',
+                        background: DAMAGE_CLASSES[selectedCluster.dominantClass]?.color || '#64748b',
                       }}
                     >
-                      {selectedCluster.dominantClass}
+                      {selectedCluster.dominantClass || '—'}
                     </span>
                     <h2 style={{ fontSize: '1rem', fontWeight: 800 }}>
-                      {DAMAGE_CLASSES[selectedCluster.dominantClass]?.fr || 'Anomalie'}
+                      {DAMAGE_CLASSES[selectedCluster.dominantClass]?.fr || 'Non classé'}
                     </h2>
                   </div>
                   <p className="mono" style={{ fontSize: '0.74rem', color: 'var(--text-dim)', marginTop: '4px' }}>
@@ -1344,7 +1324,7 @@ export default function App() {
                 <div className="report-items-list">
                   {selectedCluster.members.map((obs, idx) => {
                     const det = obs.detections?.[0];
-                    const classCode = obs.anomaly_type || det?.class_code || 'D40';
+                    const classCode = obs.anomaly_type || det?.class_code || null;
                     const conf = det?.confidence !== undefined ? det.confidence : null;
 
                     return (
@@ -1364,8 +1344,8 @@ export default function App() {
                           <div style={{ flex: 1, minWidth: 0 }}>
                             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: '6px' }}>
                               <div style={{ display: 'flex', alignItems: 'center', gap: '6px', flexWrap: 'wrap' }}>
-                                <span style={{ fontWeight: 700, fontSize: '0.82rem', color: DAMAGE_CLASSES[classCode]?.color }}>
-                                  #{idx + 1} {classCode} ({DAMAGE_CLASSES[classCode]?.fr})
+                                <span style={{ fontWeight: 700, fontSize: '0.82rem', color: DAMAGE_CLASSES[classCode]?.color || '#64748b' }}>
+                                  #{idx + 1} {classCode || 'Non classé'}{DAMAGE_CLASSES[classCode] ? ` (${DAMAGE_CLASSES[classCode].fr})` : ''}
                                 </span>
                                 {obs.is_demo ? (
                                   <span className="badge badge-demo">DEMO</span>
@@ -1407,13 +1387,22 @@ export default function App() {
                                     <span>Confirmer anomalie</span>
                                   </button>
                                 )}
-                                {obs.status === 'confirmed' && (
+                                {(obs.status === 'confirmed' || obs.status === 'in_progress') && (
                                   <button
                                     className="btn-status btn-repair"
-                                    onClick={() => promptStatusUpdate(obs.id, 'confirmed', 'repaired')}
+                                    onClick={() => promptStatusUpdate(obs.id, obs.status, 'repaired')}
                                   >
                                     <Wrench size={12} />
                                     <span>Marquer réparé</span>
+                                  </button>
+                                )}
+                                {obs.status === 'confirmed' && (
+                                  <button
+                                    className="btn-status btn-confirm"
+                                    onClick={() => promptStatusUpdate(obs.id, 'confirmed', 'in_progress')}
+                                  >
+                                    <Clock size={12} />
+                                    <span>Marquer en cours</span>
                                   </button>
                                 )}
                                 {obs.status === 'repaired' && (
@@ -1483,8 +1472,8 @@ export default function App() {
                     >
                       <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
                         <span className="mono" style={{ fontSize: '0.75rem', color: 'var(--text-dim)' }}>#{i + 1}</span>
-                        <span style={{ fontWeight: 700, fontSize: '0.8rem', color: DAMAGE_CLASSES[c.dominantClass]?.color }}>
-                          {c.dominantClass}
+                        <span style={{ fontWeight: 700, fontSize: '0.8rem', color: DAMAGE_CLASSES[c.dominantClass]?.color || '#64748b' }}>
+                          {c.dominantClass || '—'}
                         </span>
                         <span style={{ fontSize: '0.74rem', color: 'var(--text-muted)' }}>
                           {c.count} {c.count > 1 ? 'passages' : 'passage'}
@@ -1521,7 +1510,7 @@ export default function App() {
                 Voulez-vous modifier le statut de cette observation :
               </p>
 
-              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '14px', padding: '12px', background: 'rgba(255,255,255,0.03)', borderRadius: 'var(--radius-sm)', marginBottom: '18px' }}>
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '14px', padding: '12px', background: 'var(--bg-primary)', borderRadius: 'var(--radius-sm)', marginBottom: '18px' }}>
                 <span className={`badge ${STATUS_LABELS[statusConfirmModal.currentStatus]?.badge || 'badge-gray'}`}>
                   {STATUS_LABELS[statusConfirmModal.currentStatus]?.fr || statusConfirmModal.currentStatus}
                 </span>

@@ -12,11 +12,12 @@ export 'sync_cancel_token.dart';
 // ---------------------------------------------------------------------------
 
 abstract class ObservationRepository {
-  Future<void>              save(Observation observation);
+  Future<void> save(Observation observation);
   Future<List<Observation>> list({SyncStatus? status});
-  Future<void>              updateSyncStatus(String id, SyncStatus status, {String? error});
-  Future<void>              updateAnnotatedPath(String id, String path);
-  Future<Observation?>      findById(String id);
+  Future<void> updateSyncStatus(String id, SyncStatus status, {String? error});
+  Future<void> updateAnnotatedPath(String id, String path);
+  Future<Observation?> findById(String id);
+  Future<void> deleteById(String id);
   Future<List<Observation>> findStuckUploading();
 }
 
@@ -33,18 +34,18 @@ class MemoryObservationRepository implements ObservationRepository {
   }
 
   @override
-  Future<List<Observation>> list({SyncStatus? status}) async =>
-      _items.values
-          .where((o) => status == null || o.syncStatus == status)
-          .toList()
-        ..sort((a, b) => b.createdAt.compareTo(a.createdAt));
+  Future<List<Observation>> list({SyncStatus? status}) async => _items.values
+      .where((o) => status == null || o.syncStatus == status)
+      .toList()
+    ..sort((a, b) => b.createdAt.compareTo(a.createdAt));
 
   @override
-  Future<void> updateSyncStatus(String id, SyncStatus status, {String? error}) async {
+  Future<void> updateSyncStatus(String id, SyncStatus status,
+      {String? error}) async {
     final obs = _items[id];
     if (obs == null) throw StateError('Observation not found: $id');
     obs.syncStatus = status;
-    obs.syncError  = error;
+    obs.syncError = error;
     if (status == SyncStatus.failed) {
       obs.uploadAttempts++;
     }
@@ -57,6 +58,9 @@ class MemoryObservationRepository implements ObservationRepository {
 
   @override
   Future<Observation?> findById(String id) async => _items[id];
+
+  @override
+  Future<void> deleteById(String id) async => _items.remove(id);
 
   @override
   Future<List<Observation>> findStuckUploading() async =>
@@ -81,7 +85,8 @@ class SqliteObservationRepository implements ObservationRepository {
       _dao.listAll(status: status);
 
   @override
-  Future<void> updateSyncStatus(String id, SyncStatus status, {String? error}) =>
+  Future<void> updateSyncStatus(String id, SyncStatus status,
+          {String? error}) =>
       _dao.updateSyncStatus(id, status, error: error);
 
   @override
@@ -90,6 +95,9 @@ class SqliteObservationRepository implements ObservationRepository {
 
   @override
   Future<Observation?> findById(String id) => _dao.findById(id);
+
+  @override
+  Future<void> deleteById(String id) => _dao.deleteById(id);
 
   @override
   Future<List<Observation>> findStuckUploading() => _dao.findStuckUploading();
@@ -193,7 +201,8 @@ class SyncCoordinator {
         await _repo.updateSyncStatus(obs.id, SyncStatus.uploading);
         try {
           cancelToken?.throwIfCancelled();
-          await _client.upload(obs, idempotencyKey: obs.id, cancelToken: cancelToken);
+          await _client.upload(obs,
+              idempotencyKey: obs.id, cancelToken: cancelToken);
           cancelToken?.throwIfCancelled();
 
           // Only mark synced if all parts (metadata, image, detections, receipts) succeeded
@@ -201,13 +210,16 @@ class SyncCoordinator {
           _uploadedCount++;
         } on SyncCancelledException {
           // Keep item in pending status locally, do NOT mark synced, never delete local data
-          debugPrint('[Sync] Cancelled while processing ${obs.id}, reverting to pending');
+          debugPrint(
+              '[Sync] Cancelled while processing ${obs.id}, reverting to pending');
           await _repo.updateSyncStatus(obs.id, SyncStatus.pending);
           rethrow;
         } catch (e) {
           final backoff = _backoffDuration(obs.uploadAttempts);
-          debugPrint('[Sync] Failed ${obs.id}: $e  (retry in ${backoff.inSeconds}s)');
-          await _repo.updateSyncStatus(obs.id, SyncStatus.failed, error: e.toString());
+          debugPrint(
+              '[Sync] Failed ${obs.id}: $e  (retry in ${backoff.inSeconds}s)');
+          await _repo.updateSyncStatus(obs.id, SyncStatus.failed,
+              error: e.toString());
           await Future<void>.delayed(backoff);
         }
       }

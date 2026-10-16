@@ -9,7 +9,7 @@ import 'package:tariqmap/models/observation.dart';
 import 'package:tariqmap/services/thumbnail_service.dart';
 
 void main() {
-  const artifactDir = r'C:\Users\USERµ\.gemini\antigravity-ide\brain\f16b4cf3-66bc-4b41-ba6a-05705de17916';
+  final artifactDir = Directory.systemTemp.createTempSync('tariqmap_thumbnails_').path;
 
   group('Real Photo Thumbnail Generation with Crop Geometry and Margin Blur', () {
     test('Image 1: Thin horizontal crack (Czech_000010.jpg)', () async {

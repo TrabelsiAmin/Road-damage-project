@@ -15,7 +15,7 @@ class OfflineQueueScreen extends StatefulWidget {
     required this.onSync,
   });
 
-  final ObservationRepository     repository;
+  final ObservationRepository repository;
   final Future<SyncResult> Function({SyncCancelToken? cancelToken}) onSync;
 
   @override
@@ -25,8 +25,8 @@ class OfflineQueueScreen extends StatefulWidget {
 class _OfflineQueueScreenState extends State<OfflineQueueScreen>
     with SingleTickerProviderStateMixin {
   List<Observation> _all = [];
-  bool _loading  = true;
-  bool _syncing  = false;
+  bool _loading = true;
+  bool _syncing = false;
   SyncCancelToken? _cancelToken;
   String? _statusBanner;
 
@@ -48,7 +48,11 @@ class _OfflineQueueScreenState extends State<OfflineQueueScreen>
   Future<void> _load() async {
     setState(() => _loading = true);
     final obs = await widget.repository.list();
-    if (mounted) setState(() { _all = obs; _loading = false; });
+    if (mounted)
+      setState(() {
+        _all = obs;
+        _loading = false;
+      });
   }
 
   Future<void> _syncAll() async {
@@ -68,7 +72,8 @@ class _OfflineQueueScreenState extends State<OfflineQueueScreen>
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text(result.message),
-            backgroundColor: result.cancelled ? Colors.orange.shade800 : AppColors.teal,
+            backgroundColor:
+                result.cancelled ? Colors.orange.shade800 : AppColors.teal,
             duration: const Duration(seconds: 4),
           ),
         );
@@ -87,14 +92,72 @@ class _OfflineQueueScreenState extends State<OfflineQueueScreen>
     _cancelToken?.cancel();
   }
 
-  List<Observation> get _pending   => _all
-      .where((o) => o.syncStatus == SyncStatus.pending ||
-                    o.syncStatus == SyncStatus.uploading).toList();
-  List<Observation> get _failed    => _all
-      .where((o) => o.syncStatus == SyncStatus.failed ||
-                    o.syncStatus == SyncStatus.needsReview).toList();
-  List<Observation> get _synced    => _all
-      .where((o) => o.syncStatus == SyncStatus.synced).toList();
+  Future<void> _deleteObservation(Observation obs) async {
+    if (_syncing || obs.syncStatus == SyncStatus.uploading) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Impossible de supprimer pendant la synchronisation.'),
+        ),
+      );
+      return;
+    }
+
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: const Text('Supprimer cette observation ?'),
+        content: const Text(
+          'Cette action supprimera l’observation de la file locale. '
+          'Si elle a déjà été synchronisée, les données en ligne '
+          'ne seront pas supprimées par cette action.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(dialogContext, false),
+            child: const Text('Annuler'),
+          ),
+          FilledButton(
+            style: FilledButton.styleFrom(
+              backgroundColor: Colors.red,
+            ),
+            onPressed: () => Navigator.pop(dialogContext, true),
+            child: const Text('Supprimer'),
+          ),
+        ],
+      ),
+    );
+
+    if (confirmed != true || !mounted) return;
+
+    try {
+      await widget.repository.deleteById(obs.id);
+      await _load();
+
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+            content: Text('Observation supprimée de la file locale.')),
+      );
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Erreur lors de la suppression : $e')),
+      );
+    }
+  }
+
+  List<Observation> get _pending => _all
+      .where((o) =>
+          o.syncStatus == SyncStatus.pending ||
+          o.syncStatus == SyncStatus.uploading)
+      .toList();
+  List<Observation> get _failed => _all
+      .where((o) =>
+          o.syncStatus == SyncStatus.failed ||
+          o.syncStatus == SyncStatus.needsReview)
+      .toList();
+  List<Observation> get _synced =>
+      _all.where((o) => o.syncStatus == SyncStatus.synced).toList();
 
   @override
   Widget build(BuildContext context) {
@@ -114,10 +177,10 @@ class _OfflineQueueScreenState extends State<OfflineQueueScreen>
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             const Text('Sync Queue',
-              style: TextStyle(fontWeight: FontWeight.w800, fontSize: 16)),
+                style: TextStyle(fontWeight: FontWeight.w800, fontSize: 16)),
             Text(
-              '${_pending.length} pending · ${_failed.length} failed · ${_synced.length} synced',
-              style: const TextStyle(color: Colors.white54, fontSize: 11)),
+                '${_pending.length} pending · ${_failed.length} failed · ${_synced.length} synced',
+                style: const TextStyle(color: Colors.white54, fontSize: 11)),
           ],
         ),
         actions: [
@@ -131,13 +194,13 @@ class _OfflineQueueScreenState extends State<OfflineQueueScreen>
                   foregroundColor: Colors.white,
                   padding: const EdgeInsets.symmetric(horizontal: 14),
                   shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(10)),
+                      borderRadius: BorderRadius.circular(10)),
                 ),
                 onPressed: _cancelSync,
                 icon: const Icon(Icons.close_rounded, size: 16),
                 label: const Text('Cancel',
-                  style: TextStyle(
-                    fontSize: 13, fontWeight: FontWeight.w700)),
+                    style:
+                        TextStyle(fontSize: 13, fontWeight: FontWeight.w700)),
               ),
             )
           else if (hasPendingOrFailed)
@@ -149,53 +212,61 @@ class _OfflineQueueScreenState extends State<OfflineQueueScreen>
                   backgroundColor: AppColors.teal,
                   padding: const EdgeInsets.symmetric(horizontal: 14),
                   shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(10)),
+                      borderRadius: BorderRadius.circular(10)),
                 ),
                 onPressed: _syncAll,
                 icon: const Icon(Icons.cloud_upload_outlined, size: 16),
                 label: const Text('Sync All',
-                  style: TextStyle(
-                    fontSize: 13, fontWeight: FontWeight.w700)),
+                    style:
+                        TextStyle(fontSize: 13, fontWeight: FontWeight.w700)),
               ),
             ),
         ],
-        bottom: _all.isEmpty ? null : TabBar(
-          controller: _tab,
-          indicatorColor: AppColors.tealGlow,
-          indicatorWeight: 2,
-          labelColor: AppColors.tealGlow,
-          unselectedLabelColor: Colors.white54,
-          labelStyle: const TextStyle(
-            fontSize: 12, fontWeight: FontWeight.w700),
-          tabs: [
-            Tab(text: 'Pending (${_pending.length})'),
-            Tab(text: 'Failed (${_failed.length})'),
-            Tab(text: 'Synced (${_synced.length})'),
-          ],
-        ),
+        bottom: _all.isEmpty
+            ? null
+            : TabBar(
+                controller: _tab,
+                indicatorColor: AppColors.tealGlow,
+                indicatorWeight: 2,
+                labelColor: AppColors.tealGlow,
+                unselectedLabelColor: Colors.white54,
+                labelStyle:
+                    const TextStyle(fontSize: 12, fontWeight: FontWeight.w700),
+                tabs: [
+                  Tab(text: 'Pending (${_pending.length})'),
+                  Tab(text: 'Failed (${_failed.length})'),
+                  Tab(text: 'Synced (${_synced.length})'),
+                ],
+              ),
       ),
       body: _loading
-          ? const Center(child: CircularProgressIndicator(
-              valueColor: AlwaysStoppedAnimation<Color>(AppColors.teal)))
+          ? const Center(
+              child: CircularProgressIndicator(
+                  valueColor: AlwaysStoppedAnimation<Color>(AppColors.teal)))
           : Column(
               children: [
                 if (_syncing)
                   Container(
                     width: double.infinity,
                     color: AppColors.navyLight,
-                    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+                    padding: const EdgeInsets.symmetric(
+                        horizontal: 16, vertical: 10),
                     child: Row(
                       children: [
                         const SizedBox(
                           width: 14,
                           height: 14,
-                          child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
+                          child: CircularProgressIndicator(
+                              strokeWidth: 2, color: Colors.white),
                         ),
                         const SizedBox(width: 12),
                         const Expanded(
                           child: Text(
                             'Syncing in progress…',
-                            style: TextStyle(color: Colors.white, fontSize: 13, fontWeight: FontWeight.w600),
+                            style: TextStyle(
+                                color: Colors.white,
+                                fontSize: 13,
+                                fontWeight: FontWeight.w600),
                           ),
                         ),
                         TextButton(
@@ -206,7 +277,8 @@ class _OfflineQueueScreenState extends State<OfflineQueueScreen>
                             minimumSize: Size.zero,
                             tapTargetSize: MaterialTapTargetSize.shrinkWrap,
                           ),
-                          child: const Text('Cancel', style: TextStyle(fontWeight: FontWeight.w700)),
+                          child: const Text('Cancel',
+                              style: TextStyle(fontWeight: FontWeight.w700)),
                         ),
                       ],
                     ),
@@ -217,7 +289,8 @@ class _OfflineQueueScreenState extends State<OfflineQueueScreen>
                     color: _statusBanner!.contains('cancelled')
                         ? Colors.orange.shade900
                         : AppColors.navyLight,
-                    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+                    padding: const EdgeInsets.symmetric(
+                        horizontal: 16, vertical: 10),
                     child: Row(
                       children: [
                         Icon(
@@ -233,7 +306,10 @@ class _OfflineQueueScreenState extends State<OfflineQueueScreen>
                         Expanded(
                           child: Text(
                             _statusBanner!,
-                            style: const TextStyle(color: Colors.white, fontSize: 13, fontWeight: FontWeight.w600),
+                            style: const TextStyle(
+                                color: Colors.white,
+                                fontSize: 13,
+                                fontWeight: FontWeight.w600),
                           ),
                         ),
                       ],
@@ -245,15 +321,30 @@ class _OfflineQueueScreenState extends State<OfflineQueueScreen>
                       : TabBarView(
                           controller: _tab,
                           children: [
-                            _ObsList(observations: _pending, emptyMessage: 'All caught up!',
+                            _ObsList(
+                              observations: _pending,
+                              emptyMessage: 'All caught up!',
                               emptyIcon: Icons.cloud_done_rounded,
-                              emptyColor: AppColors.syncDone),
-                            _ObsList(observations: _failed, emptyMessage: 'No failed uploads.',
+                              emptyColor: AppColors.syncDone,
+                              onDelete: _deleteObservation,
+                              deletingDisabled: _syncing,
+                            ),
+                            _ObsList(
+                              observations: _failed,
+                              emptyMessage: 'No failed uploads.',
                               emptyIcon: Icons.check_circle_outline_rounded,
-                              emptyColor: AppColors.syncDone),
-                            _ObsList(observations: _synced, emptyMessage: 'Nothing synced yet.',
+                              emptyColor: AppColors.syncDone,
+                              onDelete: _deleteObservation,
+                              deletingDisabled: _syncing,
+                            ),
+                            _ObsList(
+                              observations: _synced,
+                              emptyMessage: 'Nothing synced yet.',
                               emptyIcon: Icons.cloud_outlined,
-                              emptyColor: AppColors.textFaintOnDark),
+                              emptyColor: AppColors.textFaintOnDark,
+                              onDelete: _deleteObservation,
+                              deletingDisabled: _syncing,
+                            ),
                           ],
                         ),
                 ),
@@ -263,27 +354,28 @@ class _OfflineQueueScreenState extends State<OfflineQueueScreen>
   }
 
   Widget _buildEmpty() => Center(
-    child: Column(
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        Container(
-          width: 72, height: 72,
-          decoration: BoxDecoration(
-            color: AppColors.teal.withAlpha(15),
-            shape: BoxShape.circle,
-          ),
-          child: Icon(Icons.cloud_done_rounded,
-            size: 36, color: AppColors.teal.withAlpha(180)),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Container(
+              width: 72,
+              height: 72,
+              decoration: BoxDecoration(
+                color: AppColors.teal.withAlpha(15),
+                shape: BoxShape.circle,
+              ),
+              child: Icon(Icons.cloud_done_rounded,
+                  size: 36, color: AppColors.teal.withAlpha(180)),
+            ),
+            const SizedBox(height: 16),
+            const Text('No observations yet',
+                style: TextStyle(fontWeight: FontWeight.w800, fontSize: 16)),
+            const SizedBox(height: 6),
+            const Text('Captured observations will appear here.',
+                style: TextStyle(color: Colors.black45)),
+          ],
         ),
-        const SizedBox(height: 16),
-        const Text('No observations yet',
-          style: TextStyle(fontWeight: FontWeight.w800, fontSize: 16)),
-        const SizedBox(height: 6),
-        const Text('Captured observations will appear here.',
-          style: TextStyle(color: Colors.black45)),
-      ],
-    ),
-  );
+      );
 }
 
 // ── List ──────────────────────────────────────────────────────────────────────
@@ -294,12 +386,16 @@ class _ObsList extends StatelessWidget {
     required this.emptyMessage,
     required this.emptyIcon,
     required this.emptyColor,
+    required this.onDelete,
+    required this.deletingDisabled,
   });
 
   final List<Observation> observations;
-  final String            emptyMessage;
-  final IconData          emptyIcon;
-  final Color             emptyColor;
+  final String emptyMessage;
+  final IconData emptyIcon;
+  final Color emptyColor;
+  final Future<void> Function(Observation) onDelete;
+  final bool deletingDisabled;
 
   @override
   Widget build(BuildContext context) {
@@ -311,8 +407,10 @@ class _ObsList extends StatelessWidget {
             Icon(emptyIcon, size: 48, color: emptyColor.withAlpha(120)),
             const SizedBox(height: 12),
             Text(emptyMessage,
-              style: const TextStyle(
-                fontWeight: FontWeight.w700, fontSize: 15, color: Colors.black54)),
+                style: const TextStyle(
+                    fontWeight: FontWeight.w700,
+                    fontSize: 15,
+                    color: Colors.black54)),
           ],
         ),
       );
@@ -324,7 +422,11 @@ class _ObsList extends StatelessWidget {
       child: ListView.builder(
         padding: const EdgeInsets.fromLTRB(16, 16, 16, 32),
         itemCount: observations.length,
-        itemBuilder: (_, i) => _ObsCard(obs: observations[i]),
+        itemBuilder: (_, i) => _ObsCard(
+          obs: observations[i],
+          onDelete: onDelete,
+          deletingDisabled: deletingDisabled,
+        ),
       ),
     );
   }
@@ -333,32 +435,39 @@ class _ObsList extends StatelessWidget {
 // ── Obs card ──────────────────────────────────────────────────────────────────
 
 class _ObsCard extends StatelessWidget {
-  const _ObsCard({required this.obs});
+  const _ObsCard({
+    required this.obs,
+    required this.onDelete,
+    required this.deletingDisabled,
+  });
+
   final Observation obs;
+  final Future<void> Function(Observation) onDelete;
+  final bool deletingDisabled;
 
   Color get _statusColor => switch (obs.syncStatus) {
-    SyncStatus.pending     => AppColors.syncPending,
-    SyncStatus.uploading   => AppColors.tealLight,
-    SyncStatus.synced      => AppColors.syncDone,
-    SyncStatus.failed      => AppColors.syncFailed,
-    SyncStatus.needsReview => AppColors.syncFailed,
-  };
+        SyncStatus.pending => AppColors.syncPending,
+        SyncStatus.uploading => AppColors.tealLight,
+        SyncStatus.synced => AppColors.syncDone,
+        SyncStatus.failed => AppColors.syncFailed,
+        SyncStatus.needsReview => AppColors.syncFailed,
+      };
 
   String get _statusLabel => switch (obs.syncStatus) {
-    SyncStatus.pending     => 'PENDING',
-    SyncStatus.uploading   => 'UPLOADING',
-    SyncStatus.synced      => 'SYNCED',
-    SyncStatus.failed      => 'FAILED',
-    SyncStatus.needsReview => 'NEEDS REVIEW',
-  };
+        SyncStatus.pending => 'PENDING',
+        SyncStatus.uploading => 'UPLOADING',
+        SyncStatus.synced => 'SYNCED',
+        SyncStatus.failed => 'FAILED',
+        SyncStatus.needsReview => 'NEEDS REVIEW',
+      };
 
   IconData get _statusIcon => switch (obs.syncStatus) {
-    SyncStatus.synced      => Icons.cloud_done_rounded,
-    SyncStatus.uploading   => Icons.cloud_sync_rounded,
-    SyncStatus.failed      => Icons.cloud_off_rounded,
-    SyncStatus.needsReview => Icons.error_outline_rounded,
-    _                      => Icons.cloud_upload_outlined,
-  };
+        SyncStatus.synced => Icons.cloud_done_rounded,
+        SyncStatus.uploading => Icons.cloud_sync_rounded,
+        SyncStatus.failed => Icons.cloud_off_rounded,
+        SyncStatus.needsReview => Icons.error_outline_rounded,
+        _ => Icons.cloud_upload_outlined,
+      };
 
   @override
   Widget build(BuildContext context) {
@@ -372,8 +481,9 @@ class _ObsCard extends StatelessWidget {
         border: Border.all(color: AppColors.borderLight),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withAlpha(6),
-            blurRadius: 8, offset: const Offset(0, 2)),
+              color: Colors.black.withAlpha(6),
+              blurRadius: 8,
+              offset: const Offset(0, 2)),
         ],
       ),
       child: Material(
@@ -381,8 +491,7 @@ class _ObsCard extends StatelessWidget {
         borderRadius: BorderRadius.circular(16),
         child: InkWell(
           borderRadius: BorderRadius.circular(16),
-          onTap: () => Navigator.of(context).push(
-            MaterialPageRoute<void>(
+          onTap: () => Navigator.of(context).push(MaterialPageRoute<void>(
               builder: (_) => ResultScreen(observation: obs))),
           child: Padding(
             padding: const EdgeInsets.all(14),
@@ -394,11 +503,14 @@ class _ObsCard extends StatelessWidget {
                   ClipRRect(
                     borderRadius: BorderRadius.circular(8),
                     child: SizedBox(
-                      width: 52, height: 52,
+                      width: 52,
+                      height: 52,
                       child: kIsWeb
-                          ? Image.network(obs.imagePath, fit: BoxFit.cover,
+                          ? Image.network(obs.imagePath,
+                              fit: BoxFit.cover,
                               errorBuilder: (_, __, ___) => _thumb())
-                          : Image.file(File(obs.imagePath), fit: BoxFit.cover,
+                          : Image.file(File(obs.imagePath),
+                              fit: BoxFit.cover,
                               errorBuilder: (_, __, ___) => _thumb()),
                     ),
                   ),
@@ -410,49 +522,67 @@ class _ObsCard extends StatelessWidget {
                         Row(children: [
                           Container(
                             padding: const EdgeInsets.symmetric(
-                              horizontal: 7, vertical: 2),
+                                horizontal: 7, vertical: 2),
                             decoration: BoxDecoration(
                               color: priorityColor.withAlpha(20),
                               borderRadius: BorderRadius.circular(6),
                             ),
                             child: Text(
-                              '${obs.priorityScore.toStringAsFixed(0)} · ${obs.priorityLabel}',
-                              style: TextStyle(
-                                color: priorityColor,
-                                fontSize: 11, fontWeight: FontWeight.w700)),
+                                '${obs.priorityScore.toStringAsFixed(0)} · ${obs.priorityLabel}',
+                                style: TextStyle(
+                                    color: priorityColor,
+                                    fontSize: 11,
+                                    fontWeight: FontWeight.w700)),
                           ),
                           const Spacer(),
                           Container(
                             padding: const EdgeInsets.symmetric(
-                              horizontal: 7, vertical: 2),
+                                horizontal: 7, vertical: 2),
                             decoration: BoxDecoration(
                               color: _statusColor.withAlpha(20),
                               borderRadius: BorderRadius.circular(6),
                               border: Border.all(
-                                color: _statusColor.withAlpha(60), width: 1),
+                                  color: _statusColor.withAlpha(60), width: 1),
                             ),
-                            child: Row(mainAxisSize: MainAxisSize.min, children: [
+                            child:
+                                Row(mainAxisSize: MainAxisSize.min, children: [
                               Icon(_statusIcon, size: 10, color: _statusColor),
                               const SizedBox(width: 3),
                               Text(_statusLabel,
-                                style: TextStyle(
-                                  color: _statusColor,
-                                  fontSize: 10,
-                                  fontWeight: FontWeight.w700)),
+                                  style: TextStyle(
+                                      color: _statusColor,
+                                      fontSize: 10,
+                                      fontWeight: FontWeight.w700)),
                             ]),
+                          ),
+                          IconButton(
+                            tooltip: 'Supprimer cette observation',
+                            visualDensity: VisualDensity.compact,
+                            padding: EdgeInsets.zero,
+                            constraints: const BoxConstraints(
+                              minWidth: 32,
+                              minHeight: 32,
+                            ),
+                            icon: const Icon(
+                              Icons.delete_outline,
+                              color: Colors.red,
+                              size: 20,
+                            ),
+                            onPressed:
+                                deletingDisabled ? null : () => onDelete(obs),
                           ),
                         ]),
                         const SizedBox(height: 4),
                         Text(
-                          '${obs.detections.length} anomaly${obs.detections.length == 1 ? '' : 's'} · ${obs.actor}',
-                          style: const TextStyle(
-                            fontWeight: FontWeight.w700, fontSize: 13)),
+                            '${obs.detections.length} anomaly${obs.detections.length == 1 ? '' : 's'} · ${obs.actor}',
+                            style: const TextStyle(
+                                fontWeight: FontWeight.w700, fontSize: 13)),
                         Text(
-                          '${obs.latitude.toStringAsFixed(4)}, ${obs.longitude.toStringAsFixed(4)}  ·  '
-                          '${DateFormat('dd MMM HH:mm').format(obs.createdAt.toLocal())}',
-                          style: const TextStyle(
-                            color: Colors.black38, fontSize: 11),
-                          overflow: TextOverflow.ellipsis),
+                            '${obs.latitude.toStringAsFixed(4)}, ${obs.longitude.toStringAsFixed(4)}  ·  '
+                            '${DateFormat('dd MMM HH:mm').format(obs.createdAt.toLocal())}',
+                            style: const TextStyle(
+                                color: Colors.black38, fontSize: 11),
+                            overflow: TextOverflow.ellipsis),
                       ],
                     ),
                   ),
@@ -460,40 +590,41 @@ class _ObsCard extends StatelessWidget {
                 if (obs.syncError != null) ...[
                   const SizedBox(height: 8),
                   Container(
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 10, vertical: 6),
+                    padding:
+                        const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
                     decoration: BoxDecoration(
                       color: AppColors.syncFailed.withAlpha(12),
                       borderRadius: BorderRadius.circular(8),
-                      border: Border.all(
-                        color: AppColors.syncFailed.withAlpha(40)),
+                      border:
+                          Border.all(color: AppColors.syncFailed.withAlpha(40)),
                     ),
                     child: Row(children: [
                       const Icon(Icons.error_outline,
-                        size: 14, color: AppColors.syncFailed),
+                          size: 14, color: AppColors.syncFailed),
                       const SizedBox(width: 6),
                       Expanded(
-                        child: Text(obs.syncError!,
-                          style: const TextStyle(
-                            color: AppColors.syncFailed, fontSize: 11),
-                          maxLines: 2,
-                          overflow: TextOverflow.ellipsis)),
+                          child: Text(obs.syncError!,
+                              style: const TextStyle(
+                                  color: AppColors.syncFailed, fontSize: 11),
+                              maxLines: 2,
+                              overflow: TextOverflow.ellipsis)),
                     ]),
                   ),
                 ],
                 if (obs.anyMock) ...[
                   const SizedBox(height: 6),
                   Container(
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 8, vertical: 3),
+                    padding:
+                        const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
                     decoration: BoxDecoration(
                       color: AppColors.mockWarning.withAlpha(15),
                       borderRadius: BorderRadius.circular(6),
                     ),
                     child: const Text('⚠ DEMO MOCK INFERENCE',
-                      style: TextStyle(
-                        color: AppColors.mockWarning,
-                        fontSize: 10, fontWeight: FontWeight.w700)),
+                        style: TextStyle(
+                            color: AppColors.mockWarning,
+                            fontSize: 10,
+                            fontWeight: FontWeight.w700)),
                   ),
                 ],
               ],
@@ -505,6 +636,7 @@ class _ObsCard extends StatelessWidget {
   }
 
   Widget _thumb() => Container(
-    color: AppColors.offWhite,
-    child: const Icon(Icons.image_not_supported_outlined, color: Colors.black26));
+      color: AppColors.offWhite,
+      child: const Icon(Icons.image_not_supported_outlined,
+          color: Colors.black26));
 }

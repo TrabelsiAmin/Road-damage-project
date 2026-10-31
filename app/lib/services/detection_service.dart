@@ -1,6 +1,7 @@
 import 'dart:io';
 import 'package:flutter/foundation.dart';
 import '../core/constants.dart';
+import '../core/model_config.dart';
 import '../inference/roadsense_decoder.dart';
 import '../models/observation.dart';
 import 'model_manager.dart';
@@ -20,13 +21,44 @@ abstract class DetectionAgentRunner {
 }
 
 // ---------------------------------------------------------------------------
-// Mock runner — visible, labeled, deterministic
+// Failed runner — transparent, explicit error, no silent fake detections
+// ---------------------------------------------------------------------------
+
+class FailedAgentRunner implements DetectionAgentRunner {
+  FailedAgentRunner(this.agentName, this.error);
+
+  @override
+  final String agentName;
+  final String error;
+
+  @override
+  bool get isReady => false;
+
+  @override
+  bool get isMock => false;
+
+  @override
+  void dispose() {}
+
+  @override
+  Future<AgentResult> detect(File image) async {
+    return AgentResult(
+      agent: agentName,
+      detections: const [],
+      error: error,
+      isMock: false,
+    );
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Mock runner — visible, labeled, deterministic (web/unsupported platforms only)
 // ---------------------------------------------------------------------------
 
 /// Deterministic mock runner.
 ///
-/// Must ONLY be instantiated in debug/demo mode. The [isMock] flag is
-/// always true, which causes the UI to show "DEMO MOCK INFERENCE" banners.
+/// Must ONLY be instantiated on web or explicitly mocked test environments.
+/// The [isMock] flag is always true, causing the UI to show visible DEMO banners.
 class MockAgentRunner implements DetectionAgentRunner {
   MockAgentRunner(this.agentName, this._mockBoxes);
 
@@ -55,6 +87,7 @@ class MockAgentRunner implements DetectionAgentRunner {
         classCode: m.classCode,
         confidence: m.confidence,
         box: m.box,
+        modelBundleVersion: ModelConfig.active.version,
       )).toList(),
       isMock: true,
     );
@@ -95,6 +128,16 @@ class DetectionService {
     this.roadSenseRunner,
     this.potholeRunner,
   }) : _runners = runners;
+
+  /// Visible constructor for testing custom runners
+  DetectionService.custom({
+    required List<DetectionAgentRunner> runners,
+    this.isHybridActive = false,
+    this.isRoadSenseFallback = false,
+    this.fallbackReason,
+  })  : _runners = runners,
+        roadSenseRunner = null,
+        potholeRunner = null;
 
   final List<DetectionAgentRunner> _runners;
 
@@ -155,7 +198,9 @@ class DetectionService {
     try {
       final rsPath = await ModelManager.instance.localModelPath('road_damage_roadsense');
       if (rsPath == null) {
-        throw StateError('RoadSense model file could not be retrieved from assets');
+        final err = ModelManager.instance.integrityError('road_damage_roadsense') ??
+            'RoadSense model file could not be retrieved from assets';
+        throw StateError(err);
       }
 
       final rsRunner = RoadSenseAgentRunner(
@@ -215,6 +260,12 @@ class DetectionService {
     final runners = <DetectionAgentRunner>[];
 
     for (final def in _agentDefs) {
+      if (kIsWeb) {
+        debugPrint('[DetectionService] Web platform: using mock for ${def.name}');
+        runners.add(_mockForAgent(def.name, def.classes));
+        continue;
+      }
+
       final path = await ModelManager.instance.localModelPath(def.name);
       if (path != null) {
         try {
@@ -229,8 +280,12 @@ class DetectionService {
           debugPrint('[DetectionService] TFLite failed for ${def.name}: $e');
         }
       }
-      debugPrint('[DetectionService] Using mock for ${def.name}');
-      runners.add(_mockForAgent(def.name, def.classes));
+
+      // On Android/iOS: NEVER silently fall back to mock!
+      final integrityErr = ModelManager.instance.integrityError(def.name);
+      final errorMsg = integrityErr ?? 'Model file failed integrity check or could not be loaded';
+      debugPrint('[DetectionService] Using FailedAgentRunner for ${def.name}: $errorMsg');
+      runners.add(FailedAgentRunner(def.name, errorMsg));
     }
 
     return DetectionService._(
@@ -355,7 +410,7 @@ class DetectionService {
       frameIndex: d.frameIndex,
       modelBundleVersion: d.modelBundleVersion.isNotEmpty
           ? d.modelBundleVersion
-          : TariqMapConstants.modelBundleVersion,
+          : ModelConfig.active.version,
       timestamp: d.timestamp,
     )).toList();
 

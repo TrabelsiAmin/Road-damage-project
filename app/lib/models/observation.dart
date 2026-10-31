@@ -118,7 +118,7 @@ class AgentResult {
 }
 
 // ---------------------------------------------------------------------------
-// SyncStatus
+// SyncStatus & MediaSyncStatus
 // ---------------------------------------------------------------------------
 
 enum SyncStatus {
@@ -127,6 +127,20 @@ enum SyncStatus {
   synced,
   failed,
   needsReview,
+}
+
+enum MediaSyncStatus {
+  pending,
+  uploading,
+  uploaded,
+  failed;
+
+  static MediaSyncStatus fromString(String? val) {
+    return MediaSyncStatus.values.firstWhere(
+      (e) => e.name == val,
+      orElse: () => MediaSyncStatus.pending,
+    );
+  }
 }
 
 // ---------------------------------------------------------------------------
@@ -143,12 +157,14 @@ class Observation {
     required this.longitude,
     required this.agentResults,
     required this.actor,
+    this.organizationId,
     this.accuracyMeters,
     this.annotatedImagePath,
     this.gpsAvailable = true,
     this.sourceVideoPath,
     this.frameTimestampMs,
     this.syncStatus = SyncStatus.pending,
+    this.mediaSyncStatus = MediaSyncStatus.pending,
     this.syncError,
     this.uploadAttempts = 0,
     this.modelBundleVersion = TariqMapConstants.modelBundleVersion,
@@ -166,6 +182,7 @@ class Observation {
   final double?  accuracyMeters;
   final List<AgentResult> agentResults;
   final String   actor;
+  final String?  organizationId;
 
   /// Path to the annotated copy of the image (bounding boxes rendered).
   /// Null until annotation rendering completes.
@@ -176,6 +193,7 @@ class Observation {
   final int?    frameTimestampMs;
 
   SyncStatus syncStatus;
+  MediaSyncStatus mediaSyncStatus;
   String?    syncError;
   int        uploadAttempts;
   final String  modelBundleVersion;
@@ -214,7 +232,9 @@ class Observation {
     'longitude':          longitude,
     'accuracyMeters':     accuracyMeters,
     'actor':              actor,
+    'organizationId':     organizationId,
     'syncStatus':         syncStatus.name,
+    'mediaSyncStatus':    mediaSyncStatus.name,
     'syncError':          syncError,
     'uploadAttempts':     uploadAttempts,
     'modelBundleVersion': modelBundleVersion,

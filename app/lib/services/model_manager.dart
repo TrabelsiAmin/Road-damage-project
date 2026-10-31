@@ -3,16 +3,15 @@ import 'package:crypto/crypto.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
 import 'package:path_provider/path_provider.dart';
+import '../core/model_config.dart';
 
-/// The four-class checkpoint from oracl4/RoadDamageDetection, exported for
-/// phone-side inference.
-const _bundledModels = {
-  'road_damage': 'assets/models/road_damage.tflite',
-  'road_damage_roadsense': 'assets/models/road_damage_roadsense.tflite',
+/// The bundled model assets for TariqMap.
+final _bundledModels = <String, String>{
+  'road_damage': ModelConfig.legacy.assetPath,
+  'road_damage_roadsense': ModelConfig.roadSense.assetPath,
 };
 
 /// Known SHA-256 checksums for each model file.
-/// Update these after uploading your real model weights.
 const _modelSha256 = <String, String>{
   'road_damage': '830f99bd8c31c5d24138c16db7862dfb62293b96cc1dec241c36140bff8a813f',
   'road_damage_roadsense': '300798be883a7003a1a20f3d13757f9338a8cbec5e0ece9f990a2a5179286ccb',
@@ -20,18 +19,20 @@ const _modelSha256 = <String, String>{
 
 /// Manages copying and verification of bundled TFLite model files.
 ///
-/// On Android/iOS: copies the bundled model to app documents on first use.
-/// On web/desktop: always returns null (mock fallback is used).
+/// On Android/iOS: copies the bundled model to app documents on first use and
+/// validates SHA-256 integrity.
+/// On web/desktop: returns null (mock fallback only on unsupported web).
 class ModelManager {
   ModelManager._();
   static final ModelManager instance = ModelManager._();
 
   final Map<String, String?> _cachedPaths = {};
+  final Map<String, String> _integrityErrors = {};
+
+  String? integrityError(String agentName) => _integrityErrors[agentName];
 
   /// Returns the local file path for the given [agentName]'s model,
-  /// or null if not available (web, download failed, etc.).
-  ///
-  /// [onProgress] receives a value 0.0–1.0 during download.
+  /// or null if not available or if checksum failed.
   Future<String?> localModelPath(
     String agentName, {
     void Function(double progress)? onProgress,
@@ -49,16 +50,20 @@ class ModelManager {
       if (await file.exists()) {
         if (await _checksumValid(file, agentName)) {
           _cachedPaths[agentName] = file.path;
+          _integrityErrors.remove(agentName);
           return file.path;
         }
-        // Corrupted — delete and re-download.
+        // Corrupted / checksum failed — delete and re-copy
         await file.delete();
       }
 
       final asset = _bundledModels[agentName];
-      if (asset == null) return null;
+      if (asset == null) {
+        _integrityErrors[agentName] = 'Asset for $agentName is not defined in bundle';
+        return null;
+      }
 
-      debugPrint('[ModelManager] Copying bundled $agentName model');
+      debugPrint('[ModelManager] Copying bundled $agentName model from $asset');
       final data = await rootBundle.load(asset);
       await file.writeAsBytes(
         data.buffer.asUint8List(data.offsetInBytes, data.lengthInBytes),
@@ -67,15 +72,20 @@ class ModelManager {
       onProgress?.call(1.0);
 
       if (!await _checksumValid(file, agentName)) {
-        debugPrint('[ModelManager] Checksum mismatch for $agentName — deleting.');
+        final err = 'Checksum mismatch for $agentName — model corrupted';
+        debugPrint('[ModelManager] $err — deleting.');
+        _integrityErrors[agentName] = err;
         await file.delete();
         return null;
       }
 
       _cachedPaths[agentName] = file.path;
+      _integrityErrors.remove(agentName);
       return file.path;
     } catch (e) {
-      debugPrint('[ModelManager] Error loading model $agentName: $e');
+      final err = 'Error loading model $agentName: $e';
+      debugPrint('[ModelManager] $err');
+      _integrityErrors[agentName] = err;
       _cachedPaths[agentName] = null;
       return null;
     }
@@ -89,16 +99,20 @@ class ModelManager {
       final modelsDir = Directory('${dir.path}/tariqmap_models');
       if (await modelsDir.exists()) await modelsDir.delete(recursive: true);
       _cachedPaths.clear();
+      _integrityErrors.clear();
     } catch (_) {}
   }
 
   Future<bool> _checksumValid(File file, String agentName) async {
     final expected = _modelSha256[agentName];
-    // Skip validation if placeholder is still set (dev mode).
     if (expected == null || expected == 'REPLACE_AFTER_UPLOAD') return true;
     final bytes = await file.readAsBytes();
     final actual = sha256.convert(bytes).toString();
-    return actual == expected;
+    final valid = actual == expected;
+    if (!valid) {
+      _integrityErrors[agentName] =
+          'SHA-256 validation failed for $agentName. Expected: $expected, Got: $actual';
+    }
+    return valid;
   }
-
 }

@@ -11,13 +11,16 @@ import '../core/constants.dart';
 import '../inference/preprocessing.dart';
 
 import '../models/observation.dart';
+import '../models/organization.dart';
 import '../services/detection_service.dart';
 import '../services/observation_repository.dart';
+import '../services/organization_service.dart';
 import '../data/remote/api_client.dart';
 import '../services/territorial_service.dart';
 import 'camera_detection_screen.dart';
 import 'model_status_screen.dart';
 import 'offline_queue_screen.dart';
+import 'organization_selection_screen.dart';
 import 'photo_confirm_screen.dart';
 import 'result_screen.dart';
 import 'settings_screen.dart';
@@ -34,16 +37,20 @@ class HomeScreen extends StatefulWidget {
 
 class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
   final _picker = ImagePicker();
-  final _uuid   = const Uuid();
+  final _uuid = const Uuid();
+  final _orgService = OrganizationService();
 
-  late DetectionService      _detection;
+  late DetectionService _detection;
   late ObservationRepository _repository;
   final _location = LocationService();
 
   bool _servicesReady = false;
-  bool _busy          = false;
+  bool _busy = false;
+  bool _isSyncing = false;
   String? _message;
   late String _actor;
+  Organization? _selectedOrg;
+  DateTime? _lastSyncTime;
   List<Observation> _observations = [];
 
   late AnimationController _fadeCtrl;
@@ -69,10 +76,16 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
 
   Future<void> _initServices() async {
     try {
-      _detection  = await DetectionService.create();
+      _detection = await DetectionService.create();
       _repository = kIsWeb
           ? MemoryObservationRepository()
           : SqliteObservationRepository();
+
+      // Check organization selection
+      _selectedOrg = await _orgService.getSelectedOrganization();
+      if (_selectedOrg != null) {
+        _actor = _selectedOrg!.name;
+      }
 
       final sync = SyncCoordinator(_repository, ApiClient());
       await sync.recoverStuckUploads();
@@ -84,6 +97,11 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
           _servicesReady = true;
         });
         _fadeCtrl.forward();
+
+        // If no organization is selected, show setup screen
+        if (_selectedOrg == null) {
+          WidgetsBinding.instance.addPostFrameCallback((_) => _promptOrganizationSelection());
+        }
       }
     } catch (e) {
       if (mounted) {
@@ -93,6 +111,23 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
         });
         _fadeCtrl.forward();
       }
+    }
+  }
+
+  Future<void> _promptOrganizationSelection({bool isFirstLaunch = true}) async {
+    final chosen = await Navigator.of(context).push<Organization>(
+      MaterialPageRoute(
+        builder: (_) => OrganizationSelectionScreen(
+          isFirstLaunch: isFirstLaunch,
+          service: _orgService,
+        ),
+      ),
+    );
+    if (chosen != null && mounted) {
+      setState(() {
+        _selectedOrg = chosen;
+        _actor = chosen.name;
+      });
     }
   }
 
@@ -114,26 +149,25 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
       final imageWidth = decoded.width;
       final imageHeight = decoded.height;
 
-      final results   = await _detection.detectAll(imageFile);
+      final results = await _detection.detectAll(imageFile);
       final obs = Observation(
-        id:             _uuid.v4(),
-        captureId:      _uuid.v4(),
-        imagePath:      picked.path,
-        createdAt:      DateTime.now().toUtc(),
-        latitude:       position?.latitude  ?? 0.0,
-        longitude:      position?.longitude ?? 0.0,
+        id: _uuid.v4(),
+        captureId: _uuid.v4(),
+        organizationId: _selectedOrg?.id,
+        imagePath: picked.path,
+        createdAt: DateTime.now().toUtc(),
+        latitude: position?.latitude ?? 0.0,
+        longitude: position?.longitude ?? 0.0,
         accuracyMeters: position?.accuracy,
-        actor:          _actor,
-        agentResults:   results,
-        imageWidth:     imageWidth,
-        imageHeight:    imageHeight,
+        actor: _actor,
+        agentResults: results,
+        imageWidth: imageWidth,
+        imageHeight: imageHeight,
         modelBundleVersion: TariqMapConstants.modelBundleVersion,
       );
 
       debugPrint('[Pipeline:ResultObject] Gallery observation created: ${obs.id}, '
-          'detections: ${obs.detections.length}, size: ${imageWidth}x$imageHeight, '
-          'score: ${obs.priorityScore.toStringAsFixed(1)}, '
-          'anomaly: ${obs.detections.firstOrNull?.classCode}');
+          'org: ${obs.organizationId}, detections: ${obs.detections.length}');
 
       await _repository.save(obs);
       final storedObs = await _repository.findById(obs.id) ?? obs;
@@ -158,8 +192,9 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
       MaterialPageRoute<Observation>(
         builder: (_) => CameraDetectionScreen(
           detectionService: _detection,
-          repository:       _repository,
-          actor:            _actor,
+          repository: _repository,
+          actor: _actor,
+          organizationId: _selectedOrg?.id,
         ),
         fullscreenDialog: true,
       ),
@@ -170,11 +205,10 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
   }
 
   Future<void> _openTakePhoto() async {
-    // Prompt the user: camera or gallery?
     final source = await showModalBottomSheet<ImageSource>(
       context: context,
       backgroundColor: Colors.transparent,
-      builder: (ctx) => _SourcePicker(
+      builder: (ctx) => const _SourcePicker(
         title: 'Take a Photo',
         cameraLabel: 'Open Camera',
         galleryLabel: 'Choose from Gallery',
@@ -199,15 +233,15 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
         imageQuality: 92,
         maxWidth: 1600,
       );
-      if (picked == null) return;
-      if (!mounted) return;
+      if (picked == null || !mounted) return;
       await Navigator.of(context).push(
         MaterialPageRoute<void>(
           builder: (_) => PhotoConfirmScreen(
-            imageFile:       File(picked.path),
+            imageFile: File(picked.path),
             detectionService: _detection,
-            repository:      _repository,
-            actor:           _actor,
+            repository: _repository,
+            actor: _actor,
+            organizationId: _selectedOrg?.id,
           ),
         ),
       );
@@ -222,24 +256,43 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
 
   Future<void> _openVideoImport() async {
     await Navigator.of(context).push(MaterialPageRoute<void>(
-      builder: (_) => VideoImportScreen(service: _detection, actor: _actor),
+      builder: (_) => VideoImportScreen(
+        service: _detection,
+        actor: _actor,
+        repository: _repository,
+        organizationId: _selectedOrg?.id,
+      ),
     ));
     final loaded = await _repository.list();
     if (mounted) setState(() => _observations = loaded);
   }
 
   Future<SyncResult> _syncAll({SyncCancelToken? cancelToken}) async {
-    final sync = SyncCoordinator(_repository, ApiClient());
-    final result = await sync.syncPending(cancelToken: cancelToken);
-    final loaded = await _repository.list();
-    if (mounted) setState(() => _observations = loaded);
-    return result;
+    setState(() => _isSyncing = true);
+    try {
+      final sync = SyncCoordinator(_repository, ApiClient());
+      final result = await sync.syncPending(cancelToken: cancelToken);
+      final loaded = await _repository.list();
+      if (mounted) {
+        setState(() {
+          _observations = loaded;
+          _lastSyncTime = DateTime.now();
+        });
+      }
+      return result;
+    } finally {
+      if (mounted) setState(() => _isSyncing = false);
+    }
   }
 
   @override
   Widget build(BuildContext context) {
     final pending = _observations
         .where((o) => o.syncStatus == SyncStatus.pending).length;
+    final failed = _observations
+        .where((o) => o.syncStatus == SyncStatus.failed).length;
+    final synced = _observations
+        .where((o) => o.syncStatus == SyncStatus.synced).length;
 
     return Scaffold(
       backgroundColor: AppColors.offWhite,
@@ -252,15 +305,25 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
                   // ── Sliver App Bar ───────────────────────────────────────
                   _HomeAppBar(
                     actor: _actor,
+                    selectedOrg: _selectedOrg,
                     pending: pending,
                     detection: _servicesReady ? _detection : null,
+                    onChangeOrganization: () => _promptOrganizationSelection(isFirstLaunch: false),
                     onQueue: () => Navigator.of(context).push(
                       MaterialPageRoute<void>(
                         builder: (_) => OfflineQueueScreen(
                           repository: _repository, onSync: _syncAll))),
-                    onSettings: () => Navigator.of(context).push(
-                      MaterialPageRoute<void>(
-                        builder: (_) => const SettingsScreen())),
+                    onSettings: () async {
+                      await Navigator.of(context).push(
+                        MaterialPageRoute<void>(builder: (_) => const SettingsScreen()));
+                      final currentOrg = await _orgService.getSelectedOrganization();
+                      if (mounted && currentOrg != null) {
+                        setState(() {
+                          _selectedOrg = currentOrg;
+                          _actor = currentOrg.name;
+                        });
+                      }
+                    },
                     onModelStatus: () => Navigator.of(context).push(
                       MaterialPageRoute<void>(
                         builder: (_) => ModelStatusScreen(service: _detection))),
@@ -271,12 +334,27 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
                     sliver: SliverList(
                       delegate: SliverChildListDelegate([
 
+                        // ── Sync Quick Status Strip ────────────────────────
+                        _SyncStatusStrip(
+                          synced: synced,
+                          pending: pending,
+                          failed: failed,
+                          isSyncing: _isSyncing,
+                          lastSyncTime: _lastSyncTime,
+                          onSyncNow: _isSyncing ? null : () => _syncAll(),
+                          onOpenQueue: () => Navigator.of(context).push(
+                            MaterialPageRoute<void>(
+                              builder: (_) => OfflineQueueScreen(
+                                repository: _repository, onSync: _syncAll))),
+                        ),
+                        const SizedBox(height: 18),
+
                         // ── Action grid ────────────────────────────────────
                         const _SectionLabel('INSPECTION TOOLS'),
                         const SizedBox(height: 10),
                         _ActionGrid(
                           busy: _busy,
-                          onTakePhoto:   _openTakePhoto,
+                          onTakePhoto: _openTakePhoto,
                           onRecordVideo: _openVideoImport,
                         ),
 
@@ -311,7 +389,7 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
                             const _SectionLabel('RECENT INSPECTIONS'),
                             if (_observations.isNotEmpty)
                               Text('${_observations.length}',
-                                style: TextStyle(
+                                style: const TextStyle(
                                   color: AppColors.teal,
                                   fontSize: 12,
                                   fontWeight: FontWeight.w700,
@@ -337,6 +415,123 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
                 ],
               ),
             ),
+    );
+  }
+}
+
+// ── Sync Quick Status Strip ──────────────────────────────────────────────────
+
+class _SyncStatusStrip extends StatelessWidget {
+  const _SyncStatusStrip({
+    required this.synced,
+    required this.pending,
+    required this.failed,
+    required this.isSyncing,
+    required this.lastSyncTime,
+    required this.onSyncNow,
+    required this.onOpenQueue,
+  });
+
+  final int synced;
+  final int pending;
+  final int failed;
+  final bool isSyncing;
+  final DateTime? lastSyncTime;
+  final VoidCallback? onSyncNow;
+  final VoidCallback onOpenQueue;
+
+  @override
+  Widget build(BuildContext context) {
+    final statusText = isSyncing
+        ? 'Syncing observations…'
+        : pending > 0
+            ? '$pending pending sync'
+            : failed > 0
+                ? '$failed failed to sync'
+                : 'All observations synced';
+
+    final statusColor = failed > 0
+        ? AppColors.syncFailed
+        : pending > 0
+            ? AppColors.syncPending
+            : AppColors.syncDone;
+
+    final formattedTime = lastSyncTime != null
+        ? DateFormat('HH:mm').format(lastSyncTime!.toLocal())
+        : 'Not synced yet';
+
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: AppColors.borderLight),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withAlpha(6),
+            blurRadius: 8,
+            offset: const Offset(0, 2),
+          ),
+        ],
+      ),
+      child: Row(
+        children: [
+          if (isSyncing)
+            const SizedBox(
+              width: 16, height: 16,
+              child: CircularProgressIndicator(strokeWidth: 2, color: AppColors.teal),
+            )
+          else
+            Icon(
+              pending > 0
+                  ? Icons.cloud_upload_outlined
+                  : failed > 0
+                      ? Icons.cloud_off_rounded
+                      : Icons.cloud_done_rounded,
+              size: 18,
+              color: statusColor,
+            ),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Text(
+                  statusText,
+                  style: TextStyle(
+                    fontSize: 12,
+                    fontWeight: FontWeight.w700,
+                    color: statusColor,
+                  ),
+                ),
+                Text(
+                  'Last synced: $formattedTime · $synced saved',
+                  style: const TextStyle(fontSize: 10, color: Colors.black45),
+                ),
+              ],
+            ),
+          ),
+          if (pending > 0 || failed > 0)
+            ElevatedButton(
+              style: ElevatedButton.styleFrom(
+                backgroundColor: AppColors.teal,
+                foregroundColor: Colors.white,
+                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                minimumSize: Size.zero,
+                tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+              ),
+              onPressed: onSyncNow,
+              child: isSyncing
+                  ? const SizedBox(
+                      width: 12, height: 12,
+                      child: CircularProgressIndicator(strokeWidth: 1.5, color: Colors.white),
+                    )
+                  : const Text('Sync', style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold)),
+            ),
+        ],
+      ),
     );
   }
 }
@@ -369,7 +564,7 @@ class _LoadingView extends StatelessWidget {
           ),
         ),
         const SizedBox(height: 14),
-        Text('Initialising AI models…',
+        const Text('Initialising AI models…',
           style: TextStyle(color: Colors.black38, fontSize: 13)),
       ],
     ),
@@ -381,24 +576,28 @@ class _LoadingView extends StatelessWidget {
 class _HomeAppBar extends StatelessWidget {
   const _HomeAppBar({
     required this.actor,
+    required this.selectedOrg,
     required this.pending,
     required this.detection,
     required this.onQueue,
     required this.onSettings,
     required this.onModelStatus,
+    required this.onChangeOrganization,
   });
 
-  final String          actor;
-  final int             pending;
+  final String actor;
+  final Organization? selectedOrg;
+  final int pending;
   final DetectionService? detection;
-  final VoidCallback    onQueue;
-  final VoidCallback    onSettings;
-  final VoidCallback    onModelStatus;
+  final VoidCallback onQueue;
+  final VoidCallback onSettings;
+  final VoidCallback onModelStatus;
+  final VoidCallback onChangeOrganization;
 
   @override
   Widget build(BuildContext context) {
     return SliverAppBar(
-      expandedHeight: 160,
+      expandedHeight: 165,
       pinned: true,
       backgroundColor: AppColors.navy,
       systemOverlayStyle: const SystemUiOverlayStyle(
@@ -408,8 +607,10 @@ class _HomeAppBar extends StatelessWidget {
       flexibleSpace: FlexibleSpaceBar(
         background: _AppBarBackground(
           actor: actor,
+          selectedOrg: selectedOrg,
           detection: detection,
           onModelStatus: onModelStatus,
+          onChangeOrganization: onChangeOrganization,
         ),
       ),
       title: Row(children: [
@@ -465,16 +666,22 @@ class _HomeAppBar extends StatelessWidget {
 class _AppBarBackground extends StatelessWidget {
   const _AppBarBackground({
     required this.actor,
+    required this.selectedOrg,
     required this.detection,
     required this.onModelStatus,
+    required this.onChangeOrganization,
   });
 
-  final String           actor;
+  final String actor;
+  final Organization? selectedOrg;
   final DetectionService? detection;
-  final VoidCallback     onModelStatus;
+  final VoidCallback onModelStatus;
+  final VoidCallback onChangeOrganization;
 
   @override
   Widget build(BuildContext context) {
+    final orgDisplayName = selectedOrg?.name ?? actor;
+
     return Container(
       decoration: const BoxDecoration(
         gradient: LinearGradient(
@@ -485,9 +692,7 @@ class _AppBarBackground extends StatelessWidget {
       ),
       child: Stack(
         children: [
-          // subtle grid
           Positioned.fill(child: CustomPaint(painter: _GridPainter())),
-          // glow
           Positioned(
             right: -30, top: -30,
             child: Container(
@@ -504,23 +709,41 @@ class _AppBarBackground extends StatelessWidget {
             ),
           ),
           Positioned(
-            left: 24, bottom: 16, right: 24,
+            left: 20, bottom: 14, right: 20,
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               mainAxisSize: MainAxisSize.min,
               children: [
-                Row(children: [
-                  const Icon(Icons.business_outlined,
-                    size: 13, color: AppColors.tealGlow),
-                  const SizedBox(width: 6),
-                  Text(actor,
-                    style: const TextStyle(
-                      color: AppColors.tealGlow,
-                      fontSize: 12,
-                      fontWeight: FontWeight.w600,
-                      letterSpacing: 0.5,
-                    )),
-                ]),
+                // Interactive Authority Selector Card
+                GestureDetector(
+                  onTap: onChangeOrganization,
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                    decoration: BoxDecoration(
+                      color: Colors.white.withAlpha(20),
+                      borderRadius: BorderRadius.circular(20),
+                      border: Border.all(color: AppColors.tealGlow.withAlpha(60)),
+                    ),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        const Icon(Icons.business_outlined, size: 13, color: AppColors.tealGlow),
+                        const SizedBox(width: 6),
+                        Text(
+                          orgDisplayName,
+                          style: const TextStyle(
+                            color: AppColors.tealGlow,
+                            fontSize: 12,
+                            fontWeight: FontWeight.w700,
+                            letterSpacing: 0.3,
+                          ),
+                        ),
+                        const SizedBox(width: 4),
+                        const Icon(Icons.swap_horiz_rounded, size: 14, color: AppColors.tealGlow),
+                      ],
+                    ),
+                  ),
+                ),
                 const SizedBox(height: 4),
                 const Text('Road Inspection',
                   style: TextStyle(
@@ -529,8 +752,7 @@ class _AppBarBackground extends StatelessWidget {
                     fontWeight: FontWeight.w900,
                     letterSpacing: -0.5,
                   )),
-                const SizedBox(height: 10),
-                // model status pill
+                const SizedBox(height: 8),
                 if (detection != null)
                   GestureDetector(
                     onTap: onModelStatus,
@@ -591,7 +813,7 @@ class _ModelPill extends StatelessWidget {
                 : 'TFLite AI ACTIVE';
 
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
       decoration: BoxDecoration(
         color: color.withAlpha(22),
         borderRadius: BorderRadius.circular(20),
@@ -620,7 +842,7 @@ class _ActionGrid extends StatelessWidget {
     required this.onRecordVideo,
   });
 
-  final bool         busy;
+  final bool busy;
   final VoidCallback onTakePhoto;
   final VoidCallback onRecordVideo;
 
@@ -628,7 +850,6 @@ class _ActionGrid extends StatelessWidget {
   Widget build(BuildContext context) {
     return Column(
       children: [
-        // ── Take Photo — primary large button ───────────────────────────────
         _ActionButton(
           label: 'Take Photo',
           subtitle: 'Capture & analyse road defects with AI',
@@ -642,7 +863,6 @@ class _ActionGrid extends StatelessWidget {
           secondary: false,
         ),
         const SizedBox(height: 12),
-        // ── Record Video — secondary large button ───────────────────────────
         _ActionButton(
           label: 'Record Video',
           subtitle: 'Extract & detect anomalies frame by frame',
@@ -655,7 +875,6 @@ class _ActionGrid extends StatelessWidget {
           compact: false,
           secondary: true,
         ),
-        // Loading indicator
         if (busy) const Padding(
           padding: EdgeInsets.symmetric(vertical: 16),
           child: Center(child: SizedBox(
@@ -679,21 +898,21 @@ class _ActionButton extends StatefulWidget {
     required this.glow,
     required this.enabled,
     required this.onTap,
-    this.large    = false,
-    this.compact  = false,
+    this.large = false,
+    this.compact = false,
     this.secondary = false,
   });
 
-  final String     label;
-  final String     subtitle;
-  final IconData   icon;
+  final String label;
+  final String subtitle;
+  final IconData icon;
   final List<Color> gradient;
-  final Color      glow;
-  final bool       enabled;
+  final Color glow;
+  final bool enabled;
   final VoidCallback onTap;
-  final bool       large;
-  final bool       compact;
-  final bool       secondary;
+  final bool large;
+  final bool compact;
+  final bool secondary;
 
   @override
   State<_ActionButton> createState() => _ActionButtonState();
@@ -749,54 +968,42 @@ class _ActionButtonState extends State<_ActionButton>
                   children: [
                     Icon(widget.icon, size: 20, color: widget.gradient.last),
                     const SizedBox(width: 10),
-                    Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        Text(widget.label,
-                          style: TextStyle(
-                            color: widget.gradient.last,
-                            fontSize: 14, fontWeight: FontWeight.w700)),
-                        Text(widget.subtitle,
-                          style: TextStyle(
-                            color: widget.gradient.first.withAlpha(180),
-                            fontSize: 11)),
-                      ],
-                    ),
+                    Text(widget.label,
+                      style: TextStyle(
+                        color: widget.gradient.last,
+                        fontSize: widget.compact ? 13 : 15,
+                        fontWeight: FontWeight.w800,
+                      )),
                   ],
                 ),
               )
             : Container(
                 width: double.infinity,
-                padding: EdgeInsets.symmetric(
-                  horizontal: 20, vertical: verticalPad),
+                padding: EdgeInsets.symmetric(vertical: verticalPad, horizontal: 20),
                 decoration: BoxDecoration(
                   gradient: LinearGradient(
-                    colors: widget.enabled
-                        ? widget.gradient
-                        : [Colors.grey.shade300, Colors.grey.shade400],
+                    colors: widget.gradient,
                     begin: Alignment.topLeft,
                     end: Alignment.bottomRight,
                   ),
                   borderRadius: BorderRadius.circular(14),
-                  boxShadow: widget.enabled
-                      ? [BoxShadow(
-                          color: widget.glow.withAlpha(70),
-                          blurRadius: 16, offset: const Offset(0, 6))]
-                      : [],
+                  boxShadow: [
+                    BoxShadow(
+                      color: widget.glow.withAlpha(90),
+                      blurRadius: 16,
+                      offset: const Offset(0, 4),
+                    ),
+                  ],
                 ),
                 child: Row(
                   children: [
                     Container(
-                      width: widget.compact ? 32 : (widget.large ? 40 : 34),
-                      height: widget.compact ? 32 : (widget.large ? 40 : 34),
+                      width: 44, height: 44,
                       decoration: BoxDecoration(
-                        color: Colors.white.withAlpha(30),
-                        borderRadius: BorderRadius.circular(10),
+                        color: Colors.white.withAlpha(40),
+                        borderRadius: BorderRadius.circular(12),
                       ),
-                      child: Icon(widget.icon,
-                        color: Colors.white,
-                        size: widget.compact ? 18 : (widget.large ? 22 : 18)),
+                      child: Icon(widget.icon, color: Colors.white, size: 24),
                     ),
                     const SizedBox(width: 14),
                     Column(
@@ -835,9 +1042,9 @@ class _StatsRow extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final total    = observations.length;
+    final total = observations.length;
     final anomalies = observations.fold<int>(0, (s, o) => s + o.detections.length);
-    final synced   = observations.where((o) => o.syncStatus == SyncStatus.synced).length;
+    final synced = observations.where((o) => o.syncStatus == SyncStatus.synced).length;
 
     return Container(
       padding: const EdgeInsets.all(16),
@@ -883,10 +1090,10 @@ class _StatItem extends StatelessWidget {
     this.color = AppColors.tealGlow,
   });
 
-  final String   value;
-  final String   label;
+  final String value;
+  final String label;
   final IconData icon;
-  final Color    color;
+  final Color color;
 
   @override
   Widget build(BuildContext context) => Column(
@@ -987,7 +1194,7 @@ class _EmptyState extends StatelessWidget {
           style: TextStyle(
             fontWeight: FontWeight.w800, fontSize: 15)),
         const SizedBox(height: 6),
-        Text('Use Live Stream or Quick Scan above\nto start detecting road damage.',
+        const Text('Take a photo or record a video above\nto start detecting road defects.',
           textAlign: TextAlign.center,
           style: TextStyle(
             color: Colors.black45, fontSize: 13, height: 1.4)),
@@ -1005,8 +1212,8 @@ class _ObservationCard extends StatelessWidget {
     required this.onTap,
   });
 
-  final Observation  observation;
-  final int          index;
+  final Observation observation;
+  final int index;
   final VoidCallback onTap;
 
   @override
@@ -1045,8 +1252,7 @@ class _ObservationCard extends StatelessWidget {
                 // Priority strip
                 Container(
                   width: 4,
-                  height: 80,
-                  margin: const EdgeInsets.only(left: 0),
+                  height: 84,
                   decoration: BoxDecoration(
                     color: priorityColor,
                     borderRadius: const BorderRadius.horizontal(
@@ -1057,7 +1263,7 @@ class _ObservationCard extends StatelessWidget {
                 ClipRRect(
                   borderRadius: BorderRadius.zero,
                   child: SizedBox(
-                    width: 80, height: 80,
+                    width: 84, height: 84,
                     child: kIsWeb
                         ? Image.network(o.imagePath, fit: BoxFit.cover,
                             errorBuilder: (_, __, ___) => _thumb())
@@ -1068,15 +1274,13 @@ class _ObservationCard extends StatelessWidget {
                 // Info
                 Expanded(
                   child: Padding(
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 12, vertical: 10),
+                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         Row(children: [
                           Container(
-                            padding: const EdgeInsets.symmetric(
-                              horizontal: 7, vertical: 2),
+                            padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2),
                             decoration: BoxDecoration(
                               color: priorityColor.withAlpha(20),
                               borderRadius: BorderRadius.circular(6),
@@ -1092,26 +1296,29 @@ class _ObservationCard extends StatelessWidget {
                           const Spacer(),
                           Text(
                             DateFormat('HH:mm').format(o.createdAt.toLocal()),
-                            style: const TextStyle(
-                              color: Colors.black38, fontSize: 10)),
+                            style: const TextStyle(color: Colors.black38, fontSize: 10)),
                         ]),
                         const SizedBox(height: 5),
                         Text(
-                          '${o.detections.length} anomaly${o.detections.length == 1 ? '' : 's'} detected',
-                          style: const TextStyle(
-                            fontWeight: FontWeight.w700, fontSize: 13)),
+                          '${o.detections.length} anomal${o.detections.length == 1 ? 'y' : 'ies'} detected',
+                          style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 13)),
                         const SizedBox(height: 3),
-                        Text(
-                          '${o.actor}  ·  ${o.latitude.toStringAsFixed(4)}, ${o.longitude.toStringAsFixed(4)}',
-                          style: const TextStyle(
-                            fontSize: 11, color: Colors.black38),
-                          overflow: TextOverflow.ellipsis,
-                        ),
+                        Row(children: [
+                          const Icon(Icons.business_outlined, size: 11, color: Colors.black45),
+                          const SizedBox(width: 4),
+                          Expanded(
+                            child: Text(
+                              '${o.actor} · ${o.latitude.toStringAsFixed(4)}, ${o.longitude.toStringAsFixed(4)}',
+                              style: const TextStyle(fontSize: 11, color: Colors.black45),
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                          ),
+                        ]),
                       ],
                     ),
                   ),
                 ),
-                // Sync icon
+                // Sync status indicator
                 Padding(
                   padding: const EdgeInsets.only(right: 12),
                   child: _SyncDot(status: o.syncStatus),
@@ -1126,8 +1333,7 @@ class _ObservationCard extends StatelessWidget {
 
   Widget _thumb() => Container(
     color: AppColors.offWhite,
-    child: const Icon(Icons.image_not_supported_outlined,
-      color: Colors.black26),
+    child: const Icon(Icons.image_not_supported_outlined, color: Colors.black26),
   );
 }
 
@@ -1138,11 +1344,11 @@ class _SyncDot extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final (icon, color) = switch (status) {
-      SyncStatus.synced    => (Icons.cloud_done_rounded, AppColors.syncDone),
+      SyncStatus.synced => (Icons.cloud_done_rounded, AppColors.syncDone),
       SyncStatus.uploading => (Icons.cloud_sync_rounded, AppColors.tealLight),
-      SyncStatus.failed    => (Icons.cloud_off_rounded, AppColors.syncFailed),
+      SyncStatus.failed => (Icons.cloud_off_rounded, AppColors.syncFailed),
       SyncStatus.needsReview => (Icons.error_outline, AppColors.syncFailed),
-      _                    => (Icons.cloud_upload_outlined, AppColors.syncPending),
+      _ => (Icons.cloud_upload_outlined, AppColors.syncPending),
     };
     return Icon(icon, color: color, size: 18);
   }
@@ -1159,9 +1365,9 @@ class _SourcePicker extends StatelessWidget {
     required this.galleryIcon,
   });
 
-  final String   title;
-  final String   cameraLabel;
-  final String   galleryLabel;
+  final String title;
+  final String cameraLabel;
+  final String galleryLabel;
   final IconData cameraIcon;
   final IconData galleryIcon;
 
@@ -1176,7 +1382,6 @@ class _SourcePicker extends StatelessWidget {
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
-          // drag handle
           Container(
             width: 40, height: 4,
             margin: const EdgeInsets.only(bottom: 20),
@@ -1223,9 +1428,9 @@ class _SourceOption extends StatelessWidget {
     required this.onTap,
   });
 
-  final IconData   icon;
-  final String     label;
-  final Color      color;
+  final IconData icon;
+  final String label;
+  final Color color;
   final VoidCallback onTap;
 
   @override

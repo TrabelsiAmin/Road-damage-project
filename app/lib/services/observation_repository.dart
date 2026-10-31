@@ -15,6 +15,7 @@ abstract class ObservationRepository {
   Future<void> save(Observation observation);
   Future<List<Observation>> list({SyncStatus? status});
   Future<void> updateSyncStatus(String id, SyncStatus status, {String? error});
+  Future<void> updateMediaSyncStatus(String id, MediaSyncStatus status);
   Future<void> updateAnnotatedPath(String id, String path);
   Future<Observation?> findById(String id);
   Future<void> deleteById(String id);
@@ -49,6 +50,13 @@ class MemoryObservationRepository implements ObservationRepository {
     if (status == SyncStatus.failed) {
       obs.uploadAttempts++;
     }
+  }
+
+  @override
+  Future<void> updateMediaSyncStatus(String id, MediaSyncStatus status) async {
+    final obs = _items[id];
+    if (obs == null) throw StateError('Observation not found: $id');
+    obs.mediaSyncStatus = status;
   }
 
   @override
@@ -90,6 +98,10 @@ class SqliteObservationRepository implements ObservationRepository {
       _dao.updateSyncStatus(id, status, error: error);
 
   @override
+  Future<void> updateMediaSyncStatus(String id, MediaSyncStatus status) =>
+      _dao.updateMediaSyncStatus(id, status);
+
+  @override
   Future<void> updateAnnotatedPath(String id, String path) =>
       _dao.updateAnnotatedPath(id, path);
 
@@ -112,6 +124,7 @@ abstract class ObservationSyncClient {
     Observation observation, {
     required String idempotencyKey,
     SyncCancelToken? cancelToken,
+    ObservationRepository? repository,
   });
 }
 
@@ -201,8 +214,12 @@ class SyncCoordinator {
         await _repo.updateSyncStatus(obs.id, SyncStatus.uploading);
         try {
           cancelToken?.throwIfCancelled();
-          await _client.upload(obs,
-              idempotencyKey: obs.id, cancelToken: cancelToken);
+          await _client.upload(
+            obs,
+            idempotencyKey: obs.id,
+            cancelToken: cancelToken,
+            repository: _repo,
+          );
           cancelToken?.throwIfCancelled();
 
           // Only mark synced if all parts (metadata, image, detections, receipts) succeeded

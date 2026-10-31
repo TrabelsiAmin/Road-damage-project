@@ -2,7 +2,7 @@ import 'dart:io';
 import 'package:flutter/foundation.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:uuid/uuid.dart';
-import '../../core/constants.dart';
+import '../../core/model_config.dart';
 import '../../core/supabase_config.dart';
 import '../../inference/preprocessing.dart';
 import '../../models/observation.dart';
@@ -15,7 +15,7 @@ class ApiClient implements ObservationSyncClient {
 
   final _uuid = const Uuid();
 
-  // Hardcode organizations similar to python backend for demo purposes
+  // Canonical fallback organization IDs
   static const _organizationIds = {
     "Municipality": "11111111-1111-4111-8111-111111111111",
     "Ministry of Equipment": "22222222-2222-4222-8222-222222222222",
@@ -33,7 +33,7 @@ class ApiClient implements ObservationSyncClient {
 
   static Future<Map<String, dynamic>> buildObservationPayload(Observation obs) async {
     final capturedAt = obs.createdAt.toUtc().toIso8601String();
-    final organizationId = _organizationId(obs.actor);
+    final organizationId = obs.organizationId ?? _organizationId(obs.actor);
 
     var imageWidth = obs.imageWidth;
     var imageHeight = obs.imageHeight;
@@ -54,7 +54,7 @@ class ApiClient implements ObservationSyncClient {
       "parent_observation_id": null,
       "created_by": null,
       "organization_id": organizationId,
-      "device_id": null, // Task A: do not send to public-readable tables
+      "device_id": null, // Do not send to public-readable tables
       "source": "camera",
       "captured_at": capturedAt,
       "image_width": imageWidth,
@@ -64,7 +64,7 @@ class ApiClient implements ObservationSyncClient {
       "anomaly_type": _anomalyTypeFor(obs),
       "model_bundle_version": obs.modelBundleVersion.isNotEmpty
           ? obs.modelBundleVersion
-          : TariqMapConstants.modelBundleVersion,
+          : ModelConfig.active.version,
       "created_at": capturedAt,
       "is_demo": false,
       "status": "unconfirmed",
@@ -105,6 +105,7 @@ class ApiClient implements ObservationSyncClient {
     Observation obs, {
     required String idempotencyKey,
     SyncCancelToken? cancelToken,
+    ObservationRepository? repository,
   }) async {
     final client = Supabase.instance.client;
     final capturedAt = obs.createdAt.toUtc().toIso8601String();
@@ -112,60 +113,31 @@ class ApiClient implements ObservationSyncClient {
     final imageFile = File(imagePath);
 
     final observationPayload = await buildObservationPayload(obs);
-    debugPrint('[Pipeline:SyncPayload] Preparing sync payload for ${obs.id} '
-        'with ${obs.detections.length} detections, size: ${observationPayload["image_width"]}x${observationPayload["image_height"]}');
+    final locationPayload = {
+      "observation_id": obs.id,
+      "latitude": obs.latitude,
+      "longitude": obs.longitude,
+      "accuracy_meters": obs.accuracyMeters,
+      "captured_at": capturedAt,
+    };
 
-    cancelToken?.throwIfCancelled();
+    final agentRunsPayload = <Map<String, dynamic>>[];
+    final detectionsPayload = <Map<String, dynamic>>[];
 
-    // 1. Observations Table (plain insert, no device_id to public tables, 409 treated as success)
-    await _safeInsert(
-      SupabaseCfg.tableObservations,
-      observationPayload,
-      cancelToken: cancelToken,
-    );
-
-    cancelToken?.throwIfCancelled();
-
-    // 2. Locations Table (plain insert, 409 treated as success)
-    await _safeInsert(
-      SupabaseCfg.tableLocations,
-      {
-        "observation_id": obs.id,
-        "latitude": obs.latitude,
-        "longitude": obs.longitude,
-        "accuracy_meters": obs.accuracyMeters,
-        "captured_at": capturedAt,
-      },
-      cancelToken: cancelToken,
-    );
-
-    // 3. Agent runs and detections (decoupled child inserts with separate error logging)
     for (final result in obs.agentResults) {
-      cancelToken?.throwIfCancelled();
       final agentRunId = _uuid.v4();
+      agentRunsPayload.add({
+        "id": agentRunId,
+        "observation_id": obs.id,
+        "agent": result.agent,
+        "error": result.error,
+        "is_mock": result.isMock,
+        "latency_ms": result.latencyMs,
+        "model_bundle_version": obs.modelBundleVersion,
+      });
 
-      try {
-        await _safeInsert(
-          SupabaseCfg.tableAgentRuns,
-          {
-            "id": agentRunId,
-            "observation_id": obs.id,
-            "agent": result.agent,
-            "error": result.error,
-            "is_mock": result.isMock,
-            "latency_ms": result.latencyMs,
-            "model_bundle_version": obs.modelBundleVersion,
-          },
-          cancelToken: cancelToken,
-        );
-      } catch (e) {
-        debugPrint('[ApiClient] agent_runs insert failed for ${obs.id}: $e');
-        rethrow;
-      }
-
-      if (result.detections.isNotEmpty) {
-        cancelToken?.throwIfCancelled();
-        final detectionsData = result.detections.map((d) => {
+      for (final d in result.detections) {
+        detectionsPayload.add({
           "id": _uuid.v4(),
           "observation_id": obs.id,
           "agent_run_id": agentRunId,
@@ -180,100 +152,197 @@ class ApiClient implements ObservationSyncClient {
           "is_mock": result.isMock,
           "model_bundle_version": d.modelBundleVersion,
           "detected_at": (d.timestamp ?? obs.createdAt).toUtc().toIso8601String(),
-        }).toList();
+        });
+      }
+    }
 
+    cancelToken?.throwIfCancelled();
+
+    // ── 1. Atomic Relational Ingestion via RPC (with direct insert fallback) ──
+    bool rpcSucceeded = false;
+    try {
+      final rpcRes = await client.rpc('submit_observation', params: {
+        'p_observation': observationPayload,
+        'p_location': locationPayload,
+        'p_agent_runs': agentRunsPayload,
+        'p_detections': detectionsPayload,
+        'p_idempotency_key': idempotencyKey,
+      });
+      debugPrint('[ApiClient] Atomic submit_observation RPC succeeded: $rpcRes');
+      rpcSucceeded = true;
+    } on PostgrestException catch (e) {
+      // If function is not found (PGRST202 or 404), fall back to direct inserts
+      if (e.code == 'PGRST202' ||
+          e.message.toLowerCase().contains('function') ||
+          e.message.toLowerCase().contains('not found')) {
+        debugPrint('[ApiClient] RPC submit_observation not found, falling back to direct table inserts: ${e.message}');
+      } else if (_isConflict(e)) {
+        debugPrint('[ApiClient] RPC conflict/already synced treated as success');
+        rpcSucceeded = true;
+      } else {
+        debugPrint('[ApiClient] RPC error: ${e.code} ${e.message}');
+        rethrow;
+      }
+    } catch (e) {
+      debugPrint('[ApiClient] submit_observation RPC failed with generic error: $e');
+    }
+
+    // Direct insert fallback if RPC was unavailable
+    if (!rpcSucceeded) {
+      await _executeDirectInserts(
+        client: client,
+        obs: obs,
+        observationPayload: observationPayload,
+        locationPayload: locationPayload,
+        agentRunsPayload: agentRunsPayload,
+        detectionsPayload: detectionsPayload,
+        idempotencyKey: idempotencyKey,
+        cancelToken: cancelToken,
+      );
+    }
+
+    cancelToken?.throwIfCancelled();
+
+    // ── 2. Media Upload (Original Image + Public Thumbnail) ───────────────────
+    if (await imageFile.exists()) {
+      if (obs.mediaSyncStatus != MediaSyncStatus.uploaded) {
+        await repository?.updateMediaSyncStatus(obs.id, MediaSyncStatus.uploading);
         try {
+          cancelToken?.throwIfCancelled();
+          final compressed = await ImageCompressor.compressToWebP(imageFile);
+          cancelToken?.throwIfCancelled();
+
+          // Stable storage path based on observation UUID to prevent random orphan files on retry
+          final stableMediaUuid = _uuid.v5(Namespace.url.value, '${obs.id}:original');
+          final storagePath = '${obs.id}/$stableMediaUuid.${compressed.extension}';
+
+          try {
+            await client.storage
+                .from(SupabaseCfg.imagesBucket)
+                .uploadBinary(
+                  storagePath,
+                  compressed.bytes,
+                  fileOptions: FileOptions(
+                    contentType: compressed.mimeType,
+                    upsert: false,
+                  ),
+                );
+          } on StorageException catch (se) {
+            if (se.statusCode == '409' ||
+                se.message.toLowerCase().contains('already exists') ||
+                se.message.toLowerCase().contains('duplicate')) {
+              debugPrint('[ApiClient] Image already in storage (HTTP 409 treated as success): $storagePath');
+            } else {
+              rethrow;
+            }
+          }
+
+          cancelToken?.throwIfCancelled();
+
+          final publicUrl = client.storage
+              .from(SupabaseCfg.imagesBucket)
+              .getPublicUrl(storagePath);
+
+          // Record in media_files
           await _safeInsert(
-            SupabaseCfg.tableDetections,
-            detectionsData,
+            SupabaseCfg.tableMediaFiles,
+            {
+              "id": stableMediaUuid,
+              "observation_id": obs.id,
+              "bucket": SupabaseCfg.imagesBucket,
+              "storage_path": storagePath,
+              "public_url": publicUrl,
+              "media_type": "image",
+              "mime_type": compressed.mimeType,
+              "file_size_bytes": compressed.compressedSizeBytes,
+              "uploaded_at": DateTime.now().toUtc().toIso8601String(),
+              "is_demo": false,
+            },
             cancelToken: cancelToken,
           );
+
+          // 2b. Public Blurred Thumbnail Step (Option A: Crop-and-Blur Path)
+          cancelToken?.throwIfCancelled();
+          final shouldUpload = await ThumbnailService.shouldUploadPublicThumbnail(
+            detections: obs.detections,
+          );
+          if (shouldUpload) {
+            final originalBytes = await imageFile.readAsBytes();
+            final thumbBytes = await ThumbnailService.createDetectionCropThumbnail(
+              originalBytes: originalBytes,
+              detections: obs.detections,
+            );
+            if (thumbBytes != null && thumbBytes.lengthInBytes <= ThumbnailService.maxFileSizeBytes) {
+              await uploadPublicThumbnail(
+                observationId: obs.id,
+                thumbnailBytes: thumbBytes,
+                cancelToken: cancelToken,
+              );
+            }
+          }
+
+          await repository?.updateMediaSyncStatus(obs.id, MediaSyncStatus.uploaded);
         } catch (e) {
-          debugPrint('[ApiClient] detections insert failed for ${obs.id}: $e');
+          debugPrint('[ApiClient] Image upload or media_files record error: $e');
+          await repository?.updateMediaSyncStatus(obs.id, MediaSyncStatus.failed);
           rethrow;
         }
       }
     }
 
     cancelToken?.throwIfCancelled();
+  }
 
-    // 4. Image Upload to Storage (unique path, plain insert with upsert: false)
-    if (await imageFile.exists()) {
+  Future<void> _executeDirectInserts({
+    required SupabaseClient client,
+    required Observation obs,
+    required Map<String, dynamic> observationPayload,
+    required Map<String, dynamic> locationPayload,
+    required List<Map<String, dynamic>> agentRunsPayload,
+    required List<Map<String, dynamic>> detectionsPayload,
+    required String idempotencyKey,
+    SyncCancelToken? cancelToken,
+  }) async {
+    cancelToken?.throwIfCancelled();
+
+    // 1. Observations Table
+    await _safeInsert(
+      SupabaseCfg.tableObservations,
+      observationPayload,
+      cancelToken: cancelToken,
+    );
+
+    cancelToken?.throwIfCancelled();
+
+    // 2. Locations Table
+    await _safeInsert(
+      SupabaseCfg.tableLocations,
+      locationPayload,
+      cancelToken: cancelToken,
+    );
+
+    // 3. Agent runs and detections
+    for (final run in agentRunsPayload) {
       cancelToken?.throwIfCancelled();
-      final compressed = await ImageCompressor.compressToWebP(imageFile);
-      cancelToken?.throwIfCancelled();
-
-      // Task D: Unique object path plus plain upload
-      final storagePath = '${obs.id}/${_uuid.v4()}.${compressed.extension}';
-
-      try {
-        await client.storage
-            .from(SupabaseCfg.imagesBucket)
-            .uploadBinary(
-              storagePath,
-              compressed.bytes,
-              fileOptions: FileOptions(
-                contentType: compressed.mimeType,
-                upsert: false,
-              ),
-            );
-
-        cancelToken?.throwIfCancelled();
-
-        final publicUrl = client.storage
-            .from(SupabaseCfg.imagesBucket)
-            .getPublicUrl(storagePath);
-
-        // Record in media_files
-        await _safeInsert(
-          SupabaseCfg.tableMediaFiles,
-          {
-            "id": _uuid.v4(),
-            "observation_id": obs.id,
-            "bucket": SupabaseCfg.imagesBucket,
-            "storage_path": storagePath,
-            "public_url": publicUrl,
-            "media_type": "image",
-            "mime_type": compressed.mimeType,
-            "file_size_bytes": compressed.compressedSizeBytes,
-            "uploaded_at": DateTime.now().toUtc().toIso8601String(),
-            "is_demo": false,
-          },
-          cancelToken: cancelToken,
-        );
-      } catch (e) {
-        debugPrint('[ApiClient] Image upload or media_files record error: $e');
-        rethrow;
-      }
-
-      // 4b. Public Blurred Thumbnail Step (Option A: Crop-and-Blur Path)
-      // Only executes after the existing full-resolution sync step succeeds.
-      // Skips when there are no detections or when toggle is OFF.
-      cancelToken?.throwIfCancelled();
-      final shouldUpload = await ThumbnailService.shouldUploadPublicThumbnail(
-        detections: obs.detections,
+      await _safeInsert(
+        SupabaseCfg.tableAgentRuns,
+        run,
+        cancelToken: cancelToken,
       );
-      if (shouldUpload) {
-        final originalBytes = await imageFile.readAsBytes();
-        final thumbBytes = await ThumbnailService.createDetectionCropThumbnail(
-          originalBytes: originalBytes,
-          detections: obs.detections,
-        );
-        if (thumbBytes != null && thumbBytes.lengthInBytes <= ThumbnailService.maxFileSizeBytes) {
-          // Failure or cancellation here bubbles up to SyncCoordinator
-          // ensuring a failed/cancelled upload never leaves observation marked synced.
-          await uploadPublicThumbnail(
-            observationId: obs.id,
-            thumbnailBytes: thumbBytes,
-            cancelToken: cancelToken,
-          );
-        }
-      }
+    }
+
+    if (detectionsPayload.isNotEmpty) {
+      cancelToken?.throwIfCancelled();
+      await _safeInsert(
+        SupabaseCfg.tableDetections,
+        detectionsPayload,
+        cancelToken: cancelToken,
+      );
     }
 
     cancelToken?.throwIfCancelled();
 
-    // 5. Sync receipts table (plain insert, 409 treated as success)
+    // 4. Sync receipts table
     await _safeInsert(
       SupabaseCfg.tableSyncReceipts,
       {
@@ -286,19 +355,6 @@ class ApiClient implements ObservationSyncClient {
   }
 
   /// Uploads a public cropped & blurred thumbnail to bucket `public-photos`.
-  /// Bucket path policy requires:
-  ///   bucket_id = 'public-photos' and name ~ '^[0-9a-f-]{36}/[0-9a-f-]{36}\.(webp|jpg)$'
-  ///
-  /// Uses a deterministic object name `<observation_id>/<uuid_v5>.webp`, derived via
-  /// UUID v5 from the observation ID using [Namespace.url.value].
-  /// This ensures retries never create orphan files and avoids random UUID accumulation.
-  ///
-  /// Order:
-  ///   1. Plain insert (upsert: false) to storage at `<observation_id>/<uuid_v5>.webp`.
-  ///      Logs HTTP status; treats 409 conflict as success.
-  ///   2. Check cancellation (on cancel, just stop; orphan file with no media_files row is harmless).
-  ///   3. Plain insert into `media_files` with `bucket='public-photos', media_type='thumbnail', is_demo=false`.
-  ///      Logs HTTP status; treats 409 conflict as success; does NOT swallow other errors.
   Future<String?> uploadPublicThumbnail({
     required String observationId,
     required Uint8List thumbnailBytes,
@@ -308,11 +364,9 @@ class ApiClient implements ObservationSyncClient {
     cancelToken?.throwIfCancelled();
 
     final client = Supabase.instance.client;
-    // Stable UUID v5 derived deterministically from observationId
     final fileUuid = _uuid.v5(Namespace.url.value, observationId);
     final storagePath = '$observationId/$fileUuid.webp';
 
-    // 1. Plain upload to public-photos storage (upsert: false)
     try {
       await client.storage
           .from(SupabaseCfg.publicPhotosBucket)
@@ -339,15 +393,12 @@ class ApiClient implements ObservationSyncClient {
       rethrow;
     }
 
-    // Cancellation check immediately after storage upload:
-    // Phone has no delete permissions; on cancel, just stop (orphan storage object is harmless without media_files row)
     cancelToken?.throwIfCancelled();
 
     final publicUrl = client.storage
         .from(SupabaseCfg.publicPhotosBucket)
         .getPublicUrl(storagePath);
 
-    // 2. Insert media_files row (plain insert, 409 treated as success)
     final mediaId = _uuid.v5(Namespace.url.value, '$observationId:thumbnail');
     try {
       await _safeInsert(

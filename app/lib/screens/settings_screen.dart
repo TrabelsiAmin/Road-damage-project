@@ -3,6 +3,9 @@ import 'package:flutter/services.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../core/app_colors.dart';
 import '../core/constants.dart';
+import '../core/model_config.dart';
+import '../models/organization.dart';
+import '../services/organization_service.dart';
 
 class SettingsScreen extends StatefulWidget {
   const SettingsScreen({super.key});
@@ -12,13 +15,17 @@ class SettingsScreen extends StatefulWidget {
 }
 
 class _SettingsScreenState extends State<SettingsScreen> {
+  final _orgService = OrganizationService();
+
   double _confidenceThreshold = TariqMapConstants.defaultConfidenceThreshold;
-  int    _liveFps             = TariqMapConstants.defaultLiveFps;
   bool   _wifiOnly            = true;
   int    _retentionDays       = 90;
   bool   _shareBlurredPublicPhoto = true;
   bool   _loading             = true;
   bool   _saving              = false;
+
+  List<Organization> _organizations = [];
+  Organization? _selectedOrg;
 
   @override
   void initState() {
@@ -28,14 +35,18 @@ class _SettingsScreenState extends State<SettingsScreen> {
 
   Future<void> _load() async {
     final prefs = await SharedPreferences.getInstance();
+    final orgs = await _orgService.fetchOrganizations();
+    final currentOrg = await _orgService.getSelectedOrganization();
+
     if (mounted) {
       setState(() {
         _confidenceThreshold = prefs.getDouble('confidence_threshold')
             ?? TariqMapConstants.defaultConfidenceThreshold;
-        _liveFps       = prefs.getInt('live_fps')       ?? TariqMapConstants.defaultLiveFps;
         _wifiOnly      = prefs.getBool('wifi_only')     ?? true;
         _retentionDays = prefs.getInt('retention_days') ?? 90;
         _shareBlurredPublicPhoto = prefs.getBool('share_blurred_public_photo') ?? true;
+        _organizations = orgs;
+        _selectedOrg   = currentOrg ?? (orgs.isNotEmpty ? orgs.first : null);
         _loading       = false;
       });
     }
@@ -45,10 +56,14 @@ class _SettingsScreenState extends State<SettingsScreen> {
     setState(() => _saving = true);
     final prefs = await SharedPreferences.getInstance();
     await prefs.setDouble('confidence_threshold', _confidenceThreshold);
-    await prefs.setInt('live_fps', _liveFps);
     await prefs.setBool('wifi_only', _wifiOnly);
     await prefs.setInt('retention_days', _retentionDays);
     await prefs.setBool('share_blurred_public_photo', _shareBlurredPublicPhoto);
+
+    if (_selectedOrg != null) {
+      await _orgService.setSelectedOrganization(_selectedOrg!);
+    }
+
     if (mounted) {
       setState(() => _saving = false);
       ScaffoldMessenger.of(context).showSnackBar(
@@ -107,6 +122,69 @@ class _SettingsScreenState extends State<SettingsScreen> {
               padding: const EdgeInsets.fromLTRB(16, 20, 16, 32),
               children: [
 
+                // ── Operational Authority ────────────────────────────────────
+                _SectionCard(
+                  icon: Icons.account_balance_rounded,
+                  title: 'Operational Authority',
+                  children: [
+                    Padding(
+                      padding: const EdgeInsets.fromLTRB(16, 12, 16, 12),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          const Text(
+                            'Assigned Authority',
+                            style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600),
+                          ),
+                          const SizedBox(height: 4),
+                          const Text(
+                            'Newly captured observations will be registered under this authority.',
+                            style: TextStyle(color: Colors.black38, fontSize: 11),
+                          ),
+                          const SizedBox(height: 10),
+                          Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 12),
+                            decoration: BoxDecoration(
+                              color: AppColors.offWhite,
+                              borderRadius: BorderRadius.circular(10),
+                              border: Border.all(color: AppColors.borderLight),
+                            ),
+                            child: DropdownButtonHideUnderline(
+                              child: DropdownButton<Organization>(
+                                isExpanded: true,
+                                value: _selectedOrg,
+                                items: _organizations.map((org) => DropdownMenuItem(
+                                  value: org,
+                                  child: Row(
+                                    children: [
+                                      Text(
+                                        org.name,
+                                        style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 14),
+                                      ),
+                                      if (org.nameFr != null && org.nameFr != org.name) ...[
+                                        const SizedBox(width: 8),
+                                        Text(
+                                          '(${org.nameFr})',
+                                          style: const TextStyle(color: Colors.black45, fontSize: 12),
+                                        ),
+                                      ],
+                                    ],
+                                  ),
+                                )).toList(),
+                                onChanged: (org) {
+                                  if (org != null) setState(() => _selectedOrg = org);
+                                },
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
+
+                const SizedBox(height: 16),
+
                 // ── Detection ────────────────────────────────────────────────
                 _SectionCard(
                   icon: Icons.psychology_rounded,
@@ -121,17 +199,6 @@ class _SettingsScreenState extends State<SettingsScreen> {
                       max: 0.80,
                       divisions: 14,
                       onChanged: (v) => setState(() => _confidenceThreshold = v),
-                    ),
-                    const _SectionDivider(),
-                    _SliderRow(
-                      label: 'Live inference rate',
-                      valueLabel: '$_liveFps fps',
-                      description: '3–8 fps recommended. Higher = more battery drain.',
-                      value: _liveFps.toDouble(),
-                      min: 1,
-                      max: 15,
-                      divisions: 14,
-                      onChanged: (v) => setState(() => _liveFps = v.round()),
                     ),
                   ],
                 ),
@@ -177,13 +244,19 @@ class _SettingsScreenState extends State<SettingsScreen> {
                   icon: Icons.info_outline_rounded,
                   title: 'About',
                   children: [
-                    _InfoRow(label: 'Model bundle',
-                      value: TariqMapConstants.modelBundleVersion),
+                    _InfoRow(label: 'Active model',
+                      value: ModelConfig.active.displayName),
+                    const _SectionDivider(),
+                    _InfoRow(label: 'Model version',
+                      value: ModelConfig.active.version),
                     const _SectionDivider(),
                     _InfoRow(label: 'Detection classes',
-                      value: TariqMapConstants.allCodes.join(' · ')),
+                      value: ModelConfig.active.classes.join(' · ')),
                     const _SectionDivider(),
-                    _InfoRow(label: 'Rutting limitation',
+                    const _InfoRow(label: 'Inference pipeline',
+                      value: '100% On-device TFLite'),
+                    const _SectionDivider(),
+                    const _InfoRow(label: 'Rutting limitation',
                       value: 'Visual only — no depth measurement'),
                   ],
                 ),
@@ -352,7 +425,7 @@ class _ToggleRow extends StatelessWidget {
       ),
       Switch.adaptive(
         value: value,
-        activeColor: AppColors.teal,
+        activeTrackColor: AppColors.teal,
         onChanged: onChanged,
       ),
     ]),

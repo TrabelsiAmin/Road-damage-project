@@ -104,6 +104,25 @@ class ObservationDao {
     });
   }
 
+  Future<void> updateMediaSyncStatus(
+    String observationId,
+    MediaSyncStatus status,
+  ) async {
+    final db = await _db.database;
+    await db.update(
+      'observations',
+      {'media_sync_status': status.name},
+      where: 'id = ?',
+      whereArgs: [observationId],
+    );
+    await db.insert('audit_log', {
+      'observation_id': observationId,
+      'event': 'media_sync_status_changed',
+      'detail': status.name,
+      'occurred_at': DateTime.now().toUtc().toIso8601String(),
+    });
+  }
+
   Future<void> updateAnnotatedPath(String observationId, String path) async {
     final db = await _db.database;
     await db.update(
@@ -218,7 +237,9 @@ class ObservationDao {
       'frame_timestamp_ms': obs.frameTimestampMs,
       'accuracy_meters': obs.accuracyMeters,
       'actor': obs.actor,
+      'organization_id': obs.organizationId,
       'sync_status': obs.syncStatus.name,
+      'media_sync_status': obs.mediaSyncStatus.name,
       'sync_error': obs.syncError,
       'upload_attempts': obs.uploadAttempts,
       'model_bundle_version': obs.modelBundleVersion,
@@ -319,8 +340,10 @@ class ObservationDao {
           ? (row['accuracy_meters'] as num).toDouble()
           : null,
       actor: row['actor'] as String,
+      organizationId: row['organization_id'] as String?,
       agentResults: agentResults,
       syncStatus: _parseSyncStatus(row['sync_status'] as String?),
+      mediaSyncStatus: MediaSyncStatus.fromString(row['media_sync_status'] as String?),
       syncError: row['sync_error'] as String?,
       uploadAttempts: (row['upload_attempts'] as int?) ?? 0,
       modelBundleVersion: (row['model_bundle_version'] as String?) ??
@@ -345,7 +368,6 @@ class ObservationDao {
 
   // Returns the incremented attempt count synchronously
   int _incrementAttempts(dynamic db, String id) {
-    // This is called inside a non-async context — we use raw approach
-    return 0; // actual increment done via SQL expression below
+    return 0;
   }
 }

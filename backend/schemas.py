@@ -41,7 +41,9 @@ class ObservationUpload(BaseModel):
     longitude:          float = Field(ge=-180.0, le=180.0)
     accuracyMeters:     float | None = None
     actor:              str
+    organizationId:     str | None = None
     syncStatus:         str = "pending"
+    mediaSyncStatus:    str = "pending"
     modelBundleVersion: str | None = None
     deviceId:           str | None = None
     imageWidth:         int | None = None

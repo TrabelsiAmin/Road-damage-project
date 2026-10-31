@@ -105,7 +105,7 @@ class SupabaseStore:
             return {"status": "already_received", "id": body.id}
 
         captured_at = self._timestamp(body.createdAt)
-        organization_id = self._organization_id(body.actor)
+        organization_id = body.organizationId or self._organization_id(body.actor)
         observation = {
             "id": body.id,
             "capture_id": body.captureId,

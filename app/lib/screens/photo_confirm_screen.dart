@@ -20,12 +20,14 @@ class PhotoConfirmScreen extends StatefulWidget {
     required this.detectionService,
     required this.repository,
     required this.actor,
+    this.organizationId,
   });
 
-  final File              imageFile;
-  final DetectionService  detectionService;
+  final File imageFile;
+  final DetectionService detectionService;
   final ObservationRepository repository;
-  final String            actor;
+  final String actor;
+  final String? organizationId;
 
   @override
   State<PhotoConfirmScreen> createState() => _PhotoConfirmScreenState();
@@ -33,7 +35,7 @@ class PhotoConfirmScreen extends StatefulWidget {
 
 class _PhotoConfirmScreenState extends State<PhotoConfirmScreen> {
   bool _analyzing = false;
-  final _uuid     = const Uuid();
+  final _uuid = const Uuid();
   final _location = LocationService();
 
   Future<void> _analyze() async {
@@ -54,17 +56,18 @@ class _PhotoConfirmScreenState extends State<PhotoConfirmScreen> {
 
       final results = await widget.detectionService.detectAll(widget.imageFile);
       final obs = Observation(
-        id:             _uuid.v4(),
-        captureId:      _uuid.v4(),
-        imagePath:      widget.imageFile.path,
-        createdAt:      DateTime.now().toUtc(),
-        latitude:       position?.latitude  ?? 0.0,
-        longitude:      position?.longitude ?? 0.0,
+        id: _uuid.v4(),
+        captureId: _uuid.v4(),
+        organizationId: widget.organizationId,
+        imagePath: widget.imageFile.path,
+        createdAt: DateTime.now().toUtc(),
+        latitude: position?.latitude ?? 0.0,
+        longitude: position?.longitude ?? 0.0,
         accuracyMeters: position?.accuracy,
-        actor:          widget.actor,
-        agentResults:   results,
-        imageWidth:     imageWidth,
-        imageHeight:    imageHeight,
+        actor: widget.actor,
+        agentResults: results,
+        imageWidth: imageWidth,
+        imageHeight: imageHeight,
         modelBundleVersion: TariqMapConstants.modelBundleVersion,
       );
 

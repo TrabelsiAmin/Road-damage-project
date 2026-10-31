@@ -25,11 +25,13 @@ class CameraDetectionScreen extends StatefulWidget {
     required this.detectionService,
     required this.repository,
     required this.actor,
+    this.organizationId,
   });
 
   final DetectionService detectionService;
   final ObservationRepository repository;
   final String actor;
+  final String? organizationId;
 
   @override
   State<CameraDetectionScreen> createState() => _CameraDetectionScreenState();
@@ -103,6 +105,7 @@ class _CameraDetectionScreenState extends State<CameraDetectionScreen>
       final observation = Observation(
         id: _uuid.v4(),
         captureId: _uuid.v4(),
+        organizationId: widget.organizationId,
         imagePath: photo.path,
         createdAt: DateTime.now().toUtc(),
         latitude: position?.latitude ?? 0,

@@ -24,6 +24,7 @@ class MockDetailedSyncClient implements ObservationSyncClient {
     Observation observation, {
     required String idempotencyKey,
     SyncCancelToken? cancelToken,
+    ObservationRepository? repository,
   }) async {
     uploadCount++;
     if (shouldFail) {

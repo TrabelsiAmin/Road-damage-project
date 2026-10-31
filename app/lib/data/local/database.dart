@@ -22,7 +22,7 @@ class AppDatabase {
   }
 
   static const _dbName    = 'tariqmap.db';
-  static const _dbVersion = 2;
+  static const _dbVersion = 3;
 
   // ── Schema ────────────────────────────────────────────────────────────────
 
@@ -40,7 +40,9 @@ class AppDatabase {
       frame_timestamp_ms  INTEGER,
       accuracy_meters     REAL,
       actor               TEXT NOT NULL,
+      organization_id     TEXT,
       sync_status         TEXT NOT NULL DEFAULT 'pending',
+      media_sync_status   TEXT NOT NULL DEFAULT 'pending',
       sync_error          TEXT,
       upload_attempts     INTEGER NOT NULL DEFAULT 0,
       model_bundle_version TEXT NOT NULL,
@@ -130,6 +132,10 @@ class AppDatabase {
       await db.execute('ALTER TABLE observations ADD COLUMN gps_available INTEGER NOT NULL DEFAULT 1');
       await db.execute('ALTER TABLE observations ADD COLUMN source_video_path TEXT');
       await db.execute('ALTER TABLE observations ADD COLUMN frame_timestamp_ms INTEGER');
+    }
+    if (oldVersion < 3) {
+      await db.execute('ALTER TABLE observations ADD COLUMN organization_id TEXT');
+      await db.execute("ALTER TABLE observations ADD COLUMN media_sync_status TEXT NOT NULL DEFAULT 'pending'");
     }
   }
 

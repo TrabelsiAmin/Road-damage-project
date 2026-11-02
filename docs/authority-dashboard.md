@@ -180,3 +180,35 @@ The Command Center includes a full **Dark Mode / Light Mode** theme toggle syste
   - Dark Borders: `#1e2e47`
   - Dark Text: `#f8fafc` (main), `#94a3b8` (muted), `#64748b` (dim)
 - **Leaflet Cartography in Dark Mode**: OpenStreetMap tiles are styled with an inverted contrast filter (`filter: invert(100%) hue-rotate(180deg) brightness(95%) contrast(90%);`) applied directly to `.leaflet-tile-pane`. Marker pins, DBSCAN clusters, popups, and layer overlays remain unaffected, retaining full color accuracy and high contrast.
+
+---
+
+## 9. 21st.dev-Inspired UI Redesign & Shell Architecture
+
+The dashboard outer layout has been reimagined with **21st.dev-inspired modern dashboard primitives**, combining high-density ministry operational utilities with clean visual hierarchy:
+
+### 9.1 Collapsible Sidebar Navigation (`Sidebar.jsx`)
+- **Desktop Expanded Width (260px)**: Displays full ministry branding (`TariqMap - DGPC · Ministère`), primary navigation links with active indicators and live notification badges (`Critiques`, `Clusters`), and an integrated user status card with logout action.
+- **Desktop Collapsed Width (68px)**: Compact icon-only rail mode for maximized GIS map viewing. Tooltips display full link names and badges on hover.
+- **Mobile Drawer (< 1024px)**: Slide-out off-canvas drawer triggered by the topbar hamburger button, accompanied by a darkened backdrop (`.tm-sidebar-backdrop`) for focus. Automatically dismisses upon link selection.
+- **Dedicated Sidebar Footer**: Contains bilingual language switcher (`FR` / `EN`), light/dark theme toggle (`Sun` / `Moon`), and quick authority login / user session management.
+
+### 9.2 Operations Topbar & Live Search (`Topbar.jsx`)
+- **Breadcrumbs Navigation**: Clean trail indicating the active operational context (`TariqMap > Current View`).
+- **Live Search Field**: Real-time filtering across observations, defect classification codes (`D00`, `D10`, `D20`, `D40`), road segments, municipal borders, and governorates.
+- **System Status Indicators**: Includes demo data warning pill (`DONNÉES DE DÉMO`), last-updated timestamp (`HH:mm:ss`), asynchronous refresh button with spin animation, AI validation metrics modal launcher, and quick CSV export.
+- **Persistent Authority Chip**: Compact badge signaling whether the active session holds verified road authority credentials (`AUTORITÉ VOIRIE`) or standard view-only permissions.
+
+### 9.3 21st.dev Bento Stat Cards (`StatCard.jsx`)
+- **Bento Grid Presentation**: Cards feature subtle elevation, theme-aware surface borders, colored icon circles, high-contrast KPI metrics, and delta indicator pills (`+`, `-`, neutral) comparing against prior periods.
+- **Direct Queue Routing**: Clicking actionable stat cards directly navigates the operator to the corresponding queue in the Operations Action Center.
+
+### 9.4 Reusable UI Components
+- **`StatusBadge.jsx`**: High-contrast status badges for `unconfirmed`, `confirmed`, `in_progress`, `repaired`, and `rejected` states with dedicated SVG icons and localized descriptions.
+- **`PriorityBadge.jsx`**: Priority indicators for `CRITICAL`, `HIGH`, `MEDIUM`, and `LOW` with severity icons and optional calculated priority scores.
+- **`EmptyState.jsx`**: Structured empty state card with icon, title, description, and action button for zero-result states.
+- **`PageHeader.jsx`**: Standardized header block with title, breadcrumb trail, and contextual action buttons.
+
+### 9.5 Test Coverage & Verification
+- Unit test suite (`components.test.jsx`) validates rendering and localization across all new UI components under both French and English settings.
+- All 72 unit tests across 13 test files pass cleanly (`npm test -- --run`). Production builds complete cleanly in ~3 seconds (`npm run build`).

@@ -28,6 +28,7 @@ import {
   supabase,
 } from './supabase';
 import { GlobalFilterBar } from './components/GlobalFilterBar';
+import { DashboardShell } from './components/layout/DashboardShell';
 import { ExecutiveKpiGrid } from './components/ExecutiveKpiGrid';
 import { ActionCenterView } from './components/ActionCenterView';
 import { RoadSegmentRiskView } from './components/RoadSegmentRiskView';
@@ -411,6 +412,7 @@ export default function App() {
   const [selectedCluster, setSelectedCluster] = useState(null);
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
   const [clusterMediaMap, setClusterMediaMap] = useState({});
+  const [searchQuery, setSearchQuery] = useState('');
 
   // Refresh & Realtime state
   const [isRefreshing, setIsRefreshing] = useState(false);
@@ -728,8 +730,21 @@ export default function App() {
 
   // ── Multi-dimensional Filtered Observations & Command Center Analytics ──
   const filteredObservations = useMemo(() => {
-    return filterObservations(observations, filters);
-  }, [observations, filters]);
+    const base = filterObservations(observations, filters);
+    if (!searchQuery.trim()) return base;
+    const q = searchQuery.trim().toLowerCase();
+    return base.filter((obs) => {
+      return (
+        (obs.id && obs.id.toLowerCase().includes(q)) ||
+        (obs.anomaly_class && obs.anomaly_class.toLowerCase().includes(q)) ||
+        (obs.municipality && obs.municipality.toLowerCase().includes(q)) ||
+        (obs.governorate && obs.governorate.toLowerCase().includes(q)) ||
+        (obs.road_name && obs.road_name.toLowerCase().includes(q)) ||
+        (obs.status && obs.status.toLowerCase().includes(q)) ||
+        (obs.priority && obs.priority.toLowerCase().includes(q))
+      );
+    });
+  }, [observations, filters, searchQuery]);
 
   const executiveKpis = useMemo(() => {
     return buildExecutiveKpis(filteredObservations, observations, filters.dateRange);
@@ -738,6 +753,13 @@ export default function App() {
   const actionQueues = useMemo(() => {
     return partitionActionCenterQueues(filteredObservations);
   }, [filteredObservations]);
+
+  const shellCounts = useMemo(() => ({
+    critical: actionQueues.critical?.length || 0,
+    unconfirmed: actionQueues.awaiting_validation?.length || 0,
+    clusters: validClusters.length || 0,
+    overdue: actionQueues.overdue?.length || 0,
+  }), [actionQueues, validClusters]);
 
   const corridorRisks = useMemo(() => {
     return computeAllCorridorRisks(filteredObservations);
@@ -1348,206 +1370,33 @@ export default function App() {
   const isMapVisible = activeNavTab === 'overview' || activeNavTab === 'gis_map';
 
   return (
-    <div className="dashboard-container">
-      {/* ── Demo Data Active Banner ─────────────────────────────────────────── */}
-      {hasDemoData && (
-        <div className="demo-banner">
-          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-            <AlertTriangle size={16} />
-            <span>{t.demoBanner}</span>
-          </div>
-          <span className="mono" style={{ fontSize: '0.72rem' }}>
-            <code>is_demo = true</code>
-          </span>
-        </div>
-      )}
-
-      {/* ── Top Navigation Bar ───────────────────────────────────────────────── */}
-      <header className="topbar">
-        <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-          <div className="brand-badge">TM</div>
-          <div>
-            <h1 className="topbar-title">{t.title}</h1>
-            <p className="topbar-subtitle">{t.subtitle}</p>
-          </div>
-        </div>
-
-        <div style={{ display: 'flex', alignItems: 'center', gap: '10px', flexWrap: 'wrap' }}>
-          {/* Refresh & Last Updated Indicator */}
-          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-            <button
-              className="btn btn-secondary"
-              onClick={() => loadData(false)}
-              disabled={loading || isRefreshing}
-              title={lang === 'fr' ? 'Actualiser les données' : 'Refresh data'}
-            >
-              <RotateCcw
-                size={14}
-                className={loading || isRefreshing ? 'spin-animation' : ''}
-              />
-              <span className="hide-on-mobile">{loading || isRefreshing ? (lang === 'fr' ? 'Chargement...' : 'Refreshing...') : (lang === 'fr' ? 'Actualiser' : 'Refresh')}</span>
-            </button>
-            <span style={{ fontSize: '0.72rem', color: 'var(--text-muted)', whiteSpace: 'nowrap' }} className="hide-on-mobile">
-              {lastUpdated ? lastUpdated.toLocaleTimeString() : '--:--:--'}
-            </span>
-          </div>
-
-          {/* Honest Metrics Button */}
-          <button
-            className="btn btn-secondary"
-            onClick={() => setShowMetricsPanel(true)}
-            title="Consulter les métriques de validation du modèle"
-          >
-            <BarChart3 size={15} color="var(--color-primary)" />
-            <span>Métriques IA & Limites</span>
-          </button>
-
-          {/* Export CSV Button */}
-          <button className="btn btn-secondary" onClick={handleExportCsv} title="Exporter les clusters en CSV">
-            <FileSpreadsheet size={15} />
-            <span className="hide-on-mobile">Exporter CSV</span>
-          </button>
-
-          {/* Authority / Public Status Badge */}
-          {currentUser ? (
-            <div
-              className="auth-badge"
-              style={{
-                background: isAuthorityUser ? 'rgba(16, 185, 129, 0.15)' : 'rgba(245, 158, 11, 0.15)',
-                borderColor: isAuthorityUser ? 'var(--color-success)' : 'var(--color-warning)',
-              }}
-            >
-              {isAuthorityUser ? (
-                <ShieldCheck size={16} color="var(--color-success)" />
-              ) : (
-                <ShieldAlert size={16} color="var(--color-warning)" />
-              )}
-              <span style={{ fontWeight: 700, fontSize: '0.78rem' }}>
-                {isAuthorityUser ? 'AUTORITÉ VOIRIE' : 'UTILISATEUR'}
-              </span>
-              <button
-                onClick={handleLogout}
-                style={{ background: 'none', border: 'none', color: 'var(--text-muted)', cursor: 'pointer', display: 'flex' }}
-                title="Déconnexion"
-              >
-                <LogOut size={14} />
-              </button>
-            </div>
-          ) : (
-            <button className="btn btn-primary" onClick={() => setShowLoginModal(true)}>
-              <LogIn size={15} />
-              <span>Connexion Autorité</span>
-            </button>
-          )}
-
-          {/* Language Toggle */}
-          <button className="btn btn-secondary" onClick={() => setLang(lang === 'fr' ? 'en' : 'fr')}>
-            <Globe size={14} />
-            <span>{lang.toUpperCase()}</span>
-          </button>
-
-          {/* Theme Toggle (Dark / Light) */}
-          <button
-            type="button"
-            className="btn btn-secondary theme-toggle-btn"
-            onClick={toggleTheme}
-            title={
-              theme === 'dark'
-                ? (lang === 'fr' ? 'Passer en mode clair' : 'Switch to light mode')
-                : (lang === 'fr' ? 'Passer en mode sombre' : 'Switch to dark mode')
-            }
-            aria-label={theme === 'dark' ? 'Mode clair' : 'Mode sombre'}
-          >
-            {theme === 'dark' ? <Sun size={15} color="#F59E0B" /> : <Moon size={15} color="#64748B" />}
-            <span className="hide-on-mobile">
-              {theme === 'dark'
-                ? (lang === 'fr' ? 'Clair' : 'Light')
-                : (lang === 'fr' ? 'Sombre' : 'Dark')}
-            </span>
-          </button>
-        </div>
-      </header>
-
-      {/* ── Top Command Center Navigation Bar ─────────────────────────────── */}
-      <nav className="command-nav-bar" aria-label="Command Center Navigation">
-        <button
-          type="button"
-          className={`command-nav-tab ${activeNavTab === 'overview' ? 'active' : ''}`}
-          onClick={() => setActiveNavTab('overview')}
-        >
-          <BarChart3 size={15} />
-          <span>{lang === 'fr' ? 'Vue d\'ensemble' : 'Executive Overview'}</span>
-        </button>
-
-        <button
-          type="button"
-          className={`command-nav-tab ${activeNavTab === 'action_center' ? 'active' : ''}`}
-          onClick={() => setActiveNavTab('action_center')}
-        >
-          <Inbox size={15} />
-          <span>{lang === 'fr' ? 'Centre d\'opérations' : 'Action Center'}</span>
-          {(actionQueues.critical?.length || 0) > 0 && (
-            <span className="tab-badge">{actionQueues.critical.length}</span>
-          )}
-        </button>
-
-        <button
-          type="button"
-          className={`command-nav-tab ${activeNavTab === 'gis_map' ? 'active' : ''}`}
-          onClick={() => {
-            setActiveNavTab('gis_map');
-            setTimeout(() => mapInstanceRef.current?.invalidateSize(), 150);
-          }}
-        >
-          <MapPin size={15} />
-          <span>{lang === 'fr' ? 'Carte SIG' : 'GIS Map'}</span>
-        </button>
-
-        <button
-          type="button"
-          className={`command-nav-tab ${activeNavTab === 'road_segments' ? 'active' : ''}`}
-          onClick={() => setActiveNavTab('road_segments')}
-        >
-          <Route size={15} />
-          <span>{lang === 'fr' ? 'Risque par tronçon' : 'Road Segments'}</span>
-        </button>
-
-        <button
-          type="button"
-          className={`command-nav-tab ${activeNavTab === 'analytics' ? 'active' : ''}`}
-          onClick={() => setActiveNavTab('analytics')}
-        >
-          <TrendingUp size={15} />
-          <span>{lang === 'fr' ? 'Analytique & Tendances' : 'Analytics & Trends'}</span>
-        </button>
-
-        <button
-          type="button"
-          className={`command-nav-tab ${activeNavTab === 'data_quality' ? 'active' : ''}`}
-          onClick={() => setActiveNavTab('data_quality')}
-        >
-          <Cpu size={15} />
-          <span>{lang === 'fr' ? 'Qualité & Modèle IA' : 'Data Quality'}</span>
-        </button>
-
-        <button
-          type="button"
-          className={`command-nav-tab ${activeNavTab === 'reports' ? 'active' : ''}`}
-          onClick={() => setActiveNavTab('reports')}
-        >
-          <FileSpreadsheet size={15} />
-          <span>{lang === 'fr' ? 'Rapports & Exports' : 'Reports & Exports'}</span>
-        </button>
-
-        <button
-          type="button"
-          className={`command-nav-tab ${activeNavTab === 'audit' ? 'active' : ''}`}
-          onClick={() => setActiveNavTab('audit')}
-        >
-          <History size={15} />
-          <span>{lang === 'fr' ? 'Journal d\'audit' : 'Audit Trail'}</span>
-        </button>
-      </nav>
+    <DashboardShell
+      activeNavTab={activeNavTab}
+      onSelectNavTab={(tabId) => {
+        setActiveNavTab(tabId);
+        if (tabId === 'gis_map') {
+          setTimeout(() => mapInstanceRef.current?.invalidateSize(), 150);
+        }
+      }}
+      counts={shellCounts}
+      searchQuery={searchQuery}
+      onSearchChange={setSearchQuery}
+      loading={loading}
+      isRefreshing={isRefreshing}
+      onRefresh={() => loadData(false)}
+      lastUpdated={lastUpdated}
+      hasDemoData={hasDemoData}
+      onOpenMetrics={() => setShowMetricsPanel(true)}
+      onExportCsv={handleExportCsv}
+      currentUser={currentUser}
+      isAuthorityUser={isAuthorityUser}
+      onOpenLogin={() => setShowLoginModal(true)}
+      onLogout={handleLogout}
+      lang={lang}
+      onToggleLang={() => setLang((prev) => (prev === 'fr' ? 'en' : 'fr'))}
+      theme={theme}
+      onToggleTheme={toggleTheme}
+    >
 
       {/* Global Filter Bar */}
       <GlobalFilterBar
@@ -2308,7 +2157,7 @@ export default function App() {
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
                 <div>
                   <h3 style={{ fontSize: '1.15rem', fontWeight: 800, color: 'var(--text-main)' }}>
-                    Métriques d'Évaluation Honnêtes & Limites IA
+                    Métriques IA & Limites
                   </h3>
                   <span style={{ fontSize: '0.75rem', color: 'var(--text-dim)' }}>
                     Source: {validationMetricsData.model_name} • {validationMetricsData.evaluation_split}
@@ -2586,6 +2435,6 @@ export default function App() {
         image={lightboxImage}
         onClose={() => setLightboxImage(null)}
       />
-    </div>
+    </DashboardShell>
   );
 }

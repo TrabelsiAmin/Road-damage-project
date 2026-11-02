@@ -50,6 +50,7 @@ TariqMap is a production-ready, offline-first mobile application and spatial ana
 - **Data Quality & Model Telemetry**: Edge inference confidence calibration (high >80%, medium 50-80%, low <50%), class distribution, field GNSS precision integrity, and authority model feedback channels.
 - **Standard Reports & Exports**: Filter-aware CSV with UTF-8 BOM for Microsoft Excel, native Excel TSV, standard GeoJSON `FeatureCollection` for QGIS/ArcGIS, and printable A4 work orders (Fiche de tournée d'intervention).
 - **Audit Trail & Governance**: Chronological, immutable event log tracking all validations, assignments, status transitions, and repair verifications.
+- **21st.dev Command Center UI**: Modern collapsible navigation sidebar (260px expanded / 68px collapsed rail / mobile drawer <1024px), operational topbar with live search & breadcrumbs, Bento KPI stat cards with comparative deltas, and dual light/dark mode theme engine.
 
 ### 6. 🚗 Vehicle-Centered Drive Awareness Mode
 - **Real-Time Road Hazard Warnings**: Alerts drivers to verified upcoming potholes and cracks directly ahead on their route.

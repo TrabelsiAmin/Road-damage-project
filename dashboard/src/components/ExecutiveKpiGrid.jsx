@@ -12,6 +12,7 @@ import {
   Inbox,
   Info,
 } from 'lucide-react';
+import { StatCard } from './ui/StatCard';
 
 export function ExecutiveKpiGrid({
   kpis,
@@ -66,7 +67,7 @@ export function ExecutiveKpiGrid({
       deltaType: 'neutral',
       icon: Route,
       color: '#DC2626',
-      tooltip: lang === 'fr' ? 'Axes routiers cumulant anomalies répétées, gravité élevée et retard d\'intervention.' : 'Road corridors with high composite danger.',
+      tooltip: lang === 'fr' ? "Axes routiers cumulant anomalies répétées, gravité élevée et retard d'intervention." : 'Road corridors with high composite danger.',
       clickable: false,
     },
     {
@@ -77,7 +78,7 @@ export function ExecutiveKpiGrid({
       deltaType: 'neutral',
       icon: TrendingUp,
       color: '#3B82F6',
-      tooltip: lang === 'fr' ? 'Signalements capturés par mobile ou vidéo dans l\'intervalle sélectionné.' : 'Detections captured in selected window.',
+      tooltip: lang === 'fr' ? "Signalements capturés par mobile ou vidéo dans l'intervalle sélectionné." : 'Detections captured in selected window.',
       clickable: false,
     },
     {
@@ -88,7 +89,7 @@ export function ExecutiveKpiGrid({
       deltaType: kpis.unconfirmedReports > 10 ? 'warning' : 'neutral',
       icon: Inbox,
       color: '#8B5CF6',
-      tooltip: lang === 'fr' ? 'Signalements transmis par les usagers ou chauffeurs nécessitant validation de l\'autorité.' : 'Reports pending authority validation.',
+      tooltip: lang === 'fr' ? "Signalements transmis par les usagers ou chauffeurs nécessitant validation de l'autorité." : 'Reports pending authority validation.',
       clickable: true,
       queueKey: 'awaiting_validation',
     },
@@ -112,7 +113,7 @@ export function ExecutiveKpiGrid({
       deltaType: 'neutral',
       icon: Wrench,
       color: '#06B6D4',
-      tooltip: lang === 'fr' ? 'Chantiers de voirie actuellement en cours d\'intervention par les brigades.' : 'Currently assigned and undergoing maintenance.',
+      tooltip: lang === 'fr' ? "Chantiers de voirie actuellement en cours d'intervention par les brigades." : 'Currently assigned and undergoing maintenance.',
       clickable: true,
       queueKey: 'in_progress',
     },
@@ -120,7 +121,7 @@ export function ExecutiveKpiGrid({
       id: 'completed',
       title: lang === 'fr' ? 'Réparations achevées' : 'Repairs completed',
       value: kpis.repairsCompleted,
-      sub: `${kpis.completionRate}% ${lang === 'fr' ? 'taux d\'achèvement' : 'completion rate'}`,
+      sub: `${kpis.completionRate}% ${lang === 'fr' ? "taux d'achèvement" : 'completion rate'}`,
       deltaType: 'positive',
       icon: CheckCircle2,
       color: '#10B981',
@@ -153,33 +154,21 @@ export function ExecutiveKpiGrid({
 
   return (
     <div className="kpi-grid-container">
-      {cards.map((card) => {
-        const Icon = card.icon;
-        return (
-          <div
-            key={card.id}
-            className={`kpi-card ${card.clickable ? 'kpi-clickable' : ''}`}
-            onClick={() => card.clickable && onSelectQueue && onSelectQueue(card.queueKey)}
-            title={card.tooltip}
-          >
-            <div className="kpi-card-header">
-              <span className="kpi-title">{card.title}</span>
-              <div className="kpi-icon-wrap" style={{ color: card.color, background: `${card.color}15` }}>
-                <Icon size={16} />
-              </div>
-            </div>
-
-            <div className="kpi-value-row">
-              <span className="kpi-value">{card.value}</span>
-            </div>
-
-            <div className="kpi-footer-row">
-              <span className={`kpi-subtext ${card.deltaType}`}>{card.sub}</span>
-              <Info size={11} className="kpi-info-icon" />
-            </div>
-          </div>
-        );
-      })}
+      {cards.map((card) => (
+        <StatCard
+          key={card.id}
+          title={card.title}
+          value={card.value}
+          delta={card.sub}
+          deltaType={card.deltaType}
+          subtitle=""
+          icon={card.icon}
+          color={card.color}
+          tooltip={card.tooltip}
+          clickable={card.clickable}
+          onClick={() => card.clickable && onSelectQueue && onSelectQueue(card.queueKey)}
+        />
+      ))}
     </div>
   );
 }

@@ -116,8 +116,8 @@ The interactive map is powered by Leaflet 1.9.4 with standard OpenStreetMap cart
 
 ### 6.1 Lifecycle Safety (React 18 StrictMode)
 - **Separation of Concerns**: Map container creation is strictly isolated from marker updates and camera controls:
-  1. `5a. Leaflet Map Instance Lifecycle`: Runs once on container mount (`[]`). Cleans any stale `_leaflet_id` before instantiating `L.map`, binds OSM tile layer, sets up `ResizeObserver`, and returns a cleanup function that tears down `map.remove()`, disconnects observer, and resets layer references.
-  2. `5b. Size Invalidation on Visibility`: Watches `[activeNavTab, isSidebarCollapsed]`. Fires `requestAnimationFrame(() => map.invalidateSize())` whenever the overview or GIS map becomes visible.
+  1. `5a. Leaflet Map Instance Lifecycle`: Runs once on container mount (`[]`). Initializes a single map on the dedicated `.leaflet-map-host` element, binds OSM tile layer, sets up `ResizeObserver`, and returns a cleanup function that unsubscribes tile listeners, disconnects observer, clears marker layers, and calls `map.remove()` without mutating private Leaflet internals (`_leaflet_id`).
+  2. `5b. Size Invalidation on Visibility & Layout`: Watches `[activeNavTab, isSidebarCollapsed]`. Fires both immediate `requestAnimationFrame(() => map.invalidateSize({ pan: false }))` and a post-transition `setTimeout(..., 300)` to ensure accurate dimensions after sidebar grid transitions.
   3. `5c. Markers & Bounds Calculation`: Watches `[mapReady, validClusters, mapLayers.roadSegments]`. Clears and repopulates the markers layer group without recreating the underlying Leaflet instance.
   4. `5d. Focus Marker & Camera Navigation`: Smoothly flies the viewport (`map.flyTo`) to selected defects without resetting existing layers.
 
@@ -128,19 +128,20 @@ The interactive map is powered by Leaflet 1.9.4 with standard OpenStreetMap cart
   - Excludes uninitialized origin points (Null Island: `0, 0`).
   - Empty cluster collections do not trigger `fitBounds([])`, preventing Leaflet runtime crashes.
 
-### 6.3 CSS Dimensions & Responsive Layout
-- Explicit container dimensions prevent 0x0 collapsed views:
-  - `.main-layout`: `min-height: 560px` (desktop grid `1fr 520px`).
-  - `.map-wrapper`: `min-height: 560px`.
-  - `.map-wrapper > div, .leaflet-container`: `width: 100%; height: 100%; min-height: inherit;`.
-  - Responsive breakpoint (`@media (max-width: 1100px)`): Switches layout to single column with `.map-wrapper { height: 420px; min-height: 420px; }`.
-  - Hidden state: Uses `.main-layout.hidden-map { display: none !important; }` to maintain the Leaflet DOM node during tab navigation without interfering with CSS grid layouts.
+### 6.3 Dedicated Host & Robust CSS Grid Architecture
+- **Dedicated Leaflet Host**: Uses `.leaflet-map-host` (`position: absolute; inset: 0; width: 100%; height: 100%; z-index: 1;`) inside `.map-wrapper`. The broad `.map-wrapper > div` rule has been eliminated, preventing overlay elements from stretching across the entire map surface.
+- **Grid Column Constraints**: `.main-layout` specifies `grid-template-columns: minmax(0, 1fr) minmax(0, 520px)`, with `.main-layout.sidebar-collapsed` setting `grid-template-columns: minmax(0, 1fr) 0`. This guarantees the map always expands to fill available width while preventing sidebar content blowout.
+- **Tile Dimension Protection**: Scoped `.leaflet-container img.leaflet-tile { max-width: none !important; max-height: none !important; }` prevents global image rules from breaking tile geometry.
+- **Responsive Layout**: Narrow screens (`@media (max-width: 1100px)`) switch to single-column block layout with explicit height (`420px`), decreasing to `380px` on mobile (`@media (max-width: 768px)`).
+- **Hidden State**: Uses `.main-layout.hidden-map { display: none !important; }` to maintain the Leaflet DOM node during tab navigation without interfering with layout flow.
 
-### 6.4 Non-Blocking Map Overlays
-- **Loading State**: Displays a compact spinner banner (`Chargement de la carte…`) while initial data is fetched.
-- **Tile Error Banner**: Listens to Leaflet tile layer `tileerror` events and displays a non-blocking network warning banner without covering the map.
-- **Empty State**: Informs the user when no geolocated anomalies match active filters (`Aucune anomalie géolocalisée dans les filtres sélectionnés.`).
-- **Data Error State**: Displays error notification with an inline `Réessayer` button to reload Supabase data.
+### 6.4 Content-Sized Map Overlays
+- **Dedicated Stacking (`z-index: 1000`)**: Overlays (`.map-layer-controls`, `.map-filter-overlay`, `.map-legend`, `.map-overlay-banner`, `.sidebar-expand-btn`) are strictly content-sized with `pointer-events: auto`, avoiding blocking map drag/pan gestures.
+- **Separated Positions**: Layer controls are positioned at top-right (`top: 12px; right: 12px`, shifting to `top: 54px` when sidebar is collapsed to avoid collision with `.sidebar-expand-btn`), quick filters at top-left (`top: 12px; left: 12px`), and the legend at bottom-left (`left: 12px; bottom: 20px`).
+- **Loading State**: Compact spinner banner (`Chargement de la carte…`).
+- **Tile Error Banner**: Compact non-blocking network warning banner.
+- **Empty State**: Compact notification (`Aucune anomalie géolocalisée dans les filtres sélectionnés.`).
+- **Data Error State**: Compact notification with an inline `Réessayer` button to reload Supabase data.
 
 ---
 

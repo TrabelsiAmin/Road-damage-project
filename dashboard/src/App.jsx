@@ -906,79 +906,74 @@ export default function App() {
   // ── 5a. Leaflet Map Instance Lifecycle ──────────────────────────────────────
   useEffect(() => {
     const container = mapRef.current;
-    if (!container) return;
+    if (!container || mapInstanceRef.current) return undefined;
 
-    // React 18 StrictMode lifecycle safety: prevent duplicate container initialization
-    if (container._leaflet_id && !mapInstanceRef.current) {
-      delete container._leaflet_id;
-    }
+    const map = L.map(container, {
+      center: [36.8065, 10.1815], // Grand Tunis
+      zoom: 12,
+      zoomControl: false,
+    });
 
-    if (!mapInstanceRef.current) {
-      const map = L.map(container, {
-        center: [36.8065, 10.1815], // Grand Tunis
-        zoom: 12,
-        zoomControl: false,
-      });
+    L.control.zoom({ position: 'bottomright' }).addTo(map);
 
-      L.control.zoom({ position: 'bottomright' }).addTo(map);
+    const tileLayer = L.tileLayer(MAP_CONFIG.tileUrl, {
+      attribution: MAP_CONFIG.tileAttribution,
+      maxZoom: MAP_CONFIG.maxZoom,
+    });
 
-      const tileLayer = L.tileLayer(MAP_CONFIG.tileUrl, {
-        attribution: MAP_CONFIG.tileAttribution,
-        maxZoom: MAP_CONFIG.maxZoom,
-      });
+    const handleTileError = () => setTileError(true);
+    const handleTileLoad = () => setTileError(false);
 
-      tileLayer.on('tileerror', () => {
-        setTileError(true);
-      });
-      tileLayer.on('load', () => {
-        setTileError(false);
-      });
-      tileLayer.addTo(map);
+    tileLayer.on('tileerror', handleTileError);
+    tileLayer.on('load', handleTileLoad);
+    tileLayer.addTo(map);
 
-      const markersGroup = L.layerGroup().addTo(map);
-      markersLayerRef.current = markersGroup;
-      mapInstanceRef.current = map;
-      setMapReady(true);
+    const markers = L.layerGroup().addTo(map);
+    markersLayerRef.current = markers;
+    mapInstanceRef.current = map;
+    setMapReady(true);
 
-      requestAnimationFrame(() => {
-        map.invalidateSize();
-      });
-    }
+    requestAnimationFrame(() => {
+      map.invalidateSize({ pan: false });
+    });
 
-    // Attach ResizeObserver to container's wrapper for automatic dimension updates
-    if (typeof ResizeObserver !== 'undefined' && container.parentElement) {
-      const ro = new ResizeObserver(() => {
-        if (mapInstanceRef.current) {
+    const resizeObserver = typeof ResizeObserver !== 'undefined'
+      ? new ResizeObserver(() => {
           requestAnimationFrame(() => {
-            mapInstanceRef.current?.invalidateSize();
+            mapInstanceRef.current?.invalidateSize({ pan: false });
           });
-        }
-      });
-      ro.observe(container.parentElement);
-      resizeObserverRef.current = ro;
+        })
+      : null;
+
+    if (resizeObserver && container.parentElement) {
+      resizeObserver.observe(container.parentElement);
     }
 
     return () => {
-      if (resizeObserverRef.current) {
-        resizeObserverRef.current.disconnect();
-        resizeObserverRef.current = null;
-      }
-      if (mapInstanceRef.current) {
-        mapInstanceRef.current.remove();
-        mapInstanceRef.current = null;
-      }
+      resizeObserver?.disconnect();
+      tileLayer.off('tileerror', handleTileError);
+      tileLayer.off('load', handleTileLoad);
+      markers.clearLayers();
       markersLayerRef.current = null;
+      map.remove();
+      mapInstanceRef.current = null;
       setMapReady(false);
     };
   }, []);
 
   // ── 5b. Map Size Invalidation on Visibility & Layout Changes ────────────────
   useEffect(() => {
-    if (mapInstanceRef.current && (activeNavTab === 'overview' || activeNavTab === 'gis_map')) {
-      requestAnimationFrame(() => {
-        mapInstanceRef.current?.invalidateSize();
-      });
-    }
+    if (!mapInstanceRef.current) return;
+
+    requestAnimationFrame(() => {
+      mapInstanceRef.current?.invalidateSize({ pan: false });
+    });
+
+    const timer = window.setTimeout(() => {
+      mapInstanceRef.current?.invalidateSize({ pan: false });
+    }, 300);
+
+    return () => window.clearTimeout(timer);
   }, [activeNavTab, isSidebarCollapsed]);
 
   // ── 5c. Leaflet Map Markers & Bounds (colour = priority, size = report count)
@@ -1537,7 +1532,7 @@ export default function App() {
       >
         {/* Left Map View */}
         <div className="map-wrapper">
-          <div ref={mapRef} style={{ width: '100%', height: '100%' }} />
+          <div ref={mapRef} className="leaflet-map-host" />
 
           {/* Map Loading State */}
           {loading && observations.length === 0 && (

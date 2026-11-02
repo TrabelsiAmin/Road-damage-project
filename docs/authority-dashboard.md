@@ -162,3 +162,21 @@ npm run build
 # Start local Vite development server
 npm run dev
 ```
+
+
+---
+
+## 8. Dark Mode Theme System
+
+The Command Center includes a full **Dark Mode / Light Mode** theme toggle system:
+
+- **Theme Toggle Control**: Located in the topbar adjacent to the language selector, displaying dynamic `Sun` / `Moon` icons and localized labels (`Clair` / `Sombre` in FR, `Light` / `Dark` in EN).
+- **Zero-Flash Pre-Mount Initialization**: An inline script in `dashboard/index.html` inspects `localStorage` (`tariqmap_theme`) and falls back to system preferences (`prefers-color-scheme: dark`) before React mounts, preventing any white flashes on reload.
+- **Dual CSS Root Selectors**: Applies to both `[data-theme="dark"]` and `document.body.dark-mode`.
+- **Theme Variables**:
+  - Dark Primary Background: `#090e17`
+  - Dark Secondary Surfaces: `#0f172a`
+  - Dark Card Background: `#141f32`
+  - Dark Borders: `#1e2e47`
+  - Dark Text: `#f8fafc` (main), `#94a3b8` (muted), `#64748b` (dim)
+- **Leaflet Cartography in Dark Mode**: OpenStreetMap tiles are styled with an inverted contrast filter (`filter: invert(100%) hue-rotate(180deg) brightness(95%) contrast(90%);`) applied directly to `.leaflet-tile-pane`. Marker pins, DBSCAN clusters, popups, and layer overlays remain unaffected, retaining full color accuracy and high contrast.

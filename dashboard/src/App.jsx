@@ -50,6 +50,7 @@ import { haversineDistanceMeters } from './utils/clustering';
 import { MinistryOverview } from './components/MinistryOverview';
 import { TechnicalRecommendation } from './components/TechnicalRecommendation';
 import { filterValidClusters } from './utils/mapValidation';
+import { THEME_STORAGE_KEY, getInitialTheme, resolveNextTheme } from './utils/theme';
 import {
   buildMinistryOverview,
   isWithinPeriod,
@@ -102,6 +103,8 @@ import {
   Inbox,
   Sparkles,
   MapPinOff,
+  Sun,
+  Moon,
 } from 'lucide-react';
 
 // Priority Colors for Leaflet pins (v2: HIGH, MEDIUM, LOW)
@@ -330,6 +333,34 @@ export default function App() {
   const [error, setError] = useState(null);
   const [lang, setLang] = useState('fr');
   const [dataVersion, setDataVersion] = useState(0);
+
+  // Theme State: 'light' | 'dark'
+  const [theme, setTheme] = useState(() => {
+    const prefersDark = typeof window !== 'undefined' && window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches;
+    const storage = typeof localStorage !== 'undefined' ? localStorage : null;
+    return getInitialTheme(storage, prefersDark);
+  });
+
+  useEffect(() => {
+    try {
+      localStorage.setItem(THEME_STORAGE_KEY, theme);
+    } catch (err) {
+      console.warn('Failed to persist theme:', err);
+    }
+    document.documentElement.setAttribute('data-theme', theme);
+    document.body.setAttribute('data-theme', theme);
+    if (theme === 'dark') {
+      document.documentElement.classList.add('dark-mode');
+      document.body.classList.add('dark-mode');
+    } else {
+      document.documentElement.classList.remove('dark-mode');
+      document.body.classList.remove('dark-mode');
+    }
+  }, [theme]);
+
+  function toggleTheme() {
+    setTheme((prev) => resolveNextTheme(prev));
+  }
 
   // Auth State
   const [currentUser, setCurrentUser] = useState(null);
@@ -1413,6 +1444,26 @@ export default function App() {
           <button className="btn btn-secondary" onClick={() => setLang(lang === 'fr' ? 'en' : 'fr')}>
             <Globe size={14} />
             <span>{lang.toUpperCase()}</span>
+          </button>
+
+          {/* Theme Toggle (Dark / Light) */}
+          <button
+            type="button"
+            className="btn btn-secondary theme-toggle-btn"
+            onClick={toggleTheme}
+            title={
+              theme === 'dark'
+                ? (lang === 'fr' ? 'Passer en mode clair' : 'Switch to light mode')
+                : (lang === 'fr' ? 'Passer en mode sombre' : 'Switch to dark mode')
+            }
+            aria-label={theme === 'dark' ? 'Mode clair' : 'Mode sombre'}
+          >
+            {theme === 'dark' ? <Sun size={15} color="#F59E0B" /> : <Moon size={15} color="#64748B" />}
+            <span className="hide-on-mobile">
+              {theme === 'dark'
+                ? (lang === 'fr' ? 'Clair' : 'Light')
+                : (lang === 'fr' ? 'Sombre' : 'Dark')}
+            </span>
           </button>
         </div>
       </header>

@@ -3644,3 +3644,405 @@ h1, h2, h3, h4 {
   color: var(--text-muted);
   cursor: pointer;
 }
+/* ==========================================================================
+   Comprehensive Dark Mode Theme System
+   ========================================================================== */
+
+[data-theme="dark"],
+.dark-mode {
+  --bg-primary: #090e17;
+  --bg-secondary: #0f172a;
+  --bg-card: #141f32;
+  --bg-card-hover: #1b2942;
+  --bg-glass: rgba(15, 23, 42, 0.94);
+
+  --border-subtle: #1e2e47;
+  --border-medium: #2e4363;
+  --border-accent: rgba(59, 130, 246, 0.35);
+
+  --text-main: #f8fafc;
+  --text-muted: #94a3b8;
+  --text-dim: #64748b;
+
+  --color-primary: #3b82f6;
+  --color-primary-hover: #60a5fa;
+  --color-warning: #f59e0b;
+  --color-critical: #ef4444;
+  --color-success: #10b981;
+
+  --shadow-card: 0 4px 14px rgba(0, 0, 0, 0.4), 0 12px 32px rgba(0, 0, 0, 0.45);
+  --shadow-glow: 0 0 0 3px rgba(59, 130, 246, 0.25);
+}
+
+/* ── Base Dark Mode Background & Text ── */
+body[data-theme="dark"],
+body.dark-mode,
+.dark-mode body {
+  background-color: var(--bg-primary);
+  color: var(--text-main);
+}
+
+/* ── Smooth Theme Transitions ── */
+body, .topbar, .command-nav-bar, .global-filter-bar, .main-layout, .sidebar, .modal-card, .btn {
+  transition: background-color 0.2s ease, color 0.2s ease, border-color 0.2s ease;
+}
+
+/* ── Dark Mode Form Elements & Inputs ── */
+body[data-theme="dark"] .select-input,
+body[data-theme="dark"] .text-input,
+body[data-theme="dark"] select,
+body[data-theme="dark"] input[type="text"],
+body[data-theme="dark"] input[type="password"],
+body[data-theme="dark"] input[type="search"],
+body[data-theme="dark"] textarea,
+.dark-mode .select-input,
+.dark-mode .text-input,
+.dark-mode select,
+.dark-mode input[type="text"],
+.dark-mode input[type="password"],
+.dark-mode input[type="search"],
+.dark-mode textarea {
+  background-color: var(--bg-card);
+  color: var(--text-main);
+  border-color: var(--border-subtle);
+}
+
+body[data-theme="dark"] option,
+.dark-mode option {
+  background-color: var(--bg-card);
+  color: var(--text-main);
+}
+
+body[data-theme="dark"] .btn-secondary,
+.dark-mode .btn-secondary {
+  background-color: var(--bg-card);
+  color: var(--text-main);
+  border-color: var(--border-subtle);
+}
+
+body[data-theme="dark"] .btn-secondary:hover,
+.dark-mode .btn-secondary:hover {
+  background-color: var(--bg-card-hover);
+  border-color: var(--border-accent);
+}
+
+/* ── Topbar, Navigation & Filters ── */
+body[data-theme="dark"] .topbar,
+.dark-mode .topbar {
+  background-color: var(--bg-secondary);
+  border-bottom-color: var(--border-subtle);
+}
+
+body[data-theme="dark"] .command-nav-bar,
+.dark-mode .command-nav-bar {
+  background-color: var(--bg-secondary);
+  border-bottom-color: var(--border-subtle);
+}
+
+body[data-theme="dark"] .command-nav-tab,
+.dark-mode .command-nav-tab {
+  color: var(--text-muted);
+}
+
+body[data-theme="dark"] .command-nav-tab:hover,
+.dark-mode .command-nav-tab:hover {
+  color: var(--text-main);
+  background-color: var(--bg-card-hover);
+}
+
+body[data-theme="dark"] .command-nav-tab.active,
+.dark-mode .command-nav-tab.active {
+  color: var(--color-primary);
+  background-color: rgba(59, 130, 246, 0.15);
+  border-bottom-color: var(--color-primary);
+}
+
+body[data-theme="dark"] .global-filter-bar,
+.dark-mode .global-filter-bar {
+  background-color: var(--bg-secondary);
+  border-bottom-color: var(--border-subtle);
+}
+
+body[data-theme="dark"] .filter-chip,
+body[data-theme="dark"] .filter-select,
+.dark-mode .filter-chip,
+.dark-mode .filter-select {
+  background-color: var(--bg-card);
+  border-color: var(--border-subtle);
+  color: var(--text-main);
+}
+
+/* ── Executive Overview & KPI Cards ── */
+body[data-theme="dark"] .kpi-card,
+body[data-theme="dark"] .executive-kpi-card,
+body[data-theme="dark"] .metric-card,
+body[data-theme="dark"] .ministry-kpi,
+body[data-theme="dark"] .ministry-panel,
+body[data-theme="dark"] .ministry-overview,
+body[data-theme="dark"] .ministry-status,
+body[data-theme="dark"] .rag-card,
+body[data-theme="dark"] .rag-panel,
+.dark-mode .kpi-card,
+.dark-mode .executive-kpi-card,
+.dark-mode .metric-card,
+.dark-mode .ministry-kpi,
+.dark-mode .ministry-panel,
+.dark-mode .ministry-overview,
+.dark-mode .ministry-status,
+.dark-mode .rag-card,
+.dark-mode .rag-panel {
+  background-color: var(--bg-card);
+  border-color: var(--border-subtle);
+}
+
+body[data-theme="dark"] .rag-box,
+body[data-theme="dark"] .rag-source,
+.dark-mode .rag-box,
+.dark-mode .rag-source {
+  background-color: var(--bg-card-hover);
+  border-color: var(--border-subtle);
+  color: var(--text-muted);
+}
+
+body[data-theme="dark"] .ministry-period select,
+.dark-mode .ministry-period select {
+  background-color: var(--bg-card);
+  border-color: var(--border-subtle);
+  color: var(--text-main);
+}
+
+/* ── Action Center & Queues ── */
+body[data-theme="dark"] .action-table-container,
+body[data-theme="dark"] .action-queue-card,
+.dark-mode .action-table-container,
+.dark-mode .action-queue-card {
+  background-color: var(--bg-card);
+  border-color: var(--border-subtle);
+}
+
+body[data-theme="dark"] .action-queue-btn,
+.dark-mode .action-queue-btn {
+  background-color: var(--bg-card);
+  border-color: var(--border-subtle);
+  color: var(--text-muted);
+}
+
+body[data-theme="dark"] .action-queue-btn.active,
+.dark-mode .action-queue-btn.active {
+  background-color: rgba(59, 130, 246, 0.2);
+  border-color: var(--color-primary);
+  color: #93c5fd;
+}
+
+body[data-theme="dark"] .pagination-bar,
+.dark-mode .pagination-bar {
+  background-color: var(--bg-card);
+  border-top-color: var(--border-subtle);
+}
+
+/* ── Road Segments, Analytics, Quality & Reports Cards ── */
+body[data-theme="dark"] .corridor-card,
+body[data-theme="dark"] .analytics-card,
+body[data-theme="dark"] .telemetry-card,
+body[data-theme="dark"] .reports-card,
+body[data-theme="dark"] .audit-event-card,
+body[data-theme="dark"] .print-work-order-preview,
+.dark-mode .corridor-card,
+.dark-mode .analytics-card,
+.dark-mode .telemetry-card,
+.dark-mode .reports-card,
+.dark-mode .audit-event-card,
+.dark-mode .print-work-order-preview {
+  background-color: var(--bg-card);
+  border-color: var(--border-subtle);
+  color: var(--text-main);
+}
+
+/* ── Tables & Data Grids ── */
+body[data-theme="dark"] table,
+.dark-mode table {
+  background-color: var(--bg-card);
+}
+
+body[data-theme="dark"] th,
+.dark-mode th {
+  background-color: var(--bg-secondary);
+  color: var(--text-muted);
+  border-bottom-color: var(--border-subtle);
+}
+
+body[data-theme="dark"] td,
+.dark-mode td {
+  border-bottom-color: var(--border-subtle);
+  color: var(--text-main);
+}
+
+body[data-theme="dark"] tbody tr:hover,
+.dark-mode tbody tr:hover {
+  background-color: var(--bg-card-hover);
+}
+
+/* ── Modals & Drawers ── */
+body[data-theme="dark"] .modal-card,
+body[data-theme="dark"] .case-detail-drawer,
+.dark-mode .modal-card,
+.dark-mode .case-detail-drawer {
+  background-color: var(--bg-card);
+  border-color: var(--border-subtle);
+  color: var(--text-main);
+}
+
+body[data-theme="dark"] .modal-header,
+body[data-theme="dark"] .case-detail-header,
+.dark-mode .modal-header,
+.dark-mode .case-detail-header {
+  background-color: var(--bg-secondary);
+  border-bottom-color: var(--border-subtle);
+}
+
+body[data-theme="dark"] .modal-footer,
+.dark-mode .modal-footer {
+  background-color: var(--bg-secondary);
+  border-top-color: var(--border-subtle);
+}
+
+body[data-theme="dark"] .case-detail-section,
+.dark-mode .case-detail-section {
+  border-bottom-color: var(--border-subtle);
+}
+
+/* ── Map Inspection Sidebar ── */
+body[data-theme="dark"] .sidebar,
+.dark-mode .sidebar {
+  background-color: var(--bg-card);
+  border-left-color: var(--border-subtle);
+}
+
+body[data-theme="dark"] .sidebar-header,
+.dark-mode .sidebar-header {
+  background-color: var(--bg-secondary);
+  border-bottom-color: var(--border-subtle);
+}
+
+body[data-theme="dark"] .sidebar-tabs,
+.dark-mode .sidebar-tabs {
+  border-bottom-color: var(--border-subtle);
+}
+
+body[data-theme="dark"] .tab-btn,
+.dark-mode .tab-btn {
+  color: var(--text-muted);
+}
+
+body[data-theme="dark"] .tab-btn:hover,
+.dark-mode .tab-btn:hover {
+  color: var(--text-main);
+}
+
+body[data-theme="dark"] .tab-btn.active,
+.dark-mode .tab-btn.active {
+  color: var(--color-primary);
+  border-bottom-color: var(--color-primary);
+  background-color: rgba(59, 130, 246, 0.12);
+}
+
+body[data-theme="dark"] .report-card,
+.dark-mode .report-card {
+  background-color: var(--bg-card-hover);
+  border-color: var(--border-subtle);
+  color: var(--text-main);
+}
+
+body[data-theme="dark"] .report-card:hover,
+.dark-mode .report-card:hover {
+  border-color: var(--border-accent);
+}
+
+body[data-theme="dark"] .report-card.selected,
+.dark-mode .report-card.selected {
+  border-color: var(--color-primary);
+  background-color: rgba(59, 130, 246, 0.15);
+}
+
+/* ── Leaflet Dark Mode Cartography ── */
+body[data-theme="dark"] .leaflet-tile-pane,
+.dark-mode .leaflet-tile-pane {
+  filter: invert(100%) hue-rotate(180deg) brightness(95%) contrast(90%);
+}
+
+body[data-theme="dark"] .leaflet-container,
+.dark-mode .leaflet-container {
+  background-color: #090e17 !important;
+}
+
+body[data-theme="dark"] .leaflet-control-zoom a,
+.dark-mode .leaflet-control-zoom a {
+  background-color: var(--bg-card) !important;
+  color: var(--text-main) !important;
+  border-color: var(--border-subtle) !important;
+}
+
+body[data-theme="dark"] .leaflet-control-zoom a:hover,
+.dark-mode .leaflet-control-zoom a:hover {
+  background-color: var(--bg-card-hover) !important;
+  color: var(--color-primary) !important;
+}
+
+body[data-theme="dark"] .leaflet-popup-content-wrapper,
+.dark-mode .leaflet-popup-content-wrapper {
+  background-color: var(--bg-card) !important;
+  color: var(--text-main) !important;
+  border: 1px solid var(--border-subtle);
+  box-shadow: 0 10px 25px rgba(0, 0, 0, 0.65);
+}
+
+body[data-theme="dark"] .leaflet-popup-tip,
+.dark-mode .leaflet-popup-tip {
+  background-color: var(--bg-card) !important;
+}
+
+body[data-theme="dark"] .rag-map-popup-root,
+.dark-mode .rag-map-popup-root {
+  color: var(--text-main);
+}
+
+body[data-theme="dark"] .map-layer-controls,
+body[data-theme="dark"] .map-legend,
+.dark-mode .map-layer-controls,
+.dark-mode .map-legend {
+  background-color: rgba(20, 31, 50, 0.94);
+  border-color: var(--border-subtle);
+  color: var(--text-main);
+}
+
+body[data-theme="dark"] .sidebar-expand-btn,
+.dark-mode .sidebar-expand-btn {
+  background-color: var(--bg-card);
+  color: var(--text-main);
+  border-color: var(--border-subtle);
+}
+
+/* ── Scrollbars in Dark Mode ── */
+body[data-theme="dark"] *::-webkit-scrollbar-track,
+.dark-mode *::-webkit-scrollbar-track {
+  background-color: var(--bg-primary);
+}
+
+body[data-theme="dark"] *::-webkit-scrollbar-thumb,
+.dark-mode *::-webkit-scrollbar-thumb {
+  background-color: #24354f;
+  border-radius: 4px;
+}
+
+body[data-theme="dark"] *::-webkit-scrollbar-thumb:hover,
+.dark-mode *::-webkit-scrollbar-thumb:hover {
+  background-color: #334969;
+}
+
+/* ── Theme Toggle Button ── */
+.theme-toggle-btn {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  cursor: pointer;
+}

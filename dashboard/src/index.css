@@ -633,7 +633,7 @@ h1, h2, h3, h4 {
   grid-template-columns: 1fr 520px;
   flex: 1;
   height: min(680px, 72vh);
-  min-height: 480px;
+  min-height: 560px;
   position: relative;
   overflow: hidden;
   transition: grid-template-columns 0.25s cubic-bezier(0.4, 0, 0.2, 1);
@@ -643,10 +643,83 @@ h1, h2, h3, h4 {
   grid-template-columns: 1fr 0px;
 }
 
+.main-layout.hidden-map {
+  display: none !important;
+}
+
 .map-wrapper {
   position: relative;
   width: 100%;
   height: 100%;
+  min-height: 560px;
+}
+
+.map-wrapper > div {
+  width: 100%;
+  height: 100%;
+  min-height: inherit;
+}
+
+.map-wrapper .leaflet-container {
+  width: 100%;
+  height: 100%;
+  min-height: inherit;
+  background: var(--bg-primary) !important;
+}
+
+/* ── Map Overlay Banners (Loading, Error, Tile Failure, Empty States) ──────── */
+.map-overlay-banner {
+  position: absolute;
+  top: 14px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 1000;
+  padding: 8px 16px;
+  border-radius: 8px;
+  font-size: 0.82rem;
+  font-weight: 600;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.35);
+  backdrop-filter: blur(8px);
+  pointer-events: auto;
+  max-width: 90%;
+  text-align: center;
+}
+
+.map-overlay-banner.map-loading {
+  background: rgba(15, 23, 42, 0.88);
+  border: 1px solid rgba(59, 130, 246, 0.4);
+  color: #93c5fd;
+}
+
+.map-overlay-banner.map-tile-error {
+  background: rgba(127, 29, 29, 0.92);
+  border: 1px solid #ef4444;
+  color: #fecaca;
+}
+
+.map-overlay-banner.map-empty-state {
+  background: rgba(30, 41, 59, 0.92);
+  border: 1px solid rgba(148, 163, 184, 0.3);
+  color: #cbd5e1;
+}
+
+.map-overlay-banner.map-error-state {
+  background: rgba(127, 29, 29, 0.94);
+  border: 1px solid #dc2626;
+  color: #fee2e2;
+  gap: 12px;
+}
+
+.map-overlay-banner .spinner-small {
+  width: 14px;
+  height: 14px;
+  border: 2px solid rgba(147, 197, 253, 0.3);
+  border-top-color: #60a5fa;
+  border-radius: 50%;
+  animation: spin 0.8s linear infinite;
 }
 
 /* ── Basemap Dark UI Tiles ────────────────────────────────────────────────── */
@@ -1649,7 +1722,8 @@ h1, h2, h3, h4 {
   }
 
   .map-wrapper {
-    height: 480px;
+    height: 420px;
+    min-height: 420px;
   }
 
   .sidebar {

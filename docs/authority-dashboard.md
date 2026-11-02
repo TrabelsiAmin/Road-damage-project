@@ -97,3 +97,68 @@ Where:
 - **Role Separation**: Citizens and anonymous visitors can browse public blurred thumbnails and macro statistics. Original high-resolution photos and workflow management actions (Validate, Reject, Assign, Repair) strictly require authority authentication (`is_authority = true`).
 - **Temporary Signed URLs**: Authority users view high-resolution evidence through 10-minute signed URLs generated server-side by Supabase Storage, auto-refreshing 30 seconds before expiration.
 - **Audit Immutability**: All status transitions, case assignments, and bulk actions are committed to `maintenance_events` with authenticated user timestamps.
+
+
+---
+
+## 5. UTF-8 Encoding & Internationalization Standards
+
+- **Encoding Standard**: All dashboard source files (`.jsx`, `.js`, `.css`, `.json`, `.html`, `.md`) are strictly saved in standard UTF-8 without Byte Order Mark (BOM).
+- **French Diacritics Integrity**: Corrupted Windows-1252 / Latin-1 double-encoded byte sequences (such as `MÃ©triques`, `PrioritÃ©`, `â€”`, `â€¢`, `LÃ‰GENDE`) are strictly prohibited and prevented.
+- **Automated Verification**: The test suite includes `dashboard/src/utils/encodingValidation.test.js` which validates source integrity and ensures proper accents (`é`, `è`, `à`, `ç`, `ê`, `ô`, `É`) and symbols (`•`, `–`, `—`, `«`, `»`) are present.
+- **Bilingual Switching**: The dashboard provides real-time switching between French (`fr`, default) and English (`en`) across all views, tooltips, dialogs, map controls, and export generators without page reload.
+
+---
+
+## 6. Leaflet Map Lifecycle & GIS Architecture
+
+The interactive map is powered by Leaflet 1.9.4 with standard OpenStreetMap cartography. It is engineered for resilience in React 18 Strict Mode and dynamic multi-tab layouts:
+
+### 6.1 Lifecycle Safety (React 18 StrictMode)
+- **Separation of Concerns**: Map container creation is strictly isolated from marker updates and camera controls:
+  1. `5a. Leaflet Map Instance Lifecycle`: Runs once on container mount (`[]`). Cleans any stale `_leaflet_id` before instantiating `L.map`, binds OSM tile layer, sets up `ResizeObserver`, and returns a cleanup function that tears down `map.remove()`, disconnects observer, and resets layer references.
+  2. `5b. Size Invalidation on Visibility`: Watches `[activeNavTab, isSidebarCollapsed]`. Fires `requestAnimationFrame(() => map.invalidateSize())` whenever the overview or GIS map becomes visible.
+  3. `5c. Markers & Bounds Calculation`: Watches `[mapReady, validClusters, mapLayers.roadSegments]`. Clears and repopulates the markers layer group without recreating the underlying Leaflet instance.
+  4. `5d. Focus Marker & Camera Navigation`: Smoothly flies the viewport (`map.flyTo`) to selected defects without resetting existing layers.
+
+### 6.2 Coordinate Validation & Sanitization
+- Before any point is added to `L.marker` or `L.latLngBounds`, it passes through `isValidLatLng(lat, lng)` in `src/utils/mapValidation.js`:
+  - Enforces finite numbers.
+  - Validates geographical bounds: Latitude $\in [-90, 90]$, Longitude $\in [-180, 180]$.
+  - Excludes uninitialized origin points (Null Island: `0, 0`).
+  - Empty cluster collections do not trigger `fitBounds([])`, preventing Leaflet runtime crashes.
+
+### 6.3 CSS Dimensions & Responsive Layout
+- Explicit container dimensions prevent 0x0 collapsed views:
+  - `.main-layout`: `min-height: 560px` (desktop grid `1fr 520px`).
+  - `.map-wrapper`: `min-height: 560px`.
+  - `.map-wrapper > div, .leaflet-container`: `width: 100%; height: 100%; min-height: inherit;`.
+  - Responsive breakpoint (`@media (max-width: 1100px)`): Switches layout to single column with `.map-wrapper { height: 420px; min-height: 420px; }`.
+  - Hidden state: Uses `.main-layout.hidden-map { display: none !important; }` to maintain the Leaflet DOM node during tab navigation without interfering with CSS grid layouts.
+
+### 6.4 Non-Blocking Map Overlays
+- **Loading State**: Displays a compact spinner banner (`Chargement de la carte…`) while initial data is fetched.
+- **Tile Error Banner**: Listens to Leaflet tile layer `tileerror` events and displays a non-blocking network warning banner without covering the map.
+- **Empty State**: Informs the user when no geolocated anomalies match active filters (`Aucune anomalie géolocalisée dans les filtres sélectionnés.`).
+- **Data Error State**: Displays error notification with an inline `Réessayer` button to reload Supabase data.
+
+---
+
+## 7. Development, Testing & Verification Commands
+
+```bash
+# Navigate to dashboard directory
+cd dashboard
+
+# Install dependencies cleanly
+npm ci --no-audit --no-fund
+
+# Run complete Vitest unit test suite (60 tests across 11 test files)
+npm test -- --run
+
+# Run Vite production build
+npm run build
+
+# Start local Vite development server
+npm run dev
+```

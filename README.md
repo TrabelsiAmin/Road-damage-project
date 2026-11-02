@@ -41,11 +41,15 @@ TariqMap is a production-ready, offline-first mobile application and spatial ana
 - **Crash & Cancel Safety**: Each detected frame is saved incrementally to local SQLite storage immediately upon analysis; cancelling or interrupting preserves all completed defect observations.
 - **Native FFmpeg Stitching**: Assembles detected frames and bounding box overlays into an annotated MP4 video with completion summary.
 
-### 5. 🗺️ Authority Dashboard & Real-Time Sync
-- **Vite React 18 Dashboard**: Split into optimized vendor, Leaflet, Supabase, and Lucide chunks (all < 250 kB).
-- **Controlled Refresh & Realtime**: Automatic 30s polling when tab is active plus Supabase Realtime subscriptions on `observations`.
-- **Selected Cluster Preservation**: Selected cluster drawer remains open and preserves active context across background data updates.
-- **Public & Private Photos**: 10-minute signed URLs for authorities viewing original photos; public view shows privacy-preserving blurred thumbnails.
+### 5. 🏛️ Ministry Road-Maintenance Command Center
+- **Executive Overview**: 10 real-data KPI cards (active anomalies, critical locations, high-risk corridors, new reports, backlog age, overdue cases, in-progress repairs, completed repairs, mean resolution time, and estimated budget) with comparative delta indicators against prior periods.
+- **Operations Action Center**: 8 dedicated work queues (`Critiques`, `En attente validation`, `En retard >14j`, `Non assignées`, `En cours`, `À vérifier`, `Répétés`, `GPS faible`) with operational data grid and safe bulk actions (status changes, priority adjustments, contractor assignments, and CSV exports).
+- **GIS Operations Map**: Leaflet map with 20m DBSCAN spatial clustering, priority color-coding, multi-layer toggles (active anomalies, critical locations, clusters, national corridors, repaired locations), and RAG technical recommendations.
+- **Road Segment Risk Matrix**: Deterministic corridor-level risk scoring ($0-100$) for Tunisian national routes (A1, A4, RN1, RN8, RN9, RR21, etc.) with transparent human-readable explanations and official DGPC unit-cost repair budgets.
+- **Analytics & Trends**: Time series comparing new reports vs. certified repairs (backlog expansion/shrinkage), territorial backlog ranking across the 24 Tunisian governorates, and SLA performance benchmarks.
+- **Data Quality & Model Telemetry**: Edge inference confidence calibration (high >80%, medium 50-80%, low <50%), class distribution, field GNSS precision integrity, and authority model feedback channels.
+- **Standard Reports & Exports**: Filter-aware CSV with UTF-8 BOM for Microsoft Excel, native Excel TSV, standard GeoJSON `FeatureCollection` for QGIS/ArcGIS, and printable A4 work orders (Fiche de tournée d'intervention).
+- **Audit Trail & Governance**: Chronological, immutable event log tracking all validations, assignments, status transitions, and repair verifications.
 
 ### 6. 🚗 Vehicle-Centered Drive Awareness Mode
 - **Real-Time Road Hazard Warnings**: Alerts drivers to verified upcoming potholes and cracks directly ahead on their route.

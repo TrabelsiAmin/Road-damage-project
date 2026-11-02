@@ -271,3 +271,171 @@ export async function updateMultipleObservationsStatus(ids, newStatus) {
   return data;
 }
 
+
+
+/**
+ * Loads maintenance cases metadata (contractor assignment, due dates, repair notes, verification).
+ * Returns Map of observation_id -> maintenance_case row.
+ */
+export async function fetchMaintenanceCases() {
+  try {
+    const { data, error } = await supabase
+      .from('maintenance_cases')
+      .select('*')
+      .limit(1000);
+
+    if (error) {
+      console.warn('[Supabase] maintenance_cases table query warning (fallback active):', error.message);
+      return {};
+    }
+
+    const map = {};
+    (data || []).forEach((row) => {
+      if (row.observation_id) map[row.observation_id] = row;
+    });
+    return map;
+  } catch (err) {
+    console.warn('[Supabase] fetchMaintenanceCases error:', err);
+    return {};
+  }
+}
+
+/**
+ * Updates or creates a maintenance case.
+ */
+export async function updateMaintenanceCase(payload) {
+  const { observationId, ...fields } = payload;
+  if (!observationId) throw new Error('observationId is required');
+
+  try {
+    const { data, error } = await supabase
+      .from('maintenance_cases')
+      .upsert({
+        observation_id: observationId,
+        case_number: payload.caseNumber || `CASE-${new Date().getFullYear()}-${observationId.slice(0, 6)}`,
+        updated_at: new Date().toISOString(),
+        ...fields,
+      }, { onConflict: 'observation_id' })
+      .select('*');
+
+    if (error) {
+      console.warn('[Supabase] updateMaintenanceCase warning:', error.message);
+      return { observation_id: observationId, ...fields };
+    }
+    return data?.[0] || { observation_id: observationId, ...fields };
+  } catch (err) {
+    console.warn('[Supabase] updateMaintenanceCase error:', err);
+    return { observation_id: observationId, ...fields };
+  }
+}
+
+/**
+ * Fetches chronological audit trail events.
+ */
+export async function fetchMaintenanceEvents(limit = 100) {
+  try {
+    const { data, error } = await supabase
+      .from('maintenance_events')
+      .select('*')
+      .order('created_at', { ascending: false })
+      .limit(limit);
+
+    if (error) {
+      console.warn('[Supabase] maintenance_events table query warning:', error.message);
+      return [];
+    }
+    return data || [];
+  } catch (err) {
+    console.warn('[Supabase] fetchMaintenanceEvents error:', err);
+    return [];
+  }
+}
+
+/**
+ * Records an auditable maintenance action event.
+ */
+export async function recordMaintenanceEvent({
+  observationId,
+  action,
+  previousValue = null,
+  newValue = null,
+  notes = null,
+}) {
+  try {
+    const user = await getCurrentUser();
+    const { data, error } = await supabase
+      .from('maintenance_events')
+      .insert({
+        observation_id: observationId,
+        user_id: user?.id || null,
+        actor_email: user?.email || 'Autorité Voirie',
+        action,
+        previous_value: previousValue ? String(previousValue) : null,
+        new_value: newValue ? String(newValue) : null,
+        notes,
+      })
+      .select();
+
+    if (error) {
+      console.warn('[Supabase] recordMaintenanceEvent warning:', error.message);
+    }
+    return data?.[0] || null;
+  } catch (err) {
+    console.warn('[Supabase] recordMaintenanceEvent error:', err);
+    return null;
+  }
+}
+
+/**
+ * Fetches server-calculated road segments risk via PostGIS RPC get_road_segment_risk.
+ */
+export async function fetchRoadSegmentsRisk(minRiskLevel = 'ALL') {
+  try {
+    const { data, error } = await supabase.rpc('get_road_segment_risk', {
+      min_risk_level: minRiskLevel,
+    });
+
+    if (error) {
+      console.warn('[Supabase] get_road_segment_risk RPC warning (will use client calculation):', error.message);
+      return null;
+    }
+    return data || [];
+  } catch (err) {
+    console.warn('[Supabase] fetchRoadSegmentsRisk error:', err);
+    return null;
+  }
+}
+
+/**
+ * Subscribes to Realtime updates on observations and maintenance_cases.
+ */
+export function subscribeToCommandCenterUpdates(onUpdate) {
+  if (!onUpdate) return () => {};
+
+  let debounceTimer = null;
+  const triggerDebounced = (payload) => {
+    if (debounceTimer) clearTimeout(debounceTimer);
+    debounceTimer = setTimeout(() => {
+      onUpdate(payload);
+    }, 400);
+  };
+
+  const channel = supabase
+    .channel('command-center-realtime')
+    .on(
+      'postgres_changes',
+      { event: '*', schema: 'public', table: 'observations' },
+      triggerDebounced
+    )
+    .on(
+      'postgres_changes',
+      { event: '*', schema: 'public', table: 'maintenance_cases' },
+      triggerDebounced
+    )
+    .subscribe();
+
+  return () => {
+    if (debounceTimer) clearTimeout(debounceTimer);
+    supabase.removeChannel(channel);
+  };
+}

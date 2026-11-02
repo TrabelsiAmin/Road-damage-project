@@ -70,6 +70,85 @@ Emit structured events for capture, inference completion, model error, queue ret
 
 ---
 
+## Ministry Command Center PostGIS Contracts
+
+### 1. PostGIS RPC: `get_road_segment_risk`
+`POST /rest/v1/rpc/get_road_segment_risk`
+
+Aggregates observations across spatial road corridors (`road_segments`) and computes composite risk scores, dominant defect classes, backlog age, and estimated repair budgets.
+
+#### Parameters
+| Parameter | Type | Default | Description |
+| :--- | :--- | :--- | :--- |
+| `min_risk_level` | `text` | `'ALL'` | Minimum risk filter (`'ALL'`, `'CRITICAL'`, `'HIGH'`, `'MEDIUM'`, `'LOW'`) |
+
+#### Return Schema
+| Column | Type | Description |
+| :--- | :--- | :--- |
+| `segment_id` | `uuid` | Unique identifier of the corridor segment |
+| `road_code` | `text` | Corridor identifier (`A1`, `A4`, `RN1`, `RN8`, etc.) |
+| `road_name` | `text` | Formal corridor designation |
+| `governorate` | `text` | Tunisian governorate name |
+| `municipality` | `text` | Municipality / delegation name |
+| `total_reports` | `integer` | Count of observations on corridor |
+| `active_reports` | `integer` | Count of un-repaired anomalies |
+| `dominant_class` | `text` | Dominant defect class (`D00`, `D10`, `D20`, `D40`) |
+| `pothole_count` | `integer` | Count of severe D40 potholes |
+| `max_priority_score` | `double precision` | Maximum priority score observed [0, 100] |
+| `oldest_age_days` | `integer` | Age in days of oldest unresolved defect |
+| `risk_score` | `double precision` | Composite risk score [0, 100] |
+| `risk_level` | `text` | Categorical danger rating (`CRITICAL`, `HIGH`, `MEDIUM`, `LOW`) |
+| `estimated_budget_tnd` | `double precision` | Estimated repair cost in Tunisian Dinars |
+
+---
+
+### 2. PostGIS RPC: `get_anomalies_in_bounds`
+`POST /rest/v1/rpc/get_anomalies_in_bounds`
+
+Enables debounced visible-bounds viewport querying on the GIS Operations Map, preventing full database loading in the browser.
+
+#### Parameters
+| Parameter | Type | Default | Description |
+| :--- | :--- | :--- | :--- |
+| `min_lat` | `double precision` | *required* | Viewport south latitude |
+| `min_lng` | `double precision` | *required* | Viewport west longitude |
+| `max_lat` | `double precision` | *required* | Viewport north latitude |
+| `max_lng` | `double precision` | *required* | Viewport east longitude |
+| `status_filter` | `text` | `'all'` | Lifecycle status filter |
+| `class_filter` | `text` | `'all'` | Damage class filter |
+| `priority_filter` | `text` | `'all'` | Priority level filter |
+| `include_demo` | `boolean` | `false` | Whether to include synthetic test data |
+| `limit_count` | `integer` | `500` | Maximum markers returned |
+
+---
+
+### 3. Maintenance Schema
+
+#### `maintenance_cases`
+Tracks institutional case assignments, SLA due dates, contractor accountability, and repair notes:
+- `id`: UUID (Primary Key)
+- `observation_id`: UUID (Foreign Key -> `observations.id`, Unique)
+- `case_number`: Text (`CASE-YYYY-XXXXXX`)
+- `assigned_contractor_id`: UUID (Foreign Key -> `organizations.id`)
+- `due_date`: Date
+- `repair_notes`: Text
+- `verified_at`: Timestamptz
+- `verified_by`: UUID (Foreign Key -> `auth.users.id`)
+
+#### `maintenance_events`
+Append-only immutable audit trail capturing every decision made by ministry and municipal authorities:
+- `id`: UUID (Primary Key)
+- `observation_id`: UUID (Foreign Key -> `observations.id`)
+- `user_id`: UUID (Foreign Key -> `auth.users.id`)
+- `actor_email`: Text
+- `action`: Text (`validation`, `assignment`, `status_change`, `rejection`, `repair_verify`, `model_feedback`)
+- `previous_value`: Text
+- `new_value`: Text
+- `notes`: Text
+- `created_at`: Timestamptz (Default `clock_timestamp()`)
+
+---
+
 ## Drive Awareness PostGIS Contract
 
 ### PostGIS RPC: `get_nearby_anomalies`

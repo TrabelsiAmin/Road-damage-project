@@ -93,3 +93,18 @@ Early database setup scripts were executed directly in the Supabase SQL Editor o
 3. **Bounded Read-Only Querying**: Remote spatial lookups query the database through the read-only PostGIS RPC `get_nearby_anomalies` with strict coordinate clamping to Tunisia bounds and rate limiting / spatial debounce.
 4. **Lifecycle-Bound Tracking**: Location streams are strictly active only when the Drive Awareness screen is in foreground. Pausing, navigating away, or backgrounding the application immediately halts GPS listening.
 5. **Mandatory Safety Disclaimer**: A required first-use disclaimer enforces driver awareness, emphasizing that TariqMap is an informational aid that does not replace visual driver focus or traffic laws.
+
+
+---
+
+## 6. Command Center Maintenance & Audit RLS
+
+### `maintenance_cases`
+- **SELECT**: Granted to authenticated authorities (`is_authority() = true`) to view active work orders, assignments, and contractor notes.
+- **INSERT / UPDATE**: Restricted strictly to authenticated authorities.
+- **DELETE**: Denied to all roles (append / soft-status lifecycle only).
+
+### `maintenance_events`
+- **SELECT**: Granted to authenticated authorities to view audit trails.
+- **INSERT**: Granted to authenticated authorities (`is_authority() = true`) to log status transitions, contractor assignments, model feedback, and repair verifications.
+- **UPDATE / DELETE**: Denied to all roles (immutable event store).

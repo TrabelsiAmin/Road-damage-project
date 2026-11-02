@@ -22,7 +22,7 @@ class AppDatabase {
   }
 
   static const _dbName    = 'tariqmap.db';
-  static const _dbVersion = 3;
+  static const _dbVersion = 4;
 
   // ── Schema ────────────────────────────────────────────────────────────────
 
@@ -93,6 +93,27 @@ class AppDatabase {
     )
   ''';
 
+  static const _createCachedAnomalies = '''
+    CREATE TABLE IF NOT EXISTS cached_anomalies (
+      observation_id   TEXT PRIMARY KEY,
+      latitude         REAL NOT NULL,
+      longitude        REAL NOT NULL,
+      anomaly_type     TEXT NOT NULL,
+      priority_score   REAL NOT NULL,
+      priority_label   TEXT NOT NULL,
+      status           TEXT NOT NULL,
+      accuracy_meters  REAL,
+      created_at       TEXT NOT NULL,
+      report_count     INTEGER NOT NULL DEFAULT 1,
+      cached_at        TEXT NOT NULL
+    )
+  ''';
+
+  static const _createCachedAnomaliesIndex = '''
+    CREATE INDEX IF NOT EXISTS idx_cached_anomalies_coords
+    ON cached_anomalies (latitude, longitude)
+  ''';
+
   // ── Open / migrate ────────────────────────────────────────────────────────
 
   Future<Database> _open() async {
@@ -119,6 +140,8 @@ class AppDatabase {
     await db.execute(_createDetections);
     await db.execute(_createAgentResults);
     await db.execute(_createAuditLog);
+    await db.execute(_createCachedAnomalies);
+    await db.execute(_createCachedAnomaliesIndex);
   }
 
   Future<void> _onCreate(Database db, int version) async {
@@ -136,6 +159,10 @@ class AppDatabase {
     if (oldVersion < 3) {
       await db.execute('ALTER TABLE observations ADD COLUMN organization_id TEXT');
       await db.execute("ALTER TABLE observations ADD COLUMN media_sync_status TEXT NOT NULL DEFAULT 'pending'");
+    }
+    if (oldVersion < 4) {
+      await db.execute(_createCachedAnomalies);
+      await db.execute(_createCachedAnomaliesIndex);
     }
   }
 

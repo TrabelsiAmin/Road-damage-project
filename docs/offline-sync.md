@@ -27,3 +27,35 @@ Use SQLite/Drift or Isar for production because observations, detections, queue 
 ## Recovery cases
 
 The app must survive process termination during inference, upload, and file deletion. Mark `uploading` records as recoverable on startup. Never delete local evidence until the server acknowledges both observation metadata and attachment checksum. Provide a storage health screen showing count, bytes, oldest pending item, and failed items.
+
+
+---
+
+## Drive Awareness SQLite Anomaly Caching (Schema Version 4)
+
+To ensure vehicle warnings work in zero-coverage zones and remote highways, road anomalies are persisted in a local `cached_anomalies` table.
+
+### Schema Definition
+```sql
+CREATE TABLE IF NOT EXISTS cached_anomalies (
+  observation_id   TEXT PRIMARY KEY,
+  latitude         REAL NOT NULL,
+  longitude        REAL NOT NULL,
+  anomaly_type     TEXT NOT NULL,
+  priority_score   REAL NOT NULL,
+  priority_label   TEXT NOT NULL,
+  status           TEXT NOT NULL,
+  accuracy_meters  REAL,
+  created_at       TEXT NOT NULL,
+  report_count     INTEGER NOT NULL DEFAULT 1,
+  cached_at        TEXT NOT NULL
+);
+
+CREATE INDEX IF NOT EXISTS idx_cached_anomalies_coords
+ON cached_anomalies (latitude, longitude);
+```
+
+### Cache Invariants & Eviction Policy
+1. **TTL Expiration**: Records cached older than 24 hours (configurable) are automatically filtered out from nearby queries.
+2. **LRU Size Capping**: If the table exceeds 500 records, the oldest entries (`ORDER BY cached_at ASC`) are automatically pruned.
+3. **Spatial Radius Lookup**: Queries filter with a bounding box in SQLite first, followed by exact Haversine distance calculations.

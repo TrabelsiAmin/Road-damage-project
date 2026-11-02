@@ -47,6 +47,14 @@ TariqMap is a production-ready, offline-first mobile application and spatial ana
 - **Selected Cluster Preservation**: Selected cluster drawer remains open and preserves active context across background data updates.
 - **Public & Private Photos**: 10-minute signed URLs for authorities viewing original photos; public view shows privacy-preserving blurred thumbnails.
 
+### 6. 🚗 Vehicle-Centered Drive Awareness Mode
+- **Real-Time Road Hazard Warnings**: Alerts drivers to verified upcoming potholes and cracks directly ahead on their route.
+- **Glanceable Passive HUD**: High-contrast, non-distracting vehicle-centered map with Heading-Up/North-Up toggle, large defect cards, and clear road ahead states.
+- **Forward-Cone Route Matching**: Prioritizes hazards in the vehicle's driving direction ($\pm 35^\circ$ forward cone up to 300m) while filtering defects behind or on adjacent cross streets.
+- **Multi-Tier Cooldown Alerts**: Gentle audio and haptic feedback on approaching hazards (warning at ~180m, urgent at ~60m) with 40-second anti-spam cooldown protection.
+- **Offline SQLite Caching**: Automatically caches hazards in `cached_anomalies` table so warnings continue without disruption in remote or low-connectivity areas.
+- **Privacy & Safety First**: Zero continuous path logging, zero continuous YOLO inference while driving, and mandatory initial driver safety agreement.
+
 ---
 
 ## 🏛️ System Architecture

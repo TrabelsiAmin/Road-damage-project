@@ -6,6 +6,7 @@ import 'package:uuid/uuid.dart';
 import '../../core/constants.dart';
 import '../../core/supabase_config.dart';
 import '../../models/observation.dart';
+import '../../models/upcoming_anomaly.dart';
 import '../../services/image_compressor.dart';
 import '../../services/sync_cancel_token.dart';
 
@@ -472,6 +473,36 @@ class SupabaseService {
       }
     } catch (e) {
       debugPrint('[SupabaseService] media_files insert warning: $e');
+    }
+  }
+
+  /// Calls PostGIS RPC get_nearby_anomalies to fetch road anomalies around the vehicle.
+  Future<List<UpcomingAnomaly>> fetchNearbyAnomalies({
+    required double latitude,
+    required double longitude,
+    double radiusMeters = 1000.0,
+    int maxResults = 50,
+  }) async {
+    try {
+      final response = await _client.rpc(
+        'get_nearby_anomalies',
+        params: {
+          'user_lat': latitude,
+          'user_lon': longitude,
+          'radius_meters': radiusMeters,
+          'max_results': maxResults,
+        },
+      );
+
+      if (response == null) return [];
+      final List<dynamic> data = response is List ? response : [];
+      return data.map((item) {
+        final map = item as Map<String, dynamic>;
+        return UpcomingAnomaly.fromMap(map);
+      }).toList();
+    } catch (e) {
+      debugPrint('[SupabaseService] fetchNearbyAnomalies RPC error: $e');
+      return [];
     }
   }
 }

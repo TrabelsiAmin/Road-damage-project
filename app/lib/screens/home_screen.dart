@@ -18,6 +18,7 @@ import '../services/organization_service.dart';
 import '../data/remote/api_client.dart';
 import '../services/territorial_service.dart';
 import 'camera_detection_screen.dart';
+import 'drive_awareness_screen.dart';
 import 'model_status_screen.dart';
 import 'offline_queue_screen.dart';
 import 'organization_selection_screen.dart';
@@ -267,6 +268,13 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
     if (mounted) setState(() => _observations = loaded);
   }
 
+  Future<void> _openDriveAwareness() async {
+    await Navigator.of(context).push(MaterialPageRoute<void>(
+      builder: (_) => const DriveAwarenessScreen(),
+    ));
+    if (mounted) setState(() {});
+  }
+
   Future<SyncResult> _syncAll({SyncCancelToken? cancelToken}) async {
     setState(() => _isSyncing = true);
     try {
@@ -356,6 +364,7 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
                           busy: _busy,
                           onTakePhoto: _openTakePhoto,
                           onRecordVideo: _openVideoImport,
+                          onDriveAwareness: _openDriveAwareness,
                         ),
 
                         // ── Error / message banner ─────────────────────────
@@ -840,11 +849,13 @@ class _ActionGrid extends StatelessWidget {
     required this.busy,
     required this.onTakePhoto,
     required this.onRecordVideo,
+    required this.onDriveAwareness,
   });
 
   final bool busy;
   final VoidCallback onTakePhoto;
   final VoidCallback onRecordVideo;
+  final VoidCallback onDriveAwareness;
 
   @override
   Widget build(BuildContext context) {
@@ -871,6 +882,19 @@ class _ActionGrid extends StatelessWidget {
           glow: const Color(0xFF7C3AED),
           enabled: !busy,
           onTap: onRecordVideo,
+          large: true,
+          compact: false,
+          secondary: true,
+        ),
+        const SizedBox(height: 12),
+        _ActionButton(
+          label: 'Drive Awareness',
+          subtitle: 'Real-time road hazard alerts centered on your route',
+          icon: Icons.navigation_rounded,
+          gradient: const [Color(0xFF0284C7), Color(0xFF38BDF8)],
+          glow: const Color(0xFF0284C7),
+          enabled: !busy,
+          onTap: onDriveAwareness,
           large: true,
           compact: false,
           secondary: true,

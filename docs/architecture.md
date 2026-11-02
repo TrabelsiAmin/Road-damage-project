@@ -61,3 +61,46 @@ The future backend should expose:
 - `GET /analytics` for actor-specific aggregates.
 
 The client currently uses a local territorial service so that the product flow is testable before the SIG data source is selected.
+
+
+---
+
+## Drive Awareness Subsystem Architecture
+
+The Drive Awareness subsystem provides real-time, passive, glanceable driver alerts for verified and reported road anomalies ahead of the vehicle along its driving path.
+
+### Architectural Principles
+1. **Passive Safety First**: Strictly glanceable UI with high contrast, large typography, audio chimes, and haptic warnings. Prohibits deep interactions or keyboard input while driving.
+2. **Zero Continuous Model Inference**: Does NOT run on-device YOLO models continuously while driving, protecting battery and preventing device overheating.
+3. **Strict Privacy**: Does NOT upload continuous GPS breadcrumbs or tracking paths to remote servers. GPS queries are read-only and local to the active screen.
+4. **Offline Resilience**: Automatically caches known hazards locally in SQLite (`cached_anomalies`), providing full warning capabilities without cell coverage.
+
+### Component Diagram
+
+```mermaid
+flowchart TD
+  GPS[Geolocator GPS Stream] --> DLS[DrivingLocationService]
+  DLS -->|Smoothed DrivingPosition| DAS[DriveAwarenessScreen]
+  DLS -->|Smoothed Heading & Speed| DAS
+
+  subgraph Spatial & Path Evaluation
+    DAR[DriveAnomalyRepository] -->|Bounding query| RPC[PostGIS RPC get_nearby_anomalies]
+    DAR -->|Offline fallback| DCS[DrivingCacheService SQLite]
+    DAS --> DAR
+    DAS --> UAS[UpcomingAnomalyService]
+    UAS --> RMS[RouteMatchingService / ForwardCone]
+    RMS -->|Within +/-35 deg Cone & Ranked| UAS
+  end
+
+  UAS -->|UpcomingAnomalyResult| DAS
+  UAS -->|Warning / Urgent Alert| ALERT[DriveAlertService]
+  ALERT --> HAPTIC[Haptic Feedback]
+  ALERT --> AUDIO[System Audio Alert]
+```
+
+### Components
+- **`DrivingLocationService`**: Manages the continuous GPS location stream (5m distance filter), smooths heading via exponential moving average across the 0/360 boundary, computes movement bearings when speed $\ge 1.2$ m/s, and preserves heading when stationary.
+- **`RouteMatchingService`**: Abstraction defining route and path relevance. Implemented via `ForwardConeRouteMatcher` ($\pm 35^\circ$ forward field of view, lookahead up to 400m, severity weighting). Easily extensible for future OSRM/Valhalla map matching.
+- **`UpcomingAnomalyService`**: Selects the single highest-priority upcoming anomaly ahead, filters passed anomalies, enforces GPS accuracy thresholds, and returns formatted distance and advice.
+- **`DriveAlertService`**: Controls gentle audio/haptic alert emission with anti-spam cooldown timers (30-40s) and multi-tier escalation (warning at ~180m, urgent at ~60m).
+- **`DrivingCacheService`**: Manages offline SQLite caching in `cached_anomalies` table with spatial bounding box queries and TTL eviction.

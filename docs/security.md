@@ -82,3 +82,14 @@ Early database setup scripts were executed directly in the Supabase SQL Editor o
    supabase migration repair --status applied 20261013120000
    ```
 3. Apply Phase 1c migration `20261013233000_phase1c_security_hardening.sql` once confirmed by operator.
+
+
+---
+
+## 6. Drive Awareness Privacy & Driver Safety Architecture
+
+1. **Zero Path Logging**: TariqMap never stores, buffers, or uploads continuous driving tracks, routes, or GPS breadcrumbs to Supabase or any remote endpoint.
+2. **Ephemeral In-Memory GPS Processing**: Driving position and heading are processed strictly in-memory on the device within `DrivingLocationService` and discarded.
+3. **Bounded Read-Only Querying**: Remote spatial lookups query the database through the read-only PostGIS RPC `get_nearby_anomalies` with strict coordinate clamping to Tunisia bounds and rate limiting / spatial debounce.
+4. **Lifecycle-Bound Tracking**: Location streams are strictly active only when the Drive Awareness screen is in foreground. Pausing, navigating away, or backgrounding the application immediately halts GPS listening.
+5. **Mandatory Safety Disclaimer**: A required first-use disclaimer enforces driver awareness, emphasizing that TariqMap is an informational aid that does not replace visual driver focus or traffic laws.

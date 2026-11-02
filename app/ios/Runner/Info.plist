@@ -34,6 +34,8 @@
 	<string>L’application peut enregistrer des photos dans la galerie.</string>
 	<key>NSPhotoLibraryUsageDescription</key>
 	<string>L’application accède à la galerie pour sélectionner des photos.</string>
+	<key>NSLocationWhenInUseUsageDescription</key>
+	<string>TariqMap uses your location while driving to display your position and alert you to upcoming road hazards.</string>
 	<key>UIApplicationSceneManifest</key>
 	<dict>
 		<key>UIApplicationSupportsMultipleScenes</key>

@@ -1,0 +1,8 @@
+# Copy to key.properties and fill on the machine that builds the Play upload.
+# key.properties is gitignored. Do not put a real password or keystore in git.
+# Environment variables STORE_FILE, KEY_ALIAS, STORE_PASSWORD, and KEY_PASSWORD
+# override these names when they are set.
+storeFile=
+storePassword=
+keyAlias=
+keyPassword=

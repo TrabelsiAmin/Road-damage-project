@@ -1,4 +1,7 @@
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, vi } from 'vitest';
+
+vi.mock('@supabase/supabase-js', () => ({ createClient: () => ({}) }));
+
 import { assertPublicSupabaseConfig, resolvePublicConfig } from './supabase';
 
 function token(role) {

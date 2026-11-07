@@ -1,0 +1,73 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "tariqmap-annotations-1",
+  "title": "TariqMap candidate annotations",
+  "description": "COCO-style boxes plus provenance. This file defines structure only. It contains no labels for the Global_Potholes images. Category names are not D00/D10/D20/D40 until a mapping is evidenced.",
+  "type": "object",
+  "required": ["info", "images", "annotations", "categories"],
+  "additionalProperties": false,
+  "properties": {
+    "info": {
+      "type": "object",
+      "required": ["annotation_schema", "annotation_version", "provenance"],
+      "properties": {
+        "annotation_schema": {"const": "tariqmap-annotations-1"},
+        "annotation_version": {"type": "string", "minLength": 1},
+        "provenance": {"type": "string", "minLength": 1},
+        "description": {"type": "string"}
+      }
+    },
+    "images": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["id", "file_name", "width", "height"],
+        "properties": {
+          "id": {"type": "integer"},
+          "file_name": {"type": "string", "minLength": 1},
+          "width": {"type": "integer", "minimum": 1},
+          "height": {"type": "integer", "minimum": 1},
+          "content_sha256": {"type": "string"},
+          "negative": {"type": "boolean"},
+          "provenance": {"type": "string"}
+        }
+      }
+    },
+    "annotations": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["id", "image_id", "category_id", "bbox", "annotator_id", "review_status", "provenance"],
+        "properties": {
+          "id": {"type": "integer"},
+          "image_id": {"type": "integer"},
+          "category_id": {"type": "integer"},
+          "bbox": {
+            "type": "array",
+            "minItems": 4,
+            "maxItems": 4,
+            "items": {"type": "number"},
+            "description": "COCO absolute pixels: x, y, width, height from the top-left."
+          },
+          "annotator_id": {"type": "string", "minLength": 1},
+          "review_status": {"enum": ["unreviewed", "accepted", "rejected"]},
+          "provenance": {"type": "string", "minLength": 1},
+          "annotation_version": {"type": "string"}
+        }
+      }
+    },
+    "categories": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["id", "name", "definition_status"],
+        "properties": {
+          "id": {"type": "integer"},
+          "name": {"type": "string", "minLength": 1},
+          "supercategory": {"type": "string"},
+          "definition_status": {"enum": ["pending_confirmation", "confirmed"]}
+        }
+      }
+    }
+  }
+}

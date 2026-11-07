@@ -1,0 +1,8 @@
+{
+  "images_dir": "Global_Potholes_Dataset-image/images",
+  "labels_dir": "Global_Potholes_Dataset-image/labels",
+  "status": "BLOCKED",
+  "image_count": 200,
+  "reason": "labels directory does not exist; no boxes to validate",
+  "label_file_count": 0
+}

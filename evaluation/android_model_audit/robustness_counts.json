@@ -1,0 +1,86 @@
+{
+  "tag": "QUALITATIVE",
+  "host": "linux-vm-cpu",
+  "not_android": true,
+  "not_map": true,
+  "note": "Pre-NMS candidates above the production per-class thresholds. No ground truth. n=5 unlabeled images.",
+  "rows": [
+    {
+      "transform": "identity",
+      "pre_nms_candidates": [
+        11,
+        0,
+        0,
+        0,
+        0
+      ],
+      "mean": 2.2
+    },
+    {
+      "transform": "dark_0.4",
+      "pre_nms_candidates": [
+        7,
+        0,
+        0,
+        0,
+        0
+      ],
+      "mean": 1.4
+    },
+    {
+      "transform": "bright_1.6",
+      "pre_nms_candidates": [
+        6,
+        0,
+        0,
+        0,
+        0
+      ],
+      "mean": 1.2
+    },
+    {
+      "transform": "blur_k15",
+      "pre_nms_candidates": [
+        0,
+        0,
+        0,
+        0,
+        0
+      ],
+      "mean": 0.0
+    },
+    {
+      "transform": "jpeg_q20",
+      "pre_nms_candidates": [
+        0,
+        0,
+        0,
+        0,
+        0
+      ],
+      "mean": 0.0
+    },
+    {
+      "transform": "gauss_noise",
+      "pre_nms_candidates": [
+        0,
+        0,
+        0,
+        0,
+        0
+      ],
+      "mean": 0.0
+    },
+    {
+      "transform": "rot5",
+      "pre_nms_candidates": [
+        9,
+        0,
+        0,
+        0,
+        0
+      ],
+      "mean": 1.8
+    }
+  ]
+}

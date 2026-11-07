@@ -1,0 +1,22 @@
+metric,value,unit,tag,notes
+map50,,ratio,NOT VERIFIED,no labeled test set
+map50_95,,ratio,NOT VERIFIED,no labeled test set
+precision,,ratio,NOT VERIFIED,no labeled test set
+recall,,ratio,NOT VERIFIED,no labeled test set
+dataset_jpg_git,29120,count,VERIFIED,git ls-tree Global_Potholes_Dataset-image jpg only
+dataset_label_files,0,count,VERIFIED,no txt/xml/json labels in that tree
+legacy_input_n,1,count,VERIFIED,NHWC
+legacy_input_h,640,px,VERIFIED,
+legacy_input_w,640,px,VERIFIED,
+legacy_input_c,3,count,VERIFIED,
+legacy_output_channels,8,count,VERIFIED,4 box + 4 scores
+legacy_output_anchors,8400,count,VERIFIED,
+legacy_bytes,44768844,bytes,VERIFIED,sha256 830f99bd8c31c5d24138c16db7862dfb62293b96cc1dec241c36140bff8a813f
+roadsense_output_channels,9,count,VERIFIED,not the default model
+linux_invoke_mean_zero_tensor,112.36,ms,VERIFIED,n=8 XNNPACK 2 threads NOT Android
+linux_invoke_mean_real_images,103.71,ms,VERIFIED,n=12 earlier same VM NOT Android
+android_invoke_mean,,ms,BLOCKED,no flutter no adb no device
+eval_plan_n,200,images,NOT VERIFIED,plan only seed 20261105 splits 138/29/33 no boxes
+dashboard_vitest_passed,80,tests,VERIFIED,before and after these edits
+training_contract_passed,2,tests,VERIFIED,before and after
+flutter_tests,,tests,BLOCKED,new decoder and stretch tests not executed

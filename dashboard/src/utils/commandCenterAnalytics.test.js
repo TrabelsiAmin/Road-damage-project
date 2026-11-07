@@ -103,6 +103,24 @@ describe('commandCenterAnalytics', () => {
     expect(dq.classesBreakdown.D40).toBe(1);
   });
 
+  it('does not invent confidence or a D40 class when nothing was stored', () => {
+    const empty = buildDataQualityMetrics([]);
+    expect(empty.highConfidencePercent).toBeNull();
+    expect(empty.poorGpsPercent).toBeNull();
+    expect(empty.hasMediaPercent).toBeNull();
+
+    const missing = buildDataQualityMetrics([
+      {
+        id: 'obs-x',
+        status: 'unconfirmed',
+        detections: [{ confidence: 0.9 }],
+      },
+    ]);
+    expect(missing.classesBreakdown.D40).toBe(0);
+    expect(missing.unspecifiedClassCount).toBe(1);
+    expect(missing.highConfidencePercent).toBe(100);
+  });
+
   it('computes regional backlog ranking', () => {
     const backlog = buildRegionalBacklog(mockObservations);
     expect(backlog.length).toBeGreaterThan(0);

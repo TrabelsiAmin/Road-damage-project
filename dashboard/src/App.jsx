@@ -27,6 +27,7 @@ import {
   subscribeToCommandCenterUpdates,
   supabase,
 } from './supabase';
+import { mergeObservationPages, OBSERVATION_PAGE_SIZE } from './utils/records';
 import { GlobalFilterBar } from './components/GlobalFilterBar';
 import { DashboardShell } from './components/layout/DashboardShell';
 import { ExecutiveKpiGrid } from './components/ExecutiveKpiGrid';
@@ -66,7 +67,6 @@ import {
   buildTechnicalQuestion,
   observationForRecommendation,
 } from './utils/ragClient';
-import validationMetricsData from './data/validation_metrics.json';
 import {
   MapPin,
   AlertTriangle,
@@ -329,6 +329,8 @@ function ReportImageThumbnail({ obs, clusterMedia, isAuthority, onOpenLightbox }
 
 export default function App() {
   const [observations, setObservations] = useState([]);
+  const [listTruncated, setListTruncated] = useState(false);
+  const [loadingOlder, setLoadingOlder] = useState(false);
   const [serverClusters, setServerClusters] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
@@ -522,13 +524,14 @@ export default function App() {
     else setIsRefreshing(true);
     setError(null);
     try {
-      const [obsData, clusterData, casesData, eventsData] = await Promise.all([
+      const [obsPage, clusterData, casesData, eventsData] = await Promise.all([
         fetchObservations(),
         fetchServerClusters(20, 1),
         fetchMaintenanceCases().catch(() => ({})),
         fetchMaintenanceEvents(100).catch(() => []),
       ]);
-      setObservations(obsData || []);
+      setObservations(obsPage?.rows || []);
+      setListTruncated(Boolean(obsPage?.truncated));
       setServerClusters(clusterData || []);
       setMaintenanceCases(casesData || {});
       setAuditEvents(eventsData || []);
@@ -553,6 +556,25 @@ export default function App() {
   useEffect(() => {
     loadData();
   }, [loadData, dataVersion]);
+
+  const loadOlderObservations = useCallback(async () => {
+    const dated = observations
+      .map((obs) => obs.created_at)
+      .filter(Boolean)
+      .sort();
+    const oldest = dated[0];
+    if (!oldest || loadingOlder) return;
+    setLoadingOlder(true);
+    try {
+      const page = await fetchObservations({ before: oldest });
+      setObservations((current) => mergeObservationPages(current, page?.rows || []));
+      setListTruncated(Boolean(page?.truncated));
+    } catch (err) {
+      setError(err.message || 'Error fetching data from Supabase');
+    } finally {
+      setLoadingOlder(false);
+    }
+  }, [observations, loadingOlder]);
 
   // Controlled auto-polling & Realtime subscription
   useEffect(() => {
@@ -1566,6 +1588,26 @@ export default function App() {
           )}
 
           {/* Supabase Data Error State */}
+          {listTruncated && (
+            <div className="map-overlay-banner" role="status">
+              <span>
+                {lang === 'fr'
+                  ? `Totaux limités aux ${OBSERVATION_PAGE_SIZE} signalements les plus récents chargés.`
+                  : `Totals use the latest ${OBSERVATION_PAGE_SIZE} loaded observations.`}
+              </span>
+              <button
+                type="button"
+                className="btn btn-secondary btn-sm"
+                onClick={loadOlderObservations}
+                disabled={loadingOlder}
+              >
+                {loadingOlder
+                  ? (lang === 'fr' ? 'Chargement…' : 'Loading…')
+                  : (lang === 'fr' ? 'Charger les plus anciens' : 'Load older')}
+              </button>
+            </div>
+          )}
+
           {error && (
             <div className="map-overlay-banner map-error-state" role="alert">
               <span>
@@ -2144,74 +2186,26 @@ export default function App() {
         </div>
       )}
 
-      {/* ── Honest Metrics Panel Modal (Loaded from JSON file) ──────────────── */}
+      {/* ── Metrics panel: no labeled eval is stored in this repo ───────────── */}
       {showMetricsPanel && (
         <div className="modal-overlay" onClick={() => setShowMetricsPanel(false)}>
-          <div className="modal-card" style={{ maxWidth: '640px' }} onClick={(e) => e.stopPropagation()}>
+          <div className="modal-card" style={{ maxWidth: '560px' }} onClick={(e) => e.stopPropagation()}>
             <div style={{ padding: '24px' }}>
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
-                <div>
-                  <h3 style={{ fontSize: '1.15rem', fontWeight: 800, color: 'var(--text-main)' }}>
-                    Métriques IA & Limites
-                  </h3>
-                  <span style={{ fontSize: '0.75rem', color: 'var(--text-dim)' }}>
-                    Source: {validationMetricsData.model_name} • {validationMetricsData.evaluation_split}
-                  </span>
-                </div>
+                <h3 style={{ fontSize: '1.15rem', fontWeight: 800, color: 'var(--text-main)' }}>
+                  Métriques IA & Limites
+                </h3>
                 <X size={18} style={{ cursor: 'pointer' }} onClick={() => setShowMetricsPanel(false)} />
               </div>
 
-              {/* Warning Statement Banner */}
-              <div style={{ padding: '12px 14px', background: 'rgba(239, 68, 68, 0.12)', border: '1px solid rgba(239, 68, 68, 0.3)', borderRadius: 'var(--radius-sm)', marginBottom: '18px' }}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: '8px', color: 'var(--color-critical)', fontWeight: 700, fontSize: '0.85rem' }}>
-                  <AlertTriangle size={16} />
-                  <span>{validationMetricsData.warning_highlight}</span>
-                </div>
-                <p style={{ fontSize: '0.8rem', color: 'var(--text-main)', marginTop: '6px', lineHeight: 1.45 }}>
-                  {validationMetricsData.statement}
-                </p>
+              <div className="metric-unavailable" role="status">
+                <strong>Not available</strong>
+                <span>
+                  {lang === 'fr'
+                    ? "Aucune évaluation étiquetée n'est présente dans ce dépôt. La précision, le rappel et le mAP ne sont pas calculés ici et ne sont pas affichés."
+                    : 'No labeled evaluation set is in this repo. Precision, recall, and mAP are not computed here and are not shown.'}
+                </span>
               </div>
-
-              {/* Validation Metrics Table */}
-              <table className="metrics-table">
-                <thead>
-                  <tr>
-                    <th>Classe</th>
-                    <th>Nom</th>
-                    <th>Précision</th>
-                    <th>Rappel</th>
-                    <th>mAP50</th>
-                    <th>Fiabilité</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {validationMetricsData.per_class_metrics.map((row) => (
-                    <tr key={row.class_code}>
-                      <td>
-                        <span className="mono" style={{ fontWeight: 800, color: DAMAGE_CLASSES[row.class_code]?.color }}>
-                          {row.class_code}
-                        </span>
-                      </td>
-                      <td>{row.class_name_fr}</td>
-                      <td className="mono">{row.precision.toFixed(3)}</td>
-                      <td className="mono">{row.recall.toFixed(3)}</td>
-                      <td className="mono">{row.map50.toFixed(4)}</td>
-                      <td>
-                        <span
-                          className="badge"
-                          style={{
-                            background: row.reliability === 'Low' ? 'rgba(239,68,68,0.2)' : 'rgba(16,185,129,0.2)',
-                            color: row.reliability === 'Low' ? 'var(--color-critical)' : 'var(--color-success)',
-                            fontSize: '0.7rem',
-                          }}
-                        >
-                          {row.assessment}
-                        </span>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
 
               <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: '20px' }}>
                 <button className="btn btn-secondary" onClick={() => setShowMetricsPanel(false)}>

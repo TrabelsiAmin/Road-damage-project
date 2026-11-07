@@ -4,6 +4,9 @@
  * A percentage is omitted when the previous window has no reports.
  */
 
+import { displayClassCode, statClassCode } from './classCodes';
+import { uniqueObservations } from './records';
+
 export const PERIODS = ['all', '7', '30', '90'];
 
 const UNRESOLVED = new Set(['unconfirmed', 'confirmed', 'in_progress']);
@@ -178,8 +181,8 @@ function summarise(rows) {
   const active = rows.filter((o) => o.status !== 'rejected');
   const classCounts = { D40: 0, D20: 0, D10: 0, D00: 0, other: 0 };
   active.forEach((obs) => {
-    const code = observationClass(obs);
-    if (classCounts[code] != null) classCounts[code] += 1;
+    const code = statClassCode(observationClass(obs));
+    if (code && classCounts[code] != null) classCounts[code] += 1;
     else classCounts.other += 1;
   });
 
@@ -208,7 +211,7 @@ function summarise(rows) {
 }
 
 export function buildMinistryOverview(observations = [], { period = 'all', now = Date.now() } = {}) {
-  const rows = Array.isArray(observations) ? observations : [];
+  const rows = uniqueObservations(Array.isArray(observations) ? observations : []);
   let current = rows;
   let previous = [];
   let comparison = null;
@@ -267,7 +270,7 @@ export function buildMinistryOverview(observations = [], { period = 'all', now =
 function presentObservation(obs) {
   return {
     id: obs.id,
-    classCode: observationClass(obs),
+    classCode: displayClassCode(observationClass(obs)),
     priority: observationPriority(obs),
     score: Number.isFinite(Number(obs.priority_score)) ? Number(obs.priority_score) : null,
     status: obs.status || 'unconfirmed',

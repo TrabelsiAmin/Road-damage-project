@@ -1,11 +1,71 @@
 import { createClient } from '@supabase/supabase-js';
+import { OBSERVATION_PAGE_SIZE } from './utils/records';
 
-// Read from Vite environment or fall back to staging/default
-const SUPABASE_URL =
-  import.meta.env?.VITE_SUPABASE_URL || 'https://lendqcjihusqkmxansbl.supabase.co';
-const SUPABASE_ANON_KEY =
-  import.meta.env?.VITE_SUPABASE_ANON_KEY ||
-  'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImxlbmRxY2ppaHVzcWtteGFuc2JsIiwicm9sZSI6ImFub24iLCJpYXQiOjE3OTAyODA3ODYsImV4cCI6MjEwNTg1Njc4Nn0.F1FS2HZNf7qEbTx14WBSAOHeCWTGsA5OMZghgw_YNNs';
+// Public anon key only. A production Vite build does not use the debug
+// fallback. `vite` and vitest still do, so a local run without env starts.
+// No service-role key is read or logged here. Env vars do not replace RLS.
+// import.meta.env.DEV is folded to false in `vite build`, so these strings
+// are not part of the production bundle. Local `vite` and vitest still see them.
+const DEBUG_SUPABASE_URL = import.meta.env.DEV
+  ? 'https://lendqcjihusqkmxansbl.supabase.co'
+  : '';
+const DEBUG_SUPABASE_ANON_KEY = import.meta.env.DEV
+  ? 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImxlbmRxY2ppaHVzcWtteGFuc2JsIiwicm9sZSI6ImFub24iLCJpYXQiOjE3OTAyODA3ODYsImV4cCI6MjEwNTg1Njc4Nn0.F1FS2HZNf7qEbTx14WBSAOHeCWTGsA5OMZghgw_YNNs'
+  : '';
+
+export function resolvePublicConfig({ url, key, production }) {
+  const projectUrl = String(url || '').trim();
+  const anon = String(key || '').trim();
+  return {
+    url: projectUrl || (production ? '' : DEBUG_SUPABASE_URL),
+    key: anon || (production ? '' : DEBUG_SUPABASE_ANON_KEY),
+  };
+}
+
+const productionBuild = Boolean(import.meta.env?.PROD) && import.meta.env?.MODE !== 'test';
+const resolvedConfig = resolvePublicConfig({
+  url: import.meta.env?.VITE_SUPABASE_URL,
+  key: import.meta.env?.VITE_SUPABASE_ANON_KEY,
+  production: productionBuild,
+});
+const SUPABASE_URL = resolvedConfig.url;
+const SUPABASE_ANON_KEY = resolvedConfig.key;
+
+function jwtRole(token) {
+  try {
+    const part = String(token).split('.')[1];
+    if (!part) return null;
+    const padded = part.replace(/-/g, '+').replace(/_/g, '/');
+    const pad = padded.length % 4 === 0 ? padded : padded + '='.repeat(4 - (padded.length % 4));
+    const decoded = typeof atob === 'function'
+      ? atob(pad)
+      : Buffer.from(pad, 'base64').toString('utf8');
+    const role = JSON.parse(decoded).role;
+    return typeof role === 'string' ? role : null;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Startup check for the public client. Empty config and a service-role key
+ * stop the dashboard. The key itself is never included in the error.
+ */
+export function assertPublicSupabaseConfig(url, key) {
+  const projectUrl = String(url || '').trim();
+  const anon = String(key || '').trim();
+  if (!projectUrl.startsWith('https://')) {
+    throw new Error('Supabase URL is missing. Set VITE_SUPABASE_URL. The value is not logged.');
+  }
+  if (anon.length < 20) {
+    throw new Error('Supabase anon key is missing. Set VITE_SUPABASE_ANON_KEY. The value is not logged.');
+  }
+  if (jwtRole(anon) === 'service_role') {
+    throw new Error('Refusing to start: the dashboard must not use a service-role key.');
+  }
+}
+
+assertPublicSupabaseConfig(SUPABASE_URL, SUPABASE_ANON_KEY);
 
 export const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
@@ -157,17 +217,20 @@ export async function fetchServerClusters(epsMeters = 20, minPoints = 1) {
 /**
  * Loads observations with locations, detections, and media files.
  */
-export async function fetchObservations() {
+export async function fetchObservations({ before = null, limit = OBSERVATION_PAGE_SIZE } = {}) {
   try {
     // 1. Fetch observations (device_id is omitted to comply with anon column privilege)
-    const { data: obsData, error: obsErr } = await supabase
+    const pageSize = Math.min(Math.max(Number(limit) || OBSERVATION_PAGE_SIZE, 1), OBSERVATION_PAGE_SIZE);
+    let query = supabase
       .from('observations')
       .select('id, capture_id, anomaly_type, priority_score, priority_label, status, is_demo, created_at, organization_id')
       .order('created_at', { ascending: false })
-      .limit(500);
+      .limit(pageSize);
+    if (before) query = query.lt('created_at', before);
+    const { data: obsData, error: obsErr } = await query;
 
     if (obsErr) throw obsErr;
-    if (!obsData || obsData.length === 0) return [];
+    if (!obsData || obsData.length === 0) return { rows: [], truncated: false };
 
     const obsIds = obsData.map((o) => o.id);
 
@@ -209,8 +272,9 @@ export async function fetchObservations() {
       }
     });
 
+    const truncated = obsData.length === pageSize;
     // Merge entities
-    return obsData.map((obs) => {
+    const rows = obsData.map((obs) => {
       const loc = locMap.get(obs.id) || { latitude: 0, longitude: 0, accuracy_meters: null };
       const dets = detMap.get(obs.id) || [];
       const orig = mediaOriginalMap.get(obs.id) || null;
@@ -228,6 +292,7 @@ export async function fetchObservations() {
         bucket: orig?.bucket || thumb?.bucket || 'observation-images',
       };
     }).filter((o) => o.latitude !== 0 && o.longitude !== 0);
+    return { rows, truncated };
   } catch (err) {
     console.error('[Supabase] fetchObservations failed:', err);
     throw err;

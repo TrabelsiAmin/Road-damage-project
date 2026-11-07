@@ -3,6 +3,7 @@
  */
 
 import { DAMAGE_CLASSES, STATUS_LABELS } from '../constants';
+import { displayClassCode, observationClassCode, statClassCode, UNKNOWN_CLASS_LABEL } from './classCodes';
 import { resolveTunisiaAdmin } from './tunisiaGeo';
 
 /**
@@ -11,18 +12,18 @@ import { resolveTunisiaAdmin } from './tunisiaGeo';
 export function buildExportRows(observations) {
   return (observations || []).map((obs) => {
     const geo = resolveTunisiaAdmin(obs.latitude, obs.longitude);
-    const cls = obs.anomaly_type || obs.detections?.[0]?.class_code || 'D40';
-    const typeLabel = DAMAGE_CLASSES[cls]?.fr || cls;
+    const cls = statClassCode(observationClassCode(obs));
+    const typeLabel = cls ? (DAMAGE_CLASSES[cls]?.fr || cls) : UNKNOWN_CLASS_LABEL;
     const statusLabel = STATUS_LABELS[obs.status]?.fr || obs.status || 'Non confirmé';
-    const cost = DAMAGE_CLASSES[cls]?.defaultCostTnd || 250;
+    const cost = cls ? DAMAGE_CLASSES[cls]?.defaultCostTnd ?? null : null;
 
     return {
       id: obs.id,
       date: new Date(obs.created_at || obs.captured_at || Date.now()).toISOString(),
-      classCode: cls,
+      classCode: cls ? displayClassCode(cls) : UNKNOWN_CLASS_LABEL,
       typeLabel,
-      priorityLabel: (obs.priority_label || 'MEDIUM').toUpperCase(),
-      priorityScore: Number(obs.priority_score || 50).toFixed(1),
+      priorityLabel: obs.priority_label ? String(obs.priority_label).toUpperCase() : '',
+      priorityScore: Number.isFinite(Number(obs.priority_score)) ? Number(obs.priority_score).toFixed(1) : '',
       status: statusLabel,
       governorate: geo.governorate,
       municipality: geo.municipality,
@@ -120,7 +121,7 @@ export function generateGeoJson(observations) {
         class_code: r.classCode,
         defect_type: r.typeLabel,
         priority: r.priorityLabel,
-        priority_score: Number(r.priorityScore),
+        priority_score: r.priorityScore === '' ? null : Number(r.priorityScore),
         status: r.status,
         governorate: r.governorate,
         municipality: r.municipality,

@@ -148,7 +148,9 @@ export function Topbar({
             type="button"
             className="btn btn-secondary tm-btn-metrics hide-on-tablet"
             onClick={onOpenMetrics}
-            title="Consulter les métriques de validation du modèle IA"
+            title={lang === 'fr'
+              ? 'Précision et mAP non disponibles : pas d’évaluation étiquetée dans ce dépôt'
+              : 'Precision and mAP are not available: no labeled eval in this repo'}
           >
             <BarChart3 size={14} color="var(--tm-primary)" />
             <span>{lang === 'fr' ? 'Métriques IA' : 'AI Metrics'}</span>

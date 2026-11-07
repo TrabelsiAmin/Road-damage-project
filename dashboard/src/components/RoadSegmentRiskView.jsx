@@ -13,6 +13,7 @@ import {
   Info,
 } from 'lucide-react';
 import { DAMAGE_CLASSES, STATUS_LABELS } from '../constants';
+import { displayClassCode, statClassCode, UNKNOWN_CLASS_LABEL } from '../utils/classCodes';
 
 export function RoadSegmentRiskView({
   corridorRisks = [],
@@ -53,8 +54,9 @@ export function RoadSegmentRiskView({
           corridorRisks.map((corridor, idx) => {
             const isExpanded = expandedCode === corridor.code;
             const riskColor = corridor.levelColor || '#F59E0B';
-            const domCls = corridor.dominantClass || 'D40';
-            const clsInfo = DAMAGE_CLASSES[domCls] || { fr: domCls, color: '#64748b' };
+            const domCls = displayClassCode(corridor.dominantClass);
+            const knownDom = statClassCode(corridor.dominantClass);
+            const clsInfo = (knownDom && DAMAGE_CLASSES[knownDom]) || { fr: UNKNOWN_CLASS_LABEL, color: '#64748b' };
 
             return (
               <div key={corridor.code || idx} className={`corridor-risk-card ${isExpanded ? 'expanded' : ''}`}>
@@ -141,8 +143,8 @@ export function RoadSegmentRiskView({
                         </thead>
                         <tbody>
                           {corridor.anomalies.map((a) => {
-                            const cCode = a.anomaly_type || 'D40';
-                            const cCol = DAMAGE_CLASSES[cCode]?.color || '#64748b';
+                            const cCode = displayClassCode(a.anomaly_type);
+                            const cCol = DAMAGE_CLASSES[statClassCode(a.anomaly_type)]?.color || '#64748b';
                             return (
                               <tr key={a.id}>
                                 <td><span className="mono table-id">#{String(a.id).substring(0, 8)}</span></td>

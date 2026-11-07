@@ -6,6 +6,8 @@
  */
 
 import { DAMAGE_CLASSES } from '../constants';
+import { observationClassCode, statClassCode } from './classCodes';
+import { eventTimeMs, uniqueObservations, utcDayKey } from './records';
 import { resolveTunisiaAdmin } from './tunisiaGeo';
 import { computeRoadSegmentsRisk } from './roadSegmentRisk';
 
@@ -15,7 +17,8 @@ const ACTIVE_STATUSES = new Set(['unconfirmed', 'confirmed', 'in_progress']);
  * Filter evaluation across all dashboard dimensions.
  */
 export function filterObservations(observations, filters = {}) {
-  if (!observations || observations.length === 0) return [];
+  const unique = uniqueObservations(observations);
+  if (!unique || unique.length === 0) return [];
 
   const {
     period = 'all',
@@ -32,7 +35,7 @@ export function filterObservations(observations, filters = {}) {
   const periodDays = period !== 'all' ? Number(period) : null;
   const periodCutoff = periodDays ? now - periodDays * 86400000 : null;
 
-  return observations.filter((obs) => {
+  return unique.filter((obs) => {
     // 1. Demo filter
     if (demoFilter === 'exclude_demo' && obs.is_demo) return false;
     if (demoFilter === 'only_demo' && !obs.is_demo) return false;
@@ -41,8 +44,8 @@ export function filterObservations(observations, filters = {}) {
     const obsStatus = obs.status || 'unconfirmed';
     if (status !== 'all' && obsStatus !== status) return false;
 
-    // 3. Class filter
-    const cls = obs.anomaly_type || obs.detections?.[0]?.class_code || 'D40';
+    // 3. Class filter. A missing class does not match D40.
+    const cls = statClassCode(observationClassCode(obs));
     if (anomalyClass !== 'all' && cls !== anomalyClass) return false;
 
     // 4. Priority filter
@@ -67,8 +70,8 @@ export function filterObservations(observations, filters = {}) {
 
     // 5. Date Period
     if (periodCutoff) {
-      const t = new Date(obs.created_at || obs.captured_at || now).getTime();
-      if (Number.isFinite(t) && t < periodCutoff) return false;
+      const t = eventTimeMs(obs);
+      if (t == null || t < periodCutoff) return false;
     }
 
     // 6. Organization filter
@@ -107,14 +110,15 @@ export function buildExecutiveKpis(observations, filters = {}, now = Date.now())
   const currentWindowStart = now - periodDays * 86400000;
   const priorWindowStart = currentWindowStart - periodDays * 86400000;
 
-  const currentWindowReports = observations.filter((o) => {
-    const t = new Date(o.created_at || o.captured_at || now).getTime();
-    return t >= currentWindowStart && t <= now && o.status !== 'rejected';
+  const source = uniqueObservations(observations);
+  const currentWindowReports = source.filter((o) => {
+    const t = eventTimeMs(o);
+    return t != null && t >= currentWindowStart && t <= now && o.status !== 'rejected';
   });
 
-  const priorWindowReports = observations.filter((o) => {
-    const t = new Date(o.created_at || o.captured_at || now).getTime();
-    return t >= priorWindowStart && t < currentWindowStart && o.status !== 'rejected';
+  const priorWindowReports = source.filter((o) => {
+    const t = eventTimeMs(o);
+    return t != null && t >= priorWindowStart && t < currentWindowStart && o.status !== 'rejected';
   });
 
   // KPI 1: Active anomalies (excluding rejected)
@@ -142,8 +146,8 @@ export function buildExecutiveKpis(observations, filters = {}, now = Date.now())
   // KPI 4: New reports this week (last 7 days)
   const sevenDaysAgo = now - 7 * 86400000;
   const newThisWeek = filtered.filter((o) => {
-    const t = new Date(o.created_at || o.captured_at || now).getTime();
-    return t >= sevenDaysAgo && o.status !== 'rejected';
+    const t = eventTimeMs(o);
+    return t != null && t >= sevenDaysAgo && o.status !== 'rejected';
   }).length;
 
   // KPI 5: Unconfirmed reports (Awaiting validation)
@@ -151,10 +155,10 @@ export function buildExecutiveKpis(observations, filters = {}, now = Date.now())
 
   // KPI 6: Overdue maintenance cases (> 30 days without resolution or past due date)
   const overdueCount = activeReports.filter((o) => {
-    const t = new Date(o.created_at || o.captured_at || now).getTime();
-    const ageDays = Math.floor((now - t) / 86400000);
+    const t = eventTimeMs(o);
+    const ageDays = t == null ? 0 : Math.floor((now - t) / 86400000);
     const dueDatePassed = o.due_date && new Date(o.due_date).getTime() < now;
-    return ageDays > 30 || dueDatePassed;
+    return (t != null && ageDays > 30) || dueDatePassed;
   }).length;
 
   // KPI 7: Repairs in progress
@@ -168,17 +172,20 @@ export function buildExecutiveKpis(observations, filters = {}, now = Date.now())
   // Repair completion rate
   const totalClosedOrActive = activeCount + repairedCount;
   const repairCompletionRate =
-    totalClosedOrActive > 0 ? Math.round((repairedCount / totalClosedOrActive) * 100) : 0;
+    totalClosedOrActive > 0 ? Math.round((repairedCount / totalClosedOrActive) * 100) : null;
 
-  // KPI 9: Estimated open maintenance budget (TND)
+  // KPI 9: Estimated open maintenance budget (TND).
+  // Only a stored known class adds its catalogue cost. Missing and unknown
+  // codes add nothing, so they are not priced as D40.
   let estimatedBudgetTnd = 0;
   activeReports.forEach((o) => {
-    const cls = o.anomaly_type || o.detections?.[0]?.class_code || 'D40';
-    estimatedBudgetTnd += DAMAGE_CLASSES[cls]?.defaultCostTnd || 250;
+    const cls = statClassCode(observationClassCode(o));
+    const cost = cls ? DAMAGE_CLASSES[cls]?.defaultCostTnd : null;
+    if (typeof cost === 'number') estimatedBudgetTnd += cost;
   });
 
-  // KPI 10: Average resolution time in days
-  const avgResolutionDays = 14.5; // Calculated benchmark for repaired items
+  // Not computed from stored repair timestamps.
+  const avgResolutionDays = null;
 
   return {
     activeAnomalies: activeCount,
@@ -215,7 +222,7 @@ export function partitionActionCenterQueues(observations, maintenanceCasesMap = 
 
   if (!observations) return queues;
 
-  observations.forEach((obs) => {
+  uniqueObservations(observations).forEach((obs) => {
     if (obs.status === 'rejected') return;
 
     const mCase = maintenanceCasesMap[obs.id] || {};
@@ -275,70 +282,112 @@ export function partitionActionCenterQueues(observations, maintenanceCasesMap = 
 /**
  * Computes AI Model Quality & Field Telemetry metrics.
  */
+function _percent(count, total) {
+  if (!total) return null;
+  return Math.round((count / total) * 100);
+}
+
+/**
+ * Telemetry from stored observations only.
+ * Confidence shares use the stored scores (>= 0.65 high, < 0.45 low).
+ * They are not precision, recall, or mAP. Empty input does not invent 100%.
+ * A detection with no class_code is counted as unspecified, not as D40.
+ */
 export function buildDataQualityMetrics(observations) {
-  if (!observations || observations.length === 0) {
-    return {
-      highConfidencePercent: 100,
-      lowConfidencePercent: 0,
-      poorGpsPercent: 0,
-      missingMediaCount: 0,
-      unconfirmedPercent: 0,
-      totalObservations: 0,
-      classesBreakdown: { D40: 0, D20: 0, D10: 0, D00: 0 },
-      modelVersionsBreakdown: {},
-    };
-  }
-
-  let totalDetections = 0;
-  let highConfCount = 0;
-  let lowConfCount = 0;
-  let poorGpsCount = 0;
-  let missingMediaCount = 0;
-  let unconfirmedCount = 0;
-
   const classesBreakdown = { D40: 0, D20: 0, D10: 0, D00: 0 };
+  const empty = {
+    highConfidencePercent: null,
+    mediumConfidencePercent: null,
+    lowConfidencePercent: null,
+    highConfidenceCount: 0,
+    mediumConfidenceCount: 0,
+    lowConfidenceCount: 0,
+    scoredDetectionCount: 0,
+    poorGpsPercent: null,
+    poorGpsCount: 0,
+    gpsSampleCount: 0,
+    missingMediaCount: 0,
+    hasMediaPercent: null,
+    hasMediaCount: 0,
+    unconfirmedPercent: null,
+    totalObservations: 0,
+    classesBreakdown,
+    unspecifiedClassCount: 0,
+    modelVersionsBreakdown: {},
+  };
+
+  const rows = uniqueObservations(observations);
+  if (!rows || rows.length === 0) return empty;
+
+  let highConfCount = 0;
+  let mediumConfCount = 0;
+  let lowConfCount = 0;
+  let scored = 0;
+  let poorGpsCount = 0;
+  let gpsSampleCount = 0;
+  let missingMediaCount = 0;
+  let hasMediaCount = 0;
+  let unconfirmedCount = 0;
+  let considered = 0;
+  let unspecifiedClassCount = 0;
   const modelVersions = {};
 
-  observations.forEach((o) => {
+  rows.forEach((o) => {
     if (o.status === 'rejected') return;
+    considered++;
 
     if ((o.status || 'unconfirmed') === 'unconfirmed') unconfirmedCount++;
 
     const acc = Number(o.accuracy_meters);
-    if (Number.isFinite(acc) && acc > 25.0) poorGpsCount++;
-
-    if (!o.storage_path && !o.original_media && !o.thumbnail_media) {
-      missingMediaCount++;
+    if (Number.isFinite(acc)) {
+      gpsSampleCount++;
+      if (acc > 25.0) poorGpsCount++;
     }
 
-    const mVer = o.model_bundle_version || 'road_damage.tflite';
-    modelVersions[mVer] = (modelVersions[mVer] || 0) + 1;
+    const hasMedia = Boolean(o.storage_path || o.original_media || o.thumbnail_media);
+    if (hasMedia) hasMediaCount++;
+    else missingMediaCount++;
 
-    const dets = o.detections || [];
-    dets.forEach((d) => {
-      totalDetections++;
-      const conf = Number(d.confidence) || 0.5;
-      if (conf >= 0.65) highConfCount++;
-      if (conf < 0.45) lowConfCount++;
+    if (o.model_bundle_version) {
+      modelVersions[o.model_bundle_version] = (modelVersions[o.model_bundle_version] || 0) + 1;
+    }
 
-      const code = d.class_code || 'D40';
-      if (classesBreakdown[code] !== undefined) {
+    (o.detections || []).forEach((d) => {
+      const conf = Number(d.confidence);
+      if (Number.isFinite(conf)) {
+        scored++;
+        if (conf >= 0.65) highConfCount++;
+        else if (conf < 0.45) lowConfCount++;
+        else mediumConfCount++;
+      }
+
+      const code = statClassCode(d.class_code);
+      if (code) {
         classesBreakdown[code]++;
+      } else {
+        unspecifiedClassCount++;
       }
     });
   });
 
-  const validDets = Math.max(1, totalDetections);
-  const validObs = Math.max(1, observations.length);
-
   return {
-    highConfidencePercent: Math.round((highConfCount / validDets) * 100),
-    lowConfidencePercent: Math.round((lowConfCount / validDets) * 100),
-    poorGpsPercent: Math.round((poorGpsCount / validObs) * 100),
+    highConfidencePercent: _percent(highConfCount, scored),
+    mediumConfidencePercent: _percent(mediumConfCount, scored),
+    lowConfidencePercent: _percent(lowConfCount, scored),
+    highConfidenceCount: highConfCount,
+    mediumConfidenceCount: mediumConfCount,
+    lowConfidenceCount: lowConfCount,
+    scoredDetectionCount: scored,
+    poorGpsPercent: _percent(poorGpsCount, gpsSampleCount),
+    poorGpsCount,
+    gpsSampleCount,
     missingMediaCount,
-    unconfirmedPercent: Math.round((unconfirmedCount / validObs) * 100),
-    totalObservations: observations.length,
+    hasMediaPercent: _percent(hasMediaCount, considered),
+    hasMediaCount,
+    unconfirmedPercent: _percent(unconfirmedCount, considered),
+    totalObservations: rows.length,
     classesBreakdown,
+    unspecifiedClassCount,
     modelVersionsBreakdown: modelVersions,
   };
 }
@@ -374,8 +423,8 @@ export function buildRegionalBacklog(observations) {
     const isActive = ACTIVE_STATUSES.has(obs.status || 'unconfirmed');
     if (isActive) {
       entry.activeCount++;
-      const cls = obs.anomaly_type || obs.detections?.[0]?.class_code || 'D40';
-      entry.totalBudgetTnd += DAMAGE_CLASSES[cls]?.defaultCostTnd || 250;
+      const cls = obs.anomaly_type || obs.detections?.[0]?.class_code;
+      entry.totalBudgetTnd += (cls && DAMAGE_CLASSES[cls]?.defaultCostTnd) || 250;
 
       const p = (obs.priority_label || '').toUpperCase();
       if (p === 'CRITICAL' || p === 'HIGH' || Number(obs.priority_score) >= 65) {
@@ -404,7 +453,7 @@ export function buildNewVsRepairedTimeSeries(observations, days = 30, now = Date
 
   for (let i = 0; i <= days; i++) {
     const d = new Date(start + i * 86400000);
-    const key = d.toISOString().slice(0, 10);
+    const key = utcDayKey(d.getTime());
     buckets.push({ date: key, label: key.slice(5), newReports: 0, repairedReports: 0 });
   }
 
@@ -413,7 +462,8 @@ export function buildNewVsRepairedTimeSeries(observations, days = 30, now = Date
   (observations || []).forEach((obs) => {
     if (obs.status === 'rejected') return;
 
-    const createdDate = new Date(obs.created_at || obs.captured_at || now).toISOString().slice(0, 10);
+    const createdMs = eventTimeMs(obs);
+    const createdDate = createdMs == null ? null : utcDayKey(createdMs);
     const cIdx = index.get(createdDate);
     if (cIdx !== undefined) {
       buckets[cIdx].newReports++;
@@ -421,7 +471,8 @@ export function buildNewVsRepairedTimeSeries(observations, days = 30, now = Date
 
     if (obs.status === 'repaired') {
       // If repaired, increment on updated_at or created_at date
-      const repDate = new Date(obs.updated_at || obs.created_at || now).toISOString().slice(0, 10);
+      const repairedMs = obs.updated_at ? new Date(obs.updated_at).getTime() : createdMs;
+      const repDate = Number.isFinite(repairedMs) ? utcDayKey(repairedMs) : null;
       const rIdx = index.get(repDate);
       if (rIdx !== undefined) {
         buckets[rIdx].repairedReports++;

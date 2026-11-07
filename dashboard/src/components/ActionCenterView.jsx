@@ -20,6 +20,7 @@ import {
   FileSpreadsheet,
 } from 'lucide-react';
 import { DAMAGE_CLASSES, STATUS_LABELS } from '../constants';
+import { displayClassCode, observationClassCode, statClassCode, UNKNOWN_CLASS_LABEL } from '../utils/classCodes';
 import { resolveTunisiaAdmin } from '../utils/tunisiaGeo';
 import { ORGANIZATIONS_LIST } from './GlobalFilterBar';
 import { exportToCsv } from '../utils/exportFormats';
@@ -271,8 +272,14 @@ export function ActionCenterView({
             ) : (
               filteredList.map((item) => {
                 const isSelected = selectedIds.has(item.id);
-                const clsCode = item.anomaly_type || item.dominantClass || 'D40';
-                const clsInfo = DAMAGE_CLASSES[clsCode] || { fr: clsCode, en: clsCode, color: '#64748b' };
+                const storedClass = observationClassCode(item);
+                const knownClass = statClassCode(storedClass);
+                const clsCode = displayClassCode(storedClass);
+                const clsInfo = (knownClass && DAMAGE_CLASSES[knownClass]) || {
+                  fr: UNKNOWN_CLASS_LABEL,
+                  en: UNKNOWN_CLASS_LABEL,
+                  color: '#64748b',
+                };
                 const prio = item.priority_label || (item.priority_score > 65 ? 'HIGH' : item.priority_score > 35 ? 'MEDIUM' : 'LOW');
                 const prioColor = prio === 'HIGH' ? '#EF4444' : prio === 'MEDIUM' ? '#F59E0B' : '#3B82F6';
                 const muni = item.municipality || '—';
@@ -283,7 +290,7 @@ export function ActionCenterView({
                 const statusLabel = STATUS_LABELS[item.status]?.fr || item.status || 'Non confirmé';
 
                 // Cost estimation
-                const costEst = clsCode === 'D40' ? 180 : clsCode === 'D20' ? 450 : 100;
+                const costEst = knownClass === 'D40' ? 180 : knownClass === 'D20' ? 450 : knownClass ? 100 : null;
 
                 return (
                   <tr key={item.id} className={isSelected ? 'row-selected' : ''}>
@@ -335,7 +342,7 @@ export function ActionCenterView({
                       </span>
                     </td>
                     <td>
-                      <span className="mono cost-text">{costEst * reportCount} DT</span>
+                      <span className="mono cost-text">{costEst == null ? '—' : `${costEst * reportCount} DT`}</span>
                     </td>
                     <td style={{ textAlign: 'right' }}>
                       <div className="table-actions-cell">

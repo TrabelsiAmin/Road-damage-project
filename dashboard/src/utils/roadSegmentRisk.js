@@ -6,6 +6,7 @@
  */
 
 import { DAMAGE_CLASSES } from '../constants';
+import { observationClassCode, statClassCode } from './classCodes';
 import { resolveTunisiaAdmin } from './tunisiaGeo';
 import { haversineDistanceMeters } from './clustering';
 
@@ -120,15 +121,17 @@ export function computeRoadSegmentsRisk(observations, { minRiskFilter = 'ALL' } 
     let d20Count = 0;
     let d10Count = 0;
     let d00Count = 0;
+    let unknownClassCount = 0;
     let maxPriorityScore = 0;
     let oldestTimestamp = now;
 
     let estimatedBudget = 0;
 
     reps.forEach((r) => {
-      const cls = r.anomaly_type || r.detections?.[0]?.class_code || 'D40';
-      const score = Number(r.priority_score) || 50;
-      if (score > maxPriorityScore) maxPriorityScore = score;
+      const cls = statClassCode(observationClassCode(r));
+      const score = Number(r.priority_score);
+      const numericScore = Number.isFinite(score) ? score : 0;
+      if (numericScore > maxPriorityScore) maxPriorityScore = numericScore;
 
       const t = new Date(r.created_at || r.captured_at || now).getTime();
       if (t < oldestTimestamp) oldestTimestamp = t;
@@ -142,14 +145,16 @@ export function computeRoadSegmentsRisk(observations, { minRiskFilter = 'ALL' } 
       } else if (cls === 'D10') {
         d10Count++;
         estimatedBudget += DAMAGE_CLASSES.D10.defaultCostTnd;
-      } else {
+      } else if (cls === 'D00') {
         d00Count++;
         estimatedBudget += DAMAGE_CLASSES.D00.defaultCostTnd;
+      } else {
+        unknownClassCount++;
       }
     });
 
     const dominantClass =
-      d40Count > 0 ? 'D40' : d20Count > 0 ? 'D20' : d10Count > 0 ? 'D10' : 'D00';
+      d40Count > 0 ? 'D40' : d20Count > 0 ? 'D20' : d10Count > 0 ? 'D10' : d00Count > 0 ? 'D00' : null;
 
     const oldestAgeDays = Math.max(0, Math.floor((now - oldestTimestamp) / (1000 * 60 * 60 * 24)));
 
@@ -200,6 +205,7 @@ export function computeRoadSegmentsRisk(observations, { minRiskFilter = 'ALL' } 
         activeReportsCount: active.length,
         repairedCount: repaired.length,
         dominantClass,
+        unknownClassCount,
         d40Count,
         maxPriorityScore,
         oldestAgeDays,

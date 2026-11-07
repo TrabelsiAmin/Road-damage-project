@@ -1,4 +1,5 @@
 import { calculatePriorityScore, PRIORITY_CONFIG } from './priorityScoring.js';
+import { statClassCode, observationClassCode } from './classCodes';
 
 /**
  * Geospatial distance calculation using spherical Haversine formula.
@@ -70,8 +71,8 @@ export function clusterObservations(observations = [], radiusMeters = 20, maxAcc
     const avgLat = members.reduce((sum, m) => sum + m.latitude, 0) / count;
     const avgLng = members.reduce((sum, m) => sum + m.longitude, 0) / count;
 
-    // Pick dominant class by safety hierarchy (D40 > D20 > D10 > D00)
-    let dominantClass = 'D40';
+    // Dominant class is the highest known code present. Missing stays null.
+    let dominantClass = null;
     let highestSeverity = -1;
     let maxPriorityScore = 0;
 
@@ -87,9 +88,9 @@ export function clusterObservations(observations = [], radiusMeters = 20, maxAcc
         }
       }
 
-      const cls = m.anomaly_type || m.detections?.[0]?.class_code || 'D40';
-      const order = CLASS_SEVERITY_ORDER[cls] || 1;
-      if (order > highestSeverity) {
+      const cls = statClassCode(observationClassCode(m));
+      const order = cls ? CLASS_SEVERITY_ORDER[cls] : 0;
+      if (cls && order > highestSeverity) {
         highestSeverity = order;
         dominantClass = cls;
       }

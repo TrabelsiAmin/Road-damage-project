@@ -29,6 +29,7 @@ class _OfflineQueueScreenState extends State<OfflineQueueScreen>
   bool _syncing = false;
   SyncCancelToken? _cancelToken;
   String? _statusBanner;
+  String? _loadError;
 
   late TabController _tab;
 
@@ -46,13 +47,27 @@ class _OfflineQueueScreenState extends State<OfflineQueueScreen>
   }
 
   Future<void> _load() async {
-    setState(() => _loading = true);
-    final obs = await widget.repository.list();
-    if (mounted)
-      setState(() {
-        _all = obs;
-        _loading = false;
-      });
+    setState(() {
+      _loading = true;
+      _loadError = null;
+    });
+    try {
+      final obs = await widget.repository.list();
+      if (mounted) {
+        setState(() {
+          _all = obs;
+          _loading = false;
+        });
+      }
+    } catch (e) {
+      debugPrint('[Queue] Load error: $e');
+      if (mounted) {
+        setState(() {
+          _loading = false;
+          _loadError = 'Could not load the local queue.';
+        });
+      }
+    }
   }
 
   Future<void> _syncAll() async {
@@ -76,6 +91,14 @@ class _OfflineQueueScreenState extends State<OfflineQueueScreen>
                 result.cancelled ? Colors.orange.shade800 : AppColors.teal,
             duration: const Duration(seconds: 4),
           ),
+        );
+      }
+    } catch (e) {
+      debugPrint('[Queue] Sync error: $e');
+      if (mounted) {
+        setState(() => _statusBanner = 'Sync failed.');
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Sync failed.')),
         );
       }
     } finally {
@@ -243,6 +266,24 @@ class _OfflineQueueScreenState extends State<OfflineQueueScreen>
           ? const Center(
               child: CircularProgressIndicator(
                   valueColor: AlwaysStoppedAnimation<Color>(AppColors.teal)))
+          : _loadError != null
+          ? Center(
+              child: Padding(
+                padding: const EdgeInsets.all(24),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    const Icon(Icons.error_outline, color: AppColors.syncFailed, size: 36),
+                    const SizedBox(height: 12),
+                    Text(_loadError!,
+                        textAlign: TextAlign.center,
+                        style: const TextStyle(fontWeight: FontWeight.w700)),
+                    const SizedBox(height: 16),
+                    FilledButton(onPressed: _load, child: const Text('Retry')),
+                  ],
+                ),
+              ),
+            )
           : Column(
               children: [
                 if (_syncing)
@@ -336,6 +377,7 @@ class _OfflineQueueScreenState extends State<OfflineQueueScreen>
                               emptyColor: AppColors.syncDone,
                               onDelete: _deleteObservation,
                               deletingDisabled: _syncing,
+                              onRetry: _syncing ? null : _syncAll,
                             ),
                             _ObsList(
                               observations: _synced,
@@ -388,6 +430,7 @@ class _ObsList extends StatelessWidget {
     required this.emptyColor,
     required this.onDelete,
     required this.deletingDisabled,
+    this.onRetry,
   });
 
   final List<Observation> observations;
@@ -396,6 +439,7 @@ class _ObsList extends StatelessWidget {
   final Color emptyColor;
   final Future<void> Function(Observation) onDelete;
   final bool deletingDisabled;
+  final Future<void> Function()? onRetry;
 
   @override
   Widget build(BuildContext context) {
@@ -426,6 +470,7 @@ class _ObsList extends StatelessWidget {
           obs: observations[i],
           onDelete: onDelete,
           deletingDisabled: deletingDisabled,
+          onRetry: onRetry,
         ),
       ),
     );
@@ -439,11 +484,13 @@ class _ObsCard extends StatelessWidget {
     required this.obs,
     required this.onDelete,
     required this.deletingDisabled,
+    this.onRetry,
   });
 
   final Observation obs;
   final Future<void> Function(Observation) onDelete;
   final bool deletingDisabled;
+  final Future<void> Function()? onRetry;
 
   Color get _statusColor => switch (obs.syncStatus) {
         SyncStatus.pending => AppColors.syncPending,
@@ -587,6 +634,19 @@ class _ObsCard extends StatelessWidget {
                     ),
                   ),
                 ]),
+                if (onRetry != null &&
+                    (obs.syncStatus == SyncStatus.failed ||
+                        obs.syncStatus == SyncStatus.needsReview)) ...[
+                  const SizedBox(height: 8),
+                  Align(
+                    alignment: Alignment.centerLeft,
+                    child: TextButton.icon(
+                      onPressed: deletingDisabled ? null : onRetry,
+                      icon: const Icon(Icons.refresh, size: 16),
+                      label: const Text('Retry'),
+                    ),
+                  ),
+                ],
                 if (obs.syncError != null) ...[
                   const SizedBox(height: 8),
                   Container(

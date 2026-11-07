@@ -867,11 +867,11 @@ class _DriveAwarenessScreenState extends State<DriveAwarenessScreen> with Widget
             child: const Icon(Icons.check_circle_rounded, color: Colors.greenAccent, size: 24),
           ),
           const SizedBox(width: 14),
-          Expanded(
+          const Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               mainAxisSize: MainAxisSize.min,
-              children: const [
+              children: [
                 Text(
                   'Road Clear Ahead',
                   style: TextStyle(

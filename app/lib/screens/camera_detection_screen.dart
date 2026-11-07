@@ -43,6 +43,8 @@ class _CameraDetectionScreenState extends State<CameraDetectionScreen>
   List<CameraDescription> _cameras = [];
   bool _initialized = false;
   bool _analyzing = false;
+  bool _cameraStarting = true;
+  String? _cameraError;
   final _uuid = const Uuid();
 
   @override
@@ -53,12 +55,35 @@ class _CameraDetectionScreenState extends State<CameraDetectionScreen>
   }
 
   Future<void> _initCamera() async {
+    if (mounted) {
+      setState(() {
+        _cameraError = null;
+        _cameraStarting = true;
+        _initialized = false;
+      });
+    }
     try {
       _cameras = await availableCameras();
-      if (_cameras.isEmpty) return;
+      if (_cameras.isEmpty) {
+        if (mounted) {
+          setState(() {
+            _cameraError = 'No camera is available on this device.';
+            _cameraStarting = false;
+          });
+        }
+        return;
+      }
       await _startCamera(_cameras.first);
+      if (mounted) setState(() => _cameraStarting = false);
     } catch (e) {
       debugPrint('[Camera] Init error: $e');
+      if (mounted) {
+        setState(() {
+          _cameraError = 'Camera could not start. Check permission and try again.';
+          _cameraStarting = false;
+          _initialized = false;
+        });
+      }
     }
   }
 
@@ -158,8 +183,19 @@ class _CameraDetectionScreenState extends State<CameraDetectionScreen>
     setState(() {
       _controller = null;
       _initialized = false;
+      _cameraError = null;
     });
-    await _startCamera(next);
+    try {
+      await _startCamera(next);
+    } catch (e) {
+      debugPrint('[Camera] Switch error: $e');
+      if (mounted) {
+        setState(() {
+          _cameraError = 'Camera could not start. Check permission and try again.';
+          _initialized = false;
+        });
+      }
+    }
   }
 
   @override
@@ -187,8 +223,31 @@ class _CameraDetectionScreenState extends State<CameraDetectionScreen>
         fit: StackFit.expand,
         children: [
           // ── Camera plain preview ────────────────────────────────
-          if (_initialized && _controller != null)
+          if (_initialized && _controller != null && _cameraError == null)
             CameraPreview(_controller!)
+          else if (_cameraError != null)
+            Center(
+              child: Padding(
+                padding: const EdgeInsets.all(24),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    const Icon(Icons.videocam_off_outlined, color: Colors.white70, size: 36),
+                    const SizedBox(height: 12),
+                    Text(
+                      _cameraError!,
+                      textAlign: TextAlign.center,
+                      style: const TextStyle(color: Colors.white70, fontSize: 14),
+                    ),
+                    const SizedBox(height: 16),
+                    FilledButton(
+                      onPressed: _cameraStarting ? null : _initCamera,
+                      child: const Text('Retry'),
+                    ),
+                  ],
+                ),
+              ),
+            )
           else
             const Center(
               child: Column(

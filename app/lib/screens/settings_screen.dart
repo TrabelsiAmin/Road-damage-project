@@ -4,6 +4,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import '../core/app_colors.dart';
 import '../core/constants.dart';
 import '../core/model_config.dart';
+import '../inference/confidence_threshold.dart';
 import '../models/organization.dart';
 import '../services/organization_service.dart';
 
@@ -18,11 +19,13 @@ class _SettingsScreenState extends State<SettingsScreen> {
   final _orgService = OrganizationService();
 
   double _confidenceThreshold = TariqMapConstants.defaultConfidenceThreshold;
-  bool   _wifiOnly            = true;
-  int    _retentionDays       = 90;
-  bool   _shareBlurredPublicPhoto = true;
-  bool   _loading             = true;
-  bool   _saving              = false;
+  double _savedThreshold = TariqMapConstants.defaultConfidenceThreshold;
+  bool _confidenceApplied = false;
+  bool _wifiOnly = true;
+  int _retentionDays = 90;
+  bool _shareBlurredPublicPhoto = true;
+  bool _loading = true;
+  bool _saving = false;
 
   List<Organization> _organizations = [];
   Organization? _selectedOrg;
@@ -40,14 +43,19 @@ class _SettingsScreenState extends State<SettingsScreen> {
 
     if (mounted) {
       setState(() {
-        _confidenceThreshold = prefs.getDouble('confidence_threshold')
-            ?? TariqMapConstants.defaultConfidenceThreshold;
-        _wifiOnly      = prefs.getBool('wifi_only')     ?? true;
+        _confidenceApplied = prefs.getBool('confidence_threshold_set') ?? false;
+        _savedThreshold = clampConfidenceThreshold(
+              prefs.getDouble('confidence_threshold'),
+            ) ??
+            TariqMapConstants.defaultConfidenceThreshold;
+        _confidenceThreshold = _savedThreshold;
+        _wifiOnly = prefs.getBool('wifi_only') ?? true;
         _retentionDays = prefs.getInt('retention_days') ?? 90;
-        _shareBlurredPublicPhoto = prefs.getBool('share_blurred_public_photo') ?? true;
+        _shareBlurredPublicPhoto =
+            prefs.getBool('share_blurred_public_photo') ?? true;
         _organizations = orgs;
-        _selectedOrg   = currentOrg ?? (orgs.isNotEmpty ? orgs.first : null);
-        _loading       = false;
+        _selectedOrg = currentOrg ?? (orgs.isNotEmpty ? orgs.first : null);
+        _loading = false;
       });
     }
   }
@@ -55,7 +63,13 @@ class _SettingsScreenState extends State<SettingsScreen> {
   Future<void> _save() async {
     setState(() => _saving = true);
     final prefs = await SharedPreferences.getInstance();
-    await prefs.setDouble('confidence_threshold', _confidenceThreshold);
+    final savedThreshold = clampConfidenceThreshold(_confidenceThreshold) ??
+        TariqMapConstants.defaultConfidenceThreshold;
+    _confidenceThreshold = savedThreshold;
+    _savedThreshold = savedThreshold;
+    _confidenceApplied = true;
+    await prefs.setDouble('confidence_threshold', savedThreshold);
+    await prefs.setBool('confidence_threshold_set', true);
     await prefs.setBool('wifi_only', _wifiOnly);
     await prefs.setInt('retention_days', _retentionDays);
     await prefs.setBool('share_blurred_public_photo', _shareBlurredPublicPhoto);
@@ -75,11 +89,26 @@ class _SettingsScreenState extends State<SettingsScreen> {
           ]),
           backgroundColor: AppColors.syncDone,
           behavior: SnackBarBehavior.floating,
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+          shape:
+              RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
           duration: const Duration(seconds: 2),
         ),
       );
     }
+  }
+
+  String _thresholdDescription() {
+    final active = activeThresholds(
+      classDefaults: legacyClassThresholds,
+      saved: _confidenceApplied,
+      storedSlider: _savedThreshold,
+    );
+    final text = describeActiveThresholds(active);
+    final draft = clampConfidenceThreshold(_confidenceThreshold);
+    final saved = clampConfidenceThreshold(_savedThreshold);
+    final dirty = !_confidenceApplied || draft != saved;
+    if (!dirty) return text;
+    return '$text Slider preview is not applied until Save.';
   }
 
   @override
@@ -95,33 +124,39 @@ class _SettingsScreenState extends State<SettingsScreen> {
         ),
         elevation: 0,
         title: const Text('Settings',
-          style: TextStyle(fontWeight: FontWeight.w800, letterSpacing: -0.3)),
+            style: TextStyle(fontWeight: FontWeight.w800, letterSpacing: -0.3)),
         actions: [
           Padding(
             padding: const EdgeInsets.only(right: 12),
             child: FilledButton(
               style: FilledButton.styleFrom(
                 backgroundColor: AppColors.teal,
-                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 0),
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 16, vertical: 0),
+                shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(10)),
               ),
               onPressed: _loading || _saving ? null : _save,
               child: _saving
-                  ? const SizedBox(width: 16, height: 16,
-                      child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
+                  ? const SizedBox(
+                      width: 16,
+                      height: 16,
+                      child: CircularProgressIndicator(
+                          strokeWidth: 2, color: Colors.white))
                   : const Text('Save',
-                      style: TextStyle(fontWeight: FontWeight.w700, fontSize: 13)),
+                      style:
+                          TextStyle(fontWeight: FontWeight.w700, fontSize: 13)),
             ),
           ),
         ],
       ),
       body: _loading
-          ? const Center(child: CircularProgressIndicator(
-              valueColor: AlwaysStoppedAnimation<Color>(AppColors.teal)))
+          ? const Center(
+              child: CircularProgressIndicator(
+                  valueColor: AlwaysStoppedAnimation<Color>(AppColors.teal)))
           : ListView(
               padding: const EdgeInsets.fromLTRB(16, 20, 16, 32),
               children: [
-
                 // ── Operational Authority ────────────────────────────────────
                 _SectionCard(
                   icon: Icons.account_balance_rounded,
@@ -134,12 +169,14 @@ class _SettingsScreenState extends State<SettingsScreen> {
                         children: [
                           const Text(
                             'Assigned Authority',
-                            style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600),
+                            style: TextStyle(
+                                fontSize: 14, fontWeight: FontWeight.w600),
                           ),
                           const SizedBox(height: 4),
                           const Text(
                             'Newly captured observations will be registered under this authority.',
-                            style: TextStyle(color: Colors.black38, fontSize: 11),
+                            style:
+                                TextStyle(color: Colors.black38, fontSize: 11),
                           ),
                           const SizedBox(height: 10),
                           Container(
@@ -153,26 +190,35 @@ class _SettingsScreenState extends State<SettingsScreen> {
                               child: DropdownButton<Organization>(
                                 isExpanded: true,
                                 value: _selectedOrg,
-                                items: _organizations.map((org) => DropdownMenuItem(
-                                  value: org,
-                                  child: Row(
-                                    children: [
-                                      Text(
-                                        org.name,
-                                        style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 14),
-                                      ),
-                                      if (org.nameFr != null && org.nameFr != org.name) ...[
-                                        const SizedBox(width: 8),
-                                        Text(
-                                          '(${org.nameFr})',
-                                          style: const TextStyle(color: Colors.black45, fontSize: 12),
-                                        ),
-                                      ],
-                                    ],
-                                  ),
-                                )).toList(),
+                                items: _organizations
+                                    .map((org) => DropdownMenuItem(
+                                          value: org,
+                                          child: Row(
+                                            children: [
+                                              Text(
+                                                org.name,
+                                                style: const TextStyle(
+                                                    fontWeight: FontWeight.w600,
+                                                    fontSize: 14),
+                                              ),
+                                              if (org.nameFr != null &&
+                                                  org.nameFr != org.name) ...[
+                                                const SizedBox(width: 8),
+                                                Text(
+                                                  '(${org.nameFr})',
+                                                  style: const TextStyle(
+                                                      color: Colors.black45,
+                                                      fontSize: 12),
+                                                ),
+                                              ],
+                                            ],
+                                          ),
+                                        ))
+                                    .toList(),
                                 onChanged: (org) {
-                                  if (org != null) setState(() => _selectedOrg = org);
+                                  if (org != null) {
+                                    setState(() => _selectedOrg = org);
+                                  }
                                 },
                               ),
                             ),
@@ -192,13 +238,17 @@ class _SettingsScreenState extends State<SettingsScreen> {
                   children: [
                     _SliderRow(
                       label: 'Confidence threshold',
-                      valueLabel: '${(_confidenceThreshold * 100).toStringAsFixed(0)}%',
-                      description: 'Higher = fewer but more reliable detections.',
+                      valueLabel:
+                          '${(_confidenceThreshold * 100).toStringAsFixed(0)}%',
+                      description: _thresholdDescription(),
                       value: _confidenceThreshold,
-                      min: 0.10,
-                      max: 0.80,
+                      min: confidenceSliderMin,
+                      max: confidenceSliderMax,
                       divisions: 14,
-                      onChanged: (v) => setState(() => _confidenceThreshold = v),
+                      onChanged: (v) => setState(() {
+                        _confidenceThreshold =
+                            clampConfidenceThreshold(v) ?? _confidenceThreshold;
+                      }),
                     ),
                   ],
                 ),
@@ -212,9 +262,11 @@ class _SettingsScreenState extends State<SettingsScreen> {
                   children: [
                     _ToggleRow(
                       label: 'Share a blurred photo on the public map',
-                      description: 'A cropped copy of the damage is public; the original stays private.',
+                      description:
+                          'A cropped copy of the damage is public; the original stays private.',
                       value: _shareBlurredPublicPhoto,
-                      onChanged: (v) => setState(() => _shareBlurredPublicPhoto = v),
+                      onChanged: (v) =>
+                          setState(() => _shareBlurredPublicPhoto = v),
                     ),
                     const _SectionDivider(),
                     _ToggleRow(
@@ -226,13 +278,17 @@ class _SettingsScreenState extends State<SettingsScreen> {
                     const _SectionDivider(),
                     _SliderRow(
                       label: 'Local data retention',
-                      valueLabel: _retentionDays == 0 ? 'Forever' : '$_retentionDays days',
-                      description: 'Synced data older than this may be cleaned up.',
+                      valueLabel: _retentionDays == 0
+                          ? 'Forever'
+                          : '$_retentionDays days',
+                      description:
+                          'Synced data older than this may be cleaned up.',
                       value: _retentionDays.toDouble(),
                       min: 0,
                       max: 365,
                       divisions: 13,
-                      onChanged: (v) => setState(() => _retentionDays = v.round()),
+                      onChanged: (v) =>
+                          setState(() => _retentionDays = v.round()),
                     ),
                   ],
                 ),
@@ -244,20 +300,25 @@ class _SettingsScreenState extends State<SettingsScreen> {
                   icon: Icons.info_outline_rounded,
                   title: 'About',
                   children: [
-                    _InfoRow(label: 'Active model',
-                      value: ModelConfig.active.displayName),
+                    _InfoRow(
+                        label: 'Active model',
+                        value: ModelConfig.active.displayName),
                     const _SectionDivider(),
-                    _InfoRow(label: 'Model version',
-                      value: ModelConfig.active.version),
+                    _InfoRow(
+                        label: 'Model version',
+                        value: ModelConfig.active.version),
                     const _SectionDivider(),
-                    _InfoRow(label: 'Detection classes',
-                      value: ModelConfig.active.classes.join(' · ')),
+                    _InfoRow(
+                        label: 'Detection classes',
+                        value: ModelConfig.active.classes.join(' · ')),
                     const _SectionDivider(),
-                    const _InfoRow(label: 'Inference pipeline',
-                      value: '100% On-device TFLite'),
+                    const _InfoRow(
+                        label: 'Inference pipeline',
+                        value: '100% On-device TFLite'),
                     const _SectionDivider(),
-                    const _InfoRow(label: 'Rutting limitation',
-                      value: 'Visual only — no depth measurement'),
+                    const _InfoRow(
+                        label: 'Rutting limitation',
+                        value: 'Visual only — no depth measurement'),
                   ],
                 ),
               ],
@@ -275,51 +336,51 @@ class _SectionCard extends StatelessWidget {
     required this.children,
   });
 
-  final IconData       icon;
-  final String         title;
-  final List<Widget>   children;
+  final IconData icon;
+  final String title;
+  final List<Widget> children;
 
   @override
   Widget build(BuildContext context) => Column(
-    crossAxisAlignment: CrossAxisAlignment.start,
-    children: [
-      Padding(
-        padding: const EdgeInsets.only(bottom: 10, left: 2),
-        child: Row(children: [
-          Icon(icon, size: 14, color: AppColors.teal),
-          const SizedBox(width: 6),
-          Text(title.toUpperCase(),
-            style: const TextStyle(
-              color: AppColors.teal,
-              fontSize: 11,
-              fontWeight: FontWeight.w700,
-              letterSpacing: 1.5,
-            )),
-        ]),
-      ),
-      Container(
-        decoration: BoxDecoration(
-          color: Colors.white,
-          borderRadius: BorderRadius.circular(16),
-          border: Border.all(color: AppColors.borderLight),
-          boxShadow: [
-            BoxShadow(
-              color: Colors.black.withAlpha(6),
-              blurRadius: 8, offset: const Offset(0, 2)),
-          ],
-        ),
-        child: Column(children: children),
-      ),
-    ],
-  );
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Padding(
+            padding: const EdgeInsets.only(bottom: 10, left: 2),
+            child: Row(children: [
+              Icon(icon, size: 14, color: AppColors.teal),
+              const SizedBox(width: 6),
+              Text(title.toUpperCase(),
+                  style: const TextStyle(
+                    color: AppColors.teal,
+                    fontSize: 11,
+                    fontWeight: FontWeight.w700,
+                    letterSpacing: 1.5,
+                  )),
+            ]),
+          ),
+          Container(
+            decoration: BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.circular(16),
+              border: Border.all(color: AppColors.borderLight),
+              boxShadow: [
+                BoxShadow(
+                    color: Colors.black.withAlpha(6),
+                    blurRadius: 8,
+                    offset: const Offset(0, 2)),
+              ],
+            ),
+            child: Column(children: children),
+          ),
+        ],
+      );
 }
 
 class _SectionDivider extends StatelessWidget {
   const _SectionDivider();
   @override
-  Widget build(BuildContext context) =>
-      const Divider(height: 1, indent: 16, endIndent: 16,
-        color: AppColors.borderLight);
+  Widget build(BuildContext context) => const Divider(
+      height: 1, indent: 16, endIndent: 16, color: AppColors.borderLight);
 }
 
 // ── Slider row ────────────────────────────────────────────────────────────────
@@ -336,60 +397,62 @@ class _SliderRow extends StatelessWidget {
     required this.onChanged,
   });
 
-  final String   label;
-  final String   valueLabel;
-  final String   description;
-  final double   value;
-  final double   min;
-  final double   max;
-  final int      divisions;
+  final String label;
+  final String valueLabel;
+  final String description;
+  final double value;
+  final double min;
+  final double max;
+  final int divisions;
   final ValueChanged<double> onChanged;
 
   @override
   Widget build(BuildContext context) => Padding(
-    padding: const EdgeInsets.fromLTRB(16, 14, 16, 12),
-    child: Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Row(children: [
-          Text(label,
-            style: const TextStyle(
-              fontSize: 14, fontWeight: FontWeight.w600)),
-          const Spacer(),
-          Container(
-            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 3),
-            decoration: BoxDecoration(
-              color: AppColors.teal.withAlpha(18),
-              borderRadius: BorderRadius.circular(8),
+        padding: const EdgeInsets.fromLTRB(16, 14, 16, 12),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(children: [
+              Text(label,
+                  style: const TextStyle(
+                      fontSize: 14, fontWeight: FontWeight.w600)),
+              const Spacer(),
+              Container(
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 10, vertical: 3),
+                decoration: BoxDecoration(
+                  color: AppColors.teal.withAlpha(18),
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: Text(valueLabel,
+                    style: const TextStyle(
+                      color: AppColors.teal,
+                      fontSize: 12,
+                      fontWeight: FontWeight.w700,
+                    )),
+              ),
+            ]),
+            SliderTheme(
+              data: SliderTheme.of(context).copyWith(
+                activeTrackColor: AppColors.teal,
+                inactiveTrackColor: AppColors.teal.withAlpha(30),
+                thumbColor: AppColors.teal,
+                overlayColor: AppColors.teal.withAlpha(30),
+                trackHeight: 3,
+              ),
+              child: Slider(
+                value: value,
+                min: min,
+                max: max,
+                divisions: divisions,
+                onChanged: onChanged,
+              ),
             ),
-            child: Text(valueLabel,
-              style: const TextStyle(
-                color: AppColors.teal,
-                fontSize: 12,
-                fontWeight: FontWeight.w700,
-              )),
-          ),
-        ]),
-        SliderTheme(
-          data: SliderTheme.of(context).copyWith(
-            activeTrackColor: AppColors.teal,
-            inactiveTrackColor: AppColors.teal.withAlpha(30),
-            thumbColor: AppColors.teal,
-            overlayColor: AppColors.teal.withAlpha(30),
-            trackHeight: 3,
-          ),
-          child: Slider(
-            value: value,
-            min: min, max: max,
-            divisions: divisions,
-            onChanged: onChanged,
-          ),
+            Text(description,
+                style: const TextStyle(color: Colors.black38, fontSize: 11)),
+          ],
         ),
-        Text(description,
-          style: const TextStyle(color: Colors.black38, fontSize: 11)),
-      ],
-    ),
-  );
+      );
 }
 
 // ── Toggle row ────────────────────────────────────────────────────────────────
@@ -402,34 +465,36 @@ class _ToggleRow extends StatelessWidget {
     required this.onChanged,
   });
 
-  final String   label;
-  final String   description;
-  final bool     value;
+  final String label;
+  final String description;
+  final bool value;
   final ValueChanged<bool> onChanged;
 
   @override
   Widget build(BuildContext context) => Padding(
-    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
-    child: Row(children: [
-      Expanded(
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(label,
-              style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w600)),
-            const SizedBox(height: 2),
-            Text(description,
-              style: const TextStyle(color: Colors.black38, fontSize: 11)),
-          ],
-        ),
-      ),
-      Switch.adaptive(
-        value: value,
-        activeTrackColor: AppColors.teal,
-        onChanged: onChanged,
-      ),
-    ]),
-  );
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+        child: Row(children: [
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(label,
+                    style: const TextStyle(
+                        fontSize: 14, fontWeight: FontWeight.w600)),
+                const SizedBox(height: 2),
+                Text(description,
+                    style:
+                        const TextStyle(color: Colors.black38, fontSize: 11)),
+              ],
+            ),
+          ),
+          Switch.adaptive(
+            value: value,
+            activeTrackColor: AppColors.teal,
+            onChanged: onChanged,
+          ),
+        ]),
+      );
 }
 
 // ── Info row ──────────────────────────────────────────────────────────────────
@@ -441,18 +506,18 @@ class _InfoRow extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) => Padding(
-    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 13),
-    child: Row(children: [
-      Text(label,
-        style: const TextStyle(color: Colors.black45, fontSize: 13)),
-      const Spacer(),
-      Flexible(
-        child: Text(value,
-          textAlign: TextAlign.end,
-          style: const TextStyle(
-            fontWeight: FontWeight.w600, fontSize: 13),
-          overflow: TextOverflow.ellipsis),
-      ),
-    ]),
-  );
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 13),
+        child: Row(children: [
+          Text(label,
+              style: const TextStyle(color: Colors.black45, fontSize: 13)),
+          const Spacer(),
+          Flexible(
+            child: Text(value,
+                textAlign: TextAlign.end,
+                style:
+                    const TextStyle(fontWeight: FontWeight.w600, fontSize: 13),
+                overflow: TextOverflow.ellipsis),
+          ),
+        ]),
+      );
 }

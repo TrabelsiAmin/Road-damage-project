@@ -30,10 +30,12 @@ class SupabaseService {
 
   /// Call once at app startup before runApp.
   static Future<void> initialize() async {
+    SupabaseCfg.assertPublicConfig();
     await Supabase.initialize(
       url:            SupabaseCfg.url,
       publishableKey: SupabaseCfg.anonKey,
-      debug: kDebugMode,
+      // Do not log HTTP traffic: it can include the anon key.
+      debug: false,
     );
     debugPrint('[SupabaseService] Initialized');
   }

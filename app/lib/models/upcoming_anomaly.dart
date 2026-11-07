@@ -70,7 +70,9 @@ class UpcomingAnomaly {
       observationId: map['observation_id']?.toString() ?? map['id']?.toString() ?? '',
       latitude: (map['latitude'] as num).toDouble(),
       longitude: (map['longitude'] as num).toDouble(),
-      anomalyType: map['anomaly_type']?.toString() ?? 'D40',
+      anomalyType: map['anomaly_type']?.toString().trim().isNotEmpty == true
+          ? map['anomaly_type'].toString()
+          : '',
       priorityScore: (map['priority_score'] as num?)?.toDouble() ?? 50.0,
       priorityLabel: map['priority_label']?.toString() ?? 'medium',
       status: map['status']?.toString() ?? 'pending',

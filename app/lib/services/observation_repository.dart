@@ -4,6 +4,7 @@ import '../../models/observation.dart';
 import '../data/local/database.dart';
 import '../data/local/observation_dao.dart';
 import 'sync_cancel_token.dart';
+import 'sync_plan.dart';
 
 export 'sync_cancel_token.dart';
 
@@ -202,10 +203,9 @@ class SyncCoordinator {
       for (final obs in queue) {
         cancelToken?.throwIfCancelled();
 
-        // Failed rows are retried from Sync All. The attempt cap still applies
-        // to rows that are still pending.
-        if (obs.syncStatus == SyncStatus.pending &&
-            obs.uploadAttempts >= maxRetries) {
+        // Pending and failed rows share the attempt cap so a failing upload
+        // cannot retry forever. The local row is kept.
+        if (obs.uploadAttempts >= maxRetries) {
           await _repo.updateSyncStatus(obs.id, SyncStatus.needsReview,
               error: 'Max retries ($maxRetries) exceeded');
           continue;
@@ -236,7 +236,7 @@ class SyncCoordinator {
           debugPrint(
               '[Sync] Failed ${obs.id}: $e  (retry in ${backoff.inSeconds}s)');
           await _repo.updateSyncStatus(obs.id, SyncStatus.failed,
-              error: e.toString());
+              error: redactSecrets(e.toString()));
           await Future<void>.delayed(backoff);
         }
       }

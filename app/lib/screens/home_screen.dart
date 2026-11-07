@@ -49,6 +49,7 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
   bool _busy = false;
   bool _isSyncing = false;
   String? _message;
+  String? _startupError;
   late String _actor;
   Organization? _selectedOrg;
   DateTime? _lastSyncTime;
@@ -107,7 +108,7 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
     } catch (e) {
       if (mounted) {
         setState(() {
-          _message = 'Startup error: $e';
+          _startupError = 'Startup error: $e';
           _servicesReady = true;
         });
         _fadeCtrl.forward();
@@ -288,6 +289,15 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
         });
       }
       return result;
+    } catch (e) {
+      debugPrint('[Sync] $e');
+      if (mounted) setState(() => _message = 'Sync failed.');
+      return const SyncResult(
+        uploadedCount: 0,
+        totalCount: 0,
+        cancelled: false,
+        message: 'Sync failed.',
+      );
     } finally {
       if (mounted) setState(() => _isSyncing = false);
     }
@@ -306,6 +316,17 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
       backgroundColor: AppColors.offWhite,
       body: !_servicesReady
           ? const _LoadingView()
+          : _startupError != null
+          ? _StartupError(
+              message: _startupError!,
+              onRetry: () {
+                setState(() {
+                  _startupError = null;
+                  _servicesReady = false;
+                });
+                _initServices();
+              },
+            )
           : FadeTransition(
               opacity: _fade,
               child: CustomScrollView(
@@ -537,7 +558,10 @@ class _SyncStatusStrip extends StatelessWidget {
                       width: 12, height: 12,
                       child: CircularProgressIndicator(strokeWidth: 1.5, color: Colors.white),
                     )
-                  : const Text('Sync', style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold)),
+                  : Text(
+                      failed > 0 && pending == 0 ? 'Retry' : 'Sync',
+                      style: const TextStyle(fontSize: 11, fontWeight: FontWeight.bold),
+                    ),
             ),
         ],
       ),
@@ -576,6 +600,33 @@ class _LoadingView extends StatelessWidget {
         const Text('Initialising AI models…',
           style: TextStyle(color: Colors.black38, fontSize: 13)),
       ],
+    ),
+  );
+}
+
+class _StartupError extends StatelessWidget {
+  const _StartupError({required this.message, required this.onRetry});
+  final String message;
+  final VoidCallback onRetry;
+
+  @override
+  Widget build(BuildContext context) => Center(
+    child: Padding(
+      padding: const EdgeInsets.all(24),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          const Icon(Icons.error_outline, color: AppColors.syncFailed, size: 36),
+          const SizedBox(height: 12),
+          Text(
+            message,
+            textAlign: TextAlign.center,
+            style: const TextStyle(color: AppColors.syncFailed, fontSize: 13, height: 1.35),
+          ),
+          const SizedBox(height: 16),
+          FilledButton(onPressed: onRetry, child: const Text('Retry')),
+        ],
+      ),
     ),
   );
 }

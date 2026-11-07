@@ -117,6 +117,9 @@ class TariqMapApp extends StatelessWidget {
               ? AppColors.teal.withAlpha(80) : Colors.grey.withAlpha(60),
         ),
       ),
+      progressIndicatorTheme: const ProgressIndicatorThemeData(
+        color: AppColors.teal,
+      ),
       snackBarTheme: SnackBarThemeData(
         backgroundColor: AppColors.navy,
         contentTextStyle: GoogleFonts.inter(color: Colors.white),

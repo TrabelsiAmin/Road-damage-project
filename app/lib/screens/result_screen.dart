@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import 'package:share_plus/share_plus.dart';
 import '../core/app_colors.dart';
+import '../core/class_codes.dart';
 import '../core/constants.dart';
 import '../models/observation.dart';
 import '../widgets/annotated_image.dart';
@@ -190,9 +191,20 @@ class _ResultScreenState extends State<ResultScreen>
                             _StatsStrip(obs: obs),
                             const SizedBox(height: 16),
 
+                            if (obs.failedAgents > 0) ...[
+                              _InferenceErrorNote(
+                                text: obs.agentResults
+                                    .map((r) => r.error)
+                                    .whereType<String>()
+                                    .where((e) => e.isNotEmpty)
+                                    .join('\n'),
+                              ),
+                              const SizedBox(height: 10),
+                            ],
+
                             // Detections
                             if (detections.isEmpty)
-                              _EmptyDetections()
+                              _EmptyDetections(inferenceFailed: obs.failedAgents > 0)
                             else ...[
                               _SectionLabel(
                                 '${detections.length} ANOMAL${detections.length == 1 ? 'Y' : 'IES'} FOUND'),
@@ -437,21 +449,26 @@ class _DetectionCard extends StatelessWidget {
                 ),
                 const SizedBox(width: 8),
                 Expanded(
-                  child: Text(
-                    TariqMapConstants.labelFor(detection.classCode),
-                    style: const TextStyle(
-                      fontWeight: FontWeight.w800, fontSize: 14))),
-                Container(
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 8, vertical: 3),
-                  decoration: BoxDecoration(
-                    color: color.withAlpha(20),
-                    borderRadius: BorderRadius.circular(6),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        displayClassCode(detection.classCode),
+                        style: TextStyle(
+                          color: color,
+                          fontWeight: FontWeight.w800,
+                          fontSize: 15,
+                        ),
+                      ),
+                      const SizedBox(height: 2),
+                      Text(
+                        isKnownClassCode(detection.classCode)
+                            ? '${TariqMapConstants.labelFor(detection.classCode)} — plain-language name is unconfirmed'
+                            : 'Unknown class. No plain-language name is stored.',
+                        style: const TextStyle(color: Colors.black45, fontSize: 11, height: 1.3),
+                      ),
+                    ],
                   ),
-                  child: Text(detection.classCode,
-                    style: TextStyle(
-                      color: color,
-                      fontWeight: FontWeight.w800, fontSize: 11)),
                 ),
               ]),
               const SizedBox(height: 10),
@@ -532,9 +549,58 @@ class _CoordPill extends StatelessWidget {
 
 // ── Empty detections ──────────────────────────────────────────────────────────
 
-class _EmptyDetections extends StatelessWidget {
+class _InferenceErrorNote extends StatelessWidget {
+  const _InferenceErrorNote({required this.text});
+  final String text;
+
   @override
   Widget build(BuildContext context) => Container(
+    padding: const EdgeInsets.all(14),
+    decoration: BoxDecoration(
+      color: AppColors.critical.withAlpha(16),
+      borderRadius: BorderRadius.circular(14),
+      border: Border.all(color: AppColors.critical.withAlpha(70)),
+    ),
+    child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
+      const Icon(Icons.error_outline, color: AppColors.critical, size: 20),
+      const SizedBox(width: 10),
+      Expanded(
+        child: Text(
+          text.isEmpty ? 'Inference failed.' : text,
+          style: const TextStyle(color: AppColors.critical, fontSize: 12, height: 1.35),
+        ),
+      ),
+    ]),
+  );
+}
+
+class _EmptyDetections extends StatelessWidget {
+  const _EmptyDetections({this.inferenceFailed = false});
+  final bool inferenceFailed;
+
+  @override
+  Widget build(BuildContext context) {
+    if (inferenceFailed) {
+      return Container(
+        padding: const EdgeInsets.all(18),
+        decoration: BoxDecoration(
+          color: AppColors.critical.withAlpha(12),
+          borderRadius: BorderRadius.circular(14),
+          border: Border.all(color: AppColors.critical.withAlpha(50)),
+        ),
+        child: const Row(children: [
+          Icon(Icons.error_outline, color: AppColors.critical, size: 26),
+          SizedBox(width: 12),
+          Expanded(
+            child: Text(
+              'No detections were returned because inference failed.',
+              style: TextStyle(fontWeight: FontWeight.w600, fontSize: 13),
+            ),
+          ),
+        ]),
+      );
+    }
+    return Container(
     padding: const EdgeInsets.all(18),
     decoration: BoxDecoration(
       color: AppColors.syncDone.withAlpha(12),
@@ -551,6 +617,7 @@ class _EmptyDetections extends StatelessWidget {
             fontWeight: FontWeight.w600, fontSize: 13))),
     ]),
   );
+  }
 }
 
 // ── Meta section ──────────────────────────────────────────────────────────────

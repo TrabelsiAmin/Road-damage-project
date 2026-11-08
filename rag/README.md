@@ -133,6 +133,16 @@ Réponse :
 
 La documentation interactive est disponible sur `/docs`.
 
+### 5.4 Tableau de bord TariqMap
+
+Le notebook `RDDRAG.ipynb` termine en ouvrant un tunnel ngrok. Sa dernière cellule affiche une seule ligne à copier :
+
+```bash
+VITE_RAG_API_URL=https://<session>.ngrok-free.app
+```
+
+Collez-la dans `dashboard/.env.local`, sans `/ask`, puis relancez `npm run dev`. Le tableau de bord envoie `POST /rag/ask` ; Vite le transmet à `POST /ask`. Le secret Colab `NGROK_AUTH_TOKEN` est le jeton ngrok. Une adresse d'une session précédente ne répond plus.
+
 ---
 
 ## 6. Artefacts sauvegardés (`/content/road_damage_rag/vector_db`)

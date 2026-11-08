@@ -51,6 +51,7 @@ import { REFERENCE_CORRIDORS } from './utils/tunisiaGeo';
 import { haversineDistanceMeters } from './utils/clustering';
 import { MinistryOverview } from './components/MinistryOverview';
 import { TechnicalRecommendation } from './components/TechnicalRecommendation';
+import { displayClassCode } from './utils/classCodes';
 import { filterValidClusters } from './utils/mapValidation';
 import { THEME_STORAGE_KEY, getInitialTheme, resolveNextTheme } from './utils/theme';
 import {
@@ -286,7 +287,7 @@ function ReportImageThumbnail({ obs, clusterMedia, isAuthority, onOpenLightbox }
     const isOriginal = isAuthority && hasOriginal;
     const badgeText = isOriginal ? 'Original HD (Signé 10 min)' : 'Aperçu public flouté';
     const badgeClass = isOriginal ? 'badge-signed-hd' : 'badge-public-thumb';
-    const title = `#${obs.id.slice(0, 8)} • ${DAMAGE_CLASSES[obs.anomaly_type]?.fr || obs.anomaly_type || 'Anomalie'}`;
+    const title = `#${obs.id.slice(0, 8)} • ${displayClassCode(obs.anomaly_type)}`;
 
     return (
       <div
@@ -1050,11 +1051,10 @@ export default function App() {
         const root = popup.getElement()?.querySelector('.rag-map-popup-root');
         if (!root) return;
         const safe = observationForRecommendation(cluster);
-        const known = safe.classCode && DAMAGE_CLASSES[safe.classCode];
         const isFr = langRef.current !== 'en';
         root.innerHTML = buildMapRagPopupHtml({
           classCode: safe.classCode || '—',
-          classLabel: known ? (isFr ? known.fr : known.en) : (isFr ? 'Non classé' : 'Unclassified'),
+          classLabel: safe.classCode ? displayClassCode(safe.classCode) : (isFr ? 'Non classé' : 'Unclassified'),
           priorityLabel: safe.priority || '—',
           statusLabel: safe.status && STATUS_LABELS[safe.status]
             ? (isFr ? STATUS_LABELS[safe.status].fr : STATUS_LABELS[safe.status].en)
@@ -1692,7 +1692,7 @@ export default function App() {
               <option value="all">{lang === 'fr' ? 'Classe: Tous' : 'Class: All'}</option>
               {['D40', 'D20', 'D10', 'D00'].map((code) => (
                 <option key={code} value={code}>
-                  {code} ({lang === 'fr' ? DAMAGE_CLASSES[code].fr : DAMAGE_CLASSES[code].en})
+                  {code}
                 </option>
               ))}
             </select>
@@ -1815,7 +1815,7 @@ export default function App() {
                             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: '6px' }}>
                               <div style={{ display: 'flex', alignItems: 'center', gap: '6px', flexWrap: 'wrap' }}>
                                 <span style={{ fontWeight: 700, fontSize: '0.82rem', color: DAMAGE_CLASSES[classCode]?.color || '#64748b' }}>
-                                  #{idx + 1} {classCode || 'Non classé'}{DAMAGE_CLASSES[classCode] ? ` (${DAMAGE_CLASSES[classCode].fr})` : ''}
+                                  #{idx + 1} {displayClassCode(classCode)}
                                 </span>
                                 {obs.is_demo ? (
                                   <span className="badge badge-demo">DEMO</span>
@@ -1876,7 +1876,7 @@ export default function App() {
                       {selectedCluster.dominantClass || '—'}
                     </span>
                     <h2 style={{ fontSize: '1rem', fontWeight: 800 }}>
-                      {DAMAGE_CLASSES[selectedCluster.dominantClass]?.fr || 'Non classé'}
+                      {displayClassCode(selectedCluster.dominantClass)}
                     </h2>
                   </div>
                   <p className="mono" style={{ fontSize: '0.74rem', color: 'var(--text-dim)', marginTop: '4px' }}>
@@ -1981,7 +1981,7 @@ export default function App() {
                             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: '6px' }}>
                               <div style={{ display: 'flex', alignItems: 'center', gap: '6px', flexWrap: 'wrap' }}>
                                 <span style={{ fontWeight: 700, fontSize: '0.82rem', color: DAMAGE_CLASSES[classCode]?.color || '#64748b' }}>
-                                  #{idx + 1} {classCode || 'Non classé'}{DAMAGE_CLASSES[classCode] ? ` (${DAMAGE_CLASSES[classCode].fr})` : ''}
+                                  #{idx + 1} {displayClassCode(classCode)}
                                 </span>
                                 {obs.is_demo ? (
                                   <span className="badge badge-demo">DEMO</span>

@@ -5,7 +5,6 @@
  * data (defect class, priority scores, report density, backlog age, and GPS quality).
  */
 
-import { DAMAGE_CLASSES } from '../constants';
 import { observationClassCode, statClassCode } from './classCodes';
 import { resolveTunisiaAdmin } from './tunisiaGeo';
 import { haversineDistanceMeters } from './clustering';
@@ -45,11 +44,9 @@ export function generateRiskExplanation({
   }
 
   if (potholeCount > 0) {
-    points.push(`${potholeCount} nid${potholeCount > 1 ? 's' : ''}-de-poule (D40) nécessitant un rebouchage urgent`);
-  } else if (dominantClass === 'D20') {
-    points.push('Faïençage structurel (D20) indiquant une fatigue du sous-sol');
-  } else if (dominantClass === 'D00' || dominantClass === 'D10') {
-    points.push('Fissuration linéaire continue requérant un pontage d\'étanchéité');
+    points.push(`${potholeCount} signalement${potholeCount > 1 ? 's' : ''} de classe D40`);
+  } else if (dominantClass === 'D20' || dominantClass === 'D00' || dominantClass === 'D10') {
+    points.push(`Classe dominante ${dominantClass}`);
   }
 
   if (oldestAgeDays > 30) {
@@ -125,8 +122,6 @@ export function computeRoadSegmentsRisk(observations, { minRiskFilter = 'ALL' } 
     let maxPriorityScore = 0;
     let oldestTimestamp = now;
 
-    let estimatedBudget = 0;
-
     reps.forEach((r) => {
       const cls = statClassCode(observationClassCode(r));
       const score = Number(r.priority_score);
@@ -136,21 +131,11 @@ export function computeRoadSegmentsRisk(observations, { minRiskFilter = 'ALL' } 
       const t = new Date(r.created_at || r.captured_at || now).getTime();
       if (t < oldestTimestamp) oldestTimestamp = t;
 
-      if (cls === 'D40') {
-        d40Count++;
-        estimatedBudget += DAMAGE_CLASSES.D40.defaultCostTnd;
-      } else if (cls === 'D20') {
-        d20Count++;
-        estimatedBudget += DAMAGE_CLASSES.D20.defaultCostTnd;
-      } else if (cls === 'D10') {
-        d10Count++;
-        estimatedBudget += DAMAGE_CLASSES.D10.defaultCostTnd;
-      } else if (cls === 'D00') {
-        d00Count++;
-        estimatedBudget += DAMAGE_CLASSES.D00.defaultCostTnd;
-      } else {
-        unknownClassCount++;
-      }
+      if (cls === 'D40') d40Count++;
+      else if (cls === 'D20') d20Count++;
+      else if (cls === 'D10') d10Count++;
+      else if (cls === 'D00') d00Count++;
+      else unknownClassCount++;
     });
 
     const dominantClass =
@@ -212,7 +197,7 @@ export function computeRoadSegmentsRisk(observations, { minRiskFilter = 'ALL' } 
         importanceWeight,
         riskScore: calculatedRiskScore,
         riskLevel,
-        estimatedBudgetTnd: estimatedBudget,
+        estimatedBudgetTnd: null,
         explanation,
       });
     }

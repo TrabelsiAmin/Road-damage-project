@@ -83,7 +83,7 @@ describe('commandCenterAnalytics', () => {
     expect(kpis.repairsInProgress).toBe(1); // obs-2
     expect(kpis.repairsCompleted).toBe(1); // obs-3
     expect(kpis.overdueCases).toBe(1); // obs-2 (> 30 days)
-    expect(kpis.estimatedOpenBudgetTnd).toBeGreaterThan(0);
+    expect(kpis.estimatedOpenBudgetTnd).toBeNull();
   });
 
   it('partitions observations into Action Center operational queues', () => {

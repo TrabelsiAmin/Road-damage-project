@@ -1,43 +1,40 @@
 // TariqMap Authority Dashboard Constants & Translations
 
+// Stored RDD-style codes only. Common names are not verified and are not shown.
 export const DAMAGE_CLASSES = {
   D40: {
     code: 'D40',
-    en: 'Pothole',
-    fr: 'Nid-de-poule',
-    color: '#EF4444', // Red
+    color: '#EF4444',
     bgLight: 'rgba(239, 68, 68, 0.15)',
     weight: 1.0,
-    defaultCostTnd: 280, // Average cost in Tunisian Dinars to mill & asphalt fill a pothole
   },
   D20: {
     code: 'D20',
-    en: 'Alligator Crack',
-    fr: 'Faïençage (Fatigue)',
-    color: '#F97316', // Orange
+    color: '#F97316',
     bgLight: 'rgba(249, 115, 22, 0.15)',
     weight: 0.9,
-    defaultCostTnd: 450, // Resurfacing / seal-coating patch
   },
   D00: {
     code: 'D00',
-    en: 'Longitudinal Crack',
-    fr: 'Fissure longitudinale',
-    color: '#3B82F6', // Blue
+    color: '#3B82F6',
     bgLight: 'rgba(59, 130, 246, 0.15)',
     weight: 0.7,
-    defaultCostTnd: 120, // Crack sealing
   },
   D10: {
     code: 'D10',
-    en: 'Transverse Crack',
-    fr: 'Fissure transversale',
-    color: '#10B981', // Emerald
+    color: '#10B981',
     bgLight: 'rgba(16, 185, 129, 0.15)',
     weight: 0.7,
-    defaultCostTnd: 120, // Crack sealing
   },
 };
+
+/** No cited repair-cost survey is in this repo. Do not display a TND amount. */
+export const REPAIR_COST_STATUS = 'unavailable';
+export const REPAIR_COST_UNIT = 'TND';
+
+export function repairCostText(lang = 'fr') {
+  return lang === 'fr' ? 'Indisponible' : 'Unavailable';
+}
 
 export const SEVERITY_COLORS = {
   CRITICAL: { color: '#EF4444', label: 'Critical', fr: 'Critique' },
@@ -61,7 +58,7 @@ export const I18N = {
   en: {
     title: 'Road Infrastructure Overview',
     subtitle: 'Ministry road condition, critical damage, and repair follow-up',
-    demoBanner: 'DEMO DATA ACTIVE — Generated synthetic observations around Tunisian test corridors. Values labeled estimates.',
+    demoBanner: 'DEMO DATA ACTIVE — Generated synthetic observations around Tunisian test corridors.',
     filterClass: 'Damage Type',
     filterSeverity: 'Priority Level',
     filterStatus: 'Workflow Status',
@@ -69,16 +66,16 @@ export const I18N = {
     totalDefects: 'Detected Defects',
     criticalCount: 'Critical Safety Hazards',
     healthScore: 'Road Health Index',
-    healthTooltip: 'Index = 100 - (Sum of defect severity weights per km / baseline). 100 = Perfect road.',
+    healthTooltip: 'Road health index: unavailable. No measured index is stored.',
     priorityRankedList: 'Ranked Work Order Queue',
     budgetOptimizer: 'Budget & Triage Optimizer',
     exportCsv: 'Export CSV',
     printWorkOrder: 'Print Work Order',
     accountability: 'Accountability & Repair Cycle',
-    repairCycleNote: 'Phase 3 Verification loop active: 0 verified passes logged in test session.',
+    repairCycleNote: 'Verified repair passes: unavailable.',
     switchLang: 'Français',
     budgetInput: 'Available Municipal Budget (TND)',
-    estimatedCost: 'Est. Fix Cost',
+    estimatedCost: 'Repair cost (unavailable)',
     cumulativeCost: 'Cumulative Allocation',
     workOrderTitle: 'MUNICIPAL ROAD REPAIR WORK ORDER',
     issuedTo: 'Responsible Contractor / Service',
@@ -92,7 +89,7 @@ export const I18N = {
   fr: {
     title: 'Infrastructure routière',
     subtitle: 'État du réseau, dangers critiques et suivi des réparations',
-    demoBanner: 'DONNÉES DE DÉMO — Observations synthétiques sur les axes tunisiens. Montants estimés.',
+    demoBanner: 'DONNÉES DE DÉMO — Observations synthétiques sur les axes tunisiens.',
     filterClass: 'Type d\'anomalie',
     filterSeverity: 'Niveau de priorité',
     filterStatus: 'Statut des travaux',
@@ -100,16 +97,16 @@ export const I18N = {
     totalDefects: 'Anomalies détectées',
     criticalCount: 'Dangers critiques',
     healthScore: 'Indice de Santé Routière',
-    healthTooltip: 'Indice = 100 - (Somme pondérée des sévérités par km / référence). 100 = Route neuve.',
+    healthTooltip: 'Indice de santé routière : indisponible. Aucun indice mesuré n’est enregistré.',
     priorityRankedList: 'File des Travaux Prioritaires',
     budgetOptimizer: 'Optimisation Budgétaire & Arbitrage',
     exportCsv: 'Exporter CSV',
     printWorkOrder: 'Imprimer Ordre de Travail',
     accountability: 'Délai d\'Intervention & Audit',
-    repairCycleNote: 'Boucle de vérification Phase 3 : 0 passage de contrôle enregistré en session test.',
+    repairCycleNote: 'Passages de contrôle vérifiés : indisponible.',
     switchLang: 'English',
     budgetInput: 'Budget Municipal Disponible (TND)',
-    estimatedCost: 'Coût Estimé',
+    estimatedCost: 'Coût de réparation (indisponible)',
     cumulativeCost: 'Engagement Cumulé',
     workOrderTitle: 'ORDRE DE SERVICE - RÉPARATION VOIRIE',
     issuedTo: 'Direction Régionale de l\'Équipement / Commune',

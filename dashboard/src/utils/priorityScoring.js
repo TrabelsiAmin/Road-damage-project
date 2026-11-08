@@ -10,10 +10,10 @@ export const PRIORITY_CONFIG = {
   lowThreshold: 35.0,
   highThreshold: 65.0,
   classWeights: {
-    D40: 1.00, // Pothole — highest safety risk
-    D20: 0.85, // Alligator crack — structural pavement fatigue
-    D10: 0.50, // Transverse crack
-    D00: 0.40, // Longitudinal crack
+    D40: 1.00,
+    D20: 0.85,
+    D10: 0.50,
+    D00: 0.40,
   },
   defaultClassWeight: 0.40,
 };

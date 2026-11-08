@@ -18,7 +18,7 @@ import {
   Send,
 } from 'lucide-react';
 import { DAMAGE_CLASSES, STATUS_LABELS } from '../constants';
-import { displayClassCode, observationClassCode, statClassCode, UNKNOWN_CLASS_LABEL } from '../utils/classCodes';
+import { displayClassCode, observationClassCode, statClassCode } from '../utils/classCodes';
 import { getSignedMediaUrl, getPublicMediaUrl } from '../supabase';
 import { ORGANIZATIONS_LIST } from './GlobalFilterBar';
 
@@ -44,8 +44,6 @@ export function CaseDetailModal({
   const knownClass = statClassCode(storedClass);
   const clsCode = displayClassCode(storedClass);
   const clsInfo = (knownClass && DAMAGE_CLASSES[knownClass]) || {
-    fr: UNKNOWN_CLASS_LABEL,
-    en: UNKNOWN_CLASS_LABEL,
     color: '#64748b',
   };
   const prio = observation?.priority_label || (observation?.priority_score > 65 ? 'HIGH' : observation?.priority_score > 35 ? 'MEDIUM' : 'LOW');
@@ -161,7 +159,7 @@ export function CaseDetailModal({
             <div className="case-overview-grid">
               <div className="detail-item">
                 <span className="detail-label">{lang === 'fr' ? 'Type de dégradation' : 'Damage Type'}</span>
-                <span className="detail-value">{clsCode} — {lang === 'fr' ? clsInfo.fr : clsInfo.en}</span>
+                <span className="detail-value">{clsCode}</span>
               </div>
               <div className="detail-item">
                 <span className="detail-label">{lang === 'fr' ? 'Priorité de danger' : 'Priority'}</span>

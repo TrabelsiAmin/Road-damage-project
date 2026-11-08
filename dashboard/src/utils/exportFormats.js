@@ -2,7 +2,7 @@
  * Export Formatters: CSV, Excel TSV, and Standard GeoJSON for GIS Tools.
  */
 
-import { DAMAGE_CLASSES, STATUS_LABELS } from '../constants';
+import { STATUS_LABELS } from '../constants';
 import { displayClassCode, observationClassCode, statClassCode, UNKNOWN_CLASS_LABEL } from './classCodes';
 import { resolveTunisiaAdmin } from './tunisiaGeo';
 
@@ -13,9 +13,9 @@ export function buildExportRows(observations) {
   return (observations || []).map((obs) => {
     const geo = resolveTunisiaAdmin(obs.latitude, obs.longitude);
     const cls = statClassCode(observationClassCode(obs));
-    const typeLabel = cls ? (DAMAGE_CLASSES[cls]?.fr || cls) : UNKNOWN_CLASS_LABEL;
+    const typeLabel = cls ? displayClassCode(cls) : UNKNOWN_CLASS_LABEL;
     const statusLabel = STATUS_LABELS[obs.status]?.fr || obs.status || 'Non confirmé';
-    const cost = cls ? DAMAGE_CLASSES[cls]?.defaultCostTnd ?? null : null;
+    const cost = null;
 
     return {
       id: obs.id,
@@ -58,7 +58,7 @@ export function generateCsvString(observations) {
     'Latitude',
     'Longitude',
     'Précision GPS (m)',
-    'Coût estimé (TND)',
+    'Coût de réparation (TND)',
     'Assigné à',
     'Date limite',
     'Enregistrement Démo',
@@ -89,7 +89,7 @@ export function generateCsvString(observations) {
         escapeCsv(r.latitude),
         escapeCsv(r.longitude),
         escapeCsv(r.accuracyMeters),
-        escapeCsv(r.estimatedCostTnd),
+        escapeCsv(r.estimatedCostTnd == null ? 'unavailable' : r.estimatedCostTnd),
         escapeCsv(r.assignedTo),
         escapeCsv(r.dueDate),
         escapeCsv(r.isDemo),
@@ -127,7 +127,7 @@ export function generateGeoJson(observations) {
         municipality: r.municipality,
         road_segment: r.roadSegment,
         accuracy_meters: r.accuracyMeters === 'N/A' ? null : Number(r.accuracyMeters),
-        estimated_cost_tnd: r.estimatedCostTnd,
+        estimated_cost_tnd: r.estimatedCostTnd == null ? 'unavailable' : r.estimatedCostTnd,
         assigned_to: r.assignedTo,
         due_date: r.dueDate === 'Non définie' ? null : r.dueDate,
         is_demo: r.isDemo === 'OUI',
@@ -184,7 +184,7 @@ export function exportToExcelTsv(observations, filename = 'tariqmap-export.tsv')
     tsvLines.push([
       r.id, r.date, r.classCode, r.typeLabel, r.priorityLabel, r.priorityScore,
       r.status, r.governorate, r.municipality, r.roadSegment, r.latitude,
-      r.longitude, r.accuracyMeters, r.estimatedCostTnd, r.assignedTo, r.dueDate, r.isDemo
+      r.longitude, r.accuracyMeters, r.estimatedCostTnd == null ? 'unavailable' : r.estimatedCostTnd, r.assignedTo, r.dueDate, r.isDemo
     ].join('\t'));
   });
   downloadFile('\uFEFF' + tsvLines.join('\r\n'), filename, 'text/tab-separated-values;charset=utf-8;');

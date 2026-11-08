@@ -5,7 +5,6 @@
  * regional backlog ranking, and model monitoring data quality checks.
  */
 
-import { DAMAGE_CLASSES } from '../constants';
 import { observationClassCode, statClassCode } from './classCodes';
 import { eventTimeMs, uniqueObservations, utcDayKey } from './records';
 import { resolveTunisiaAdmin } from './tunisiaGeo';
@@ -174,15 +173,9 @@ export function buildExecutiveKpis(observations, filters = {}, now = Date.now())
   const repairCompletionRate =
     totalClosedOrActive > 0 ? Math.round((repairedCount / totalClosedOrActive) * 100) : null;
 
-  // KPI 9: Estimated open maintenance budget (TND).
-  // Only a stored known class adds its catalogue cost. Missing and unknown
-  // codes add nothing, so they are not priced as D40.
-  let estimatedBudgetTnd = 0;
-  activeReports.forEach((o) => {
-    const cls = statClassCode(observationClassCode(o));
-    const cost = cls ? DAMAGE_CLASSES[cls]?.defaultCostTnd : null;
-    if (typeof cost === 'number') estimatedBudgetTnd += cost;
-  });
+  // KPI 9: Repair cost is unavailable. There is no cited TND schedule,
+  // so a known class is not given a price and an unknown class is not priced as D40.
+  const estimatedBudgetTnd = null;
 
   // Not computed from stored repair timestamps.
   const avgResolutionDays = null;
@@ -411,7 +404,7 @@ export function buildRegionalBacklog(observations) {
         governorate: gov,
         activeCount: 0,
         repairedCount: 0,
-        totalBudgetTnd: 0,
+        totalBudgetTnd: null,
         criticalCount: 0,
         municipalities: new Set(),
       });
@@ -423,8 +416,6 @@ export function buildRegionalBacklog(observations) {
     const isActive = ACTIVE_STATUSES.has(obs.status || 'unconfirmed');
     if (isActive) {
       entry.activeCount++;
-      const cls = obs.anomaly_type || obs.detections?.[0]?.class_code;
-      entry.totalBudgetTnd += (cls && DAMAGE_CLASSES[cls]?.defaultCostTnd) || 250;
 
       const p = (obs.priority_label || '').toUpperCase();
       if (p === 'CRITICAL' || p === 'HIGH' || Number(obs.priority_score) >= 65) {

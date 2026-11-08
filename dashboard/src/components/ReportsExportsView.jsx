@@ -10,6 +10,7 @@ import {
   Table,
 } from 'lucide-react';
 import { exportToCsv, exportToExcelTsv, exportToGeoJson } from '../utils/exportFormats';
+import { repairCostText } from '../constants';
 
 export function ReportsExportsView({
   filteredObservations = [],
@@ -158,8 +159,8 @@ export function ReportsExportsView({
               <strong className="wo-kpi-val" style={{ color: '#EF4444' }}>{kpis.criticalAnomalies}</strong>
             </div>
             <div className="wo-kpi">
-              <span className="wo-kpi-label">Budget prévisionnel</span>
-              <strong className="wo-kpi-val">{(kpis.estimatedBudgetTnd || 0).toLocaleString()} DT</strong>
+              <span className="wo-kpi-label">{lang === 'fr' ? 'Coût de réparation (TND)' : 'Repair cost (TND)'}</span>
+              <strong className="wo-kpi-val">{repairCostText(lang)}</strong>
             </div>
           </div>
         </div>

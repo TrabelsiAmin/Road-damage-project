@@ -1,7 +1,7 @@
 import React from 'react';
 import { Filter, RotateCcw, Calendar, MapPin, Tag, Shield, Building2 } from 'lucide-react';
 import { ALL_GOVERNORATES, getMunicipalitiesForGovernorate } from '../utils/tunisiaGeo';
-import { DAMAGE_CLASSES, STATUS_LABELS } from '../constants';
+import { STATUS_LABELS } from '../constants';
 
 export const ORGANIZATIONS_LIST = [
   { id: 'c4b8b609-b684-4861-bbd4-53965fc12d5b', name: 'Direction Voirie Municipale' },
@@ -150,7 +150,7 @@ export function GlobalFilterBar({
             <option value="all">{lang === 'fr' ? 'Toutes les classes' : 'All classes'}</option>
             {['D40', 'D20', 'D10', 'D00'].map((code) => (
               <option key={code} value={code}>
-                {code} — {lang === 'fr' ? DAMAGE_CLASSES[code].fr : DAMAGE_CLASSES[code].en}
+                {code}
               </option>
             ))}
           </select>

@@ -13,6 +13,7 @@ import {
   Info,
 } from 'lucide-react';
 import { StatCard } from './ui/StatCard';
+import { repairCostText } from '../constants';
 
 export function ExecutiveKpiGrid({
   kpis,
@@ -55,7 +56,7 @@ export function ExecutiveKpiGrid({
       deltaType: kpis.deltaCritical > 0 ? 'negative' : 'positive',
       icon: Flame,
       color: '#EF4444',
-      tooltip: lang === 'fr' ? 'Nids-de-poule profonds (D40) ou anomalies avec score de priorité > 65.' : 'Potholes or score > 65.',
+      tooltip: lang === 'fr' ? 'Priorité HIGH ou CRITICAL, ou score de priorité d’au moins 65.' : 'Priority HIGH or CRITICAL, or a priority score of at least 65.',
       clickable: true,
       queueKey: 'critical',
     },
@@ -141,13 +142,13 @@ export function ExecutiveKpiGrid({
     },
     {
       id: 'estBudget',
-      title: lang === 'fr' ? 'Budget estimé requis' : 'Est. repair budget',
-      value: `${(kpis.estimatedBudgetTnd || 0).toLocaleString()} DT`,
-      sub: lang === 'fr' ? 'Base barème DGPC' : 'DGPC unit cost index',
+      title: lang === 'fr' ? 'Coût de réparation' : 'Repair cost',
+      value: repairCostText(lang),
+      sub: lang === 'fr' ? 'Aucun montant vérifié' : 'No verified amount',
       deltaType: 'neutral',
       icon: Coins,
       color: '#EC4899',
-      tooltip: lang === 'fr' ? 'Estimation prévisionnelle basée sur les surfaces types: nid-de-poule 180 DT, faïençage 450 DT, fissures 80-120 DT.' : 'Cost estimation according to standard road repair schedules.',
+      tooltip: lang === 'fr' ? 'Coût de réparation indisponible. Aucun barème cité n’est dans ce dépôt.' : 'Repair cost unavailable. This repo has no cited price schedule.',
       clickable: false,
     },
   ];

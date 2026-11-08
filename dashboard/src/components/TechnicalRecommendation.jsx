@@ -65,9 +65,7 @@ const COPY = {
 function selectionLine(selection, lang, copy) {
   if (!selection) return null;
   const known = selection.classCode && DAMAGE_CLASSES[selection.classCode];
-  const classText = known
-    ? `${known.code} · ${lang === 'fr' ? known.fr : known.en}`
-    : copy.unclassified;
+  const classText = known ? known.code : copy.unclassified;
   const priority = selection.priority || copy.unknownPriority;
   const status = selection.status && STATUS_LABELS[selection.status]
     ? (lang === 'fr' ? STATUS_LABELS[selection.status].fr : STATUS_LABELS[selection.status].en)

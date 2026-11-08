@@ -53,7 +53,7 @@ describe('analytics consistency', () => {
     const kpis = buildExecutiveKpis([]);
     expect(kpis.activeAnomalies).toBe(0);
     expect(kpis.repairCompletionRate).toBeNull();
-    expect(kpis.estimatedOpenBudgetTnd).toBe(0);
+    expect(kpis.estimatedOpenBudgetTnd).toBeNull();
     expect(kpis.avgResolutionDays).toBeNull();
     expect(filterObservations([], { anomalyClass: 'D40' })).toEqual([]);
   });
@@ -88,10 +88,10 @@ describe('analytics consistency', () => {
     expect(d40).toBe(0);
 
     const kpis = buildExecutiveKpis(incomplete, {}, Date.parse('2026-11-05T00:00:00Z'));
-    expect(kpis.estimatedOpenBudgetTnd).toBeGreaterThan(0);
     const knownOnly = buildExecutiveKpis([incomplete[2]], {}, Date.parse('2026-11-05T00:00:00Z'));
     const unknownOnly = buildExecutiveKpis([incomplete[1]], {}, Date.parse('2026-11-05T00:00:00Z'));
-    expect(unknownOnly.estimatedOpenBudgetTnd).toBe(0);
-    expect(kpis.estimatedOpenBudgetTnd).toBe(knownOnly.estimatedOpenBudgetTnd);
+    expect(kpis.estimatedOpenBudgetTnd).toBeNull();
+    expect(knownOnly.estimatedOpenBudgetTnd).toBeNull();
+    expect(unknownOnly.estimatedOpenBudgetTnd).toBeNull();
   });
 });

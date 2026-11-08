@@ -118,16 +118,15 @@ export function DataQualityView({
             </h4>
             <p style={{ fontSize: '0.72rem', color: 'var(--text-muted)', marginBottom: '8px' }}>
               {lang === 'fr'
-                ? 'Le nom en langage courant à côté du code n’est pas confirmé par une évaluation étiquetée.'
-                : 'The plain-language name beside a code is not confirmed by a labeled eval.'}
+                ? 'Le nom courant de ces codes n’est pas vérifié. Seul le code stocké est affiché.'
+                : 'Common names for these codes are not verified. Only the stored code is shown.'}
             </p>
             <div className="class-pills-row">
               {Object.entries(metrics.classesBreakdown || {}).map(([code, count]) => {
-                const cls = DAMAGE_CLASSES[code] || { fr: code, color: '#64748b' };
+                const cls = DAMAGE_CLASSES[code] || { color: '#64748b' };
                 return (
                   <div key={code} className="class-dist-chip" style={{ borderColor: `${cls.color}40` }}>
                     <span className="chip-code" style={{ color: cls.color }}>{code}</span>
-                    <span className="chip-name">{lang === 'fr' ? cls.fr : code}</span>
                     <strong className="chip-count mono">{count}</strong>
                   </div>
                 );

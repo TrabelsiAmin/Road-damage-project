@@ -32,8 +32,8 @@ const LEAKY = {
 describe('technical question', () => {
   it('builds a French question from the class, status, and priority already shown', () => {
     const question = buildTechnicalQuestion(LEAKY);
-    expect(question).toContain('Nid-de-poule');
-    expect(question).toContain('RDD2022 D40');
+    expect(question).toContain('code RDD2022 D40');
+    expect(question).not.toContain('Nid-de-poule');
     expect(question).toContain('priorité élevée');
     expect(question).toContain('Confirmé');
     expect(question).toContain('manuels de pathologie routière');
@@ -69,8 +69,8 @@ describe('technical question', () => {
       score: 12,
     };
     const question = buildTechnicalQuestion(row);
-    expect(question).toContain('Fissure longitudinale');
-    expect(question).toContain('D00');
+    expect(question).toContain('code RDD2022 D00');
+    expect(question).not.toContain('Fissure longitudinale');
     expect(question).toContain('priorité faible');
     expect(question).toContain('En cours');
     expect(question).not.toContain('36.123456');

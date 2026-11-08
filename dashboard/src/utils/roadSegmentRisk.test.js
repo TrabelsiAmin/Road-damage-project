@@ -27,7 +27,8 @@ describe('roadSegmentRisk calculations', () => {
     });
 
     expect(explanation).toContain('4 signalements');
-    expect(explanation).toContain('3 nids-de-poule (D40)');
+    expect(explanation).toContain('3 signalements de classe D40');
+    expect(explanation).not.toContain('nid');
     expect(explanation).toContain('32 jours');
     expect(explanation).toContain('Score de sévérité maximal élevé');
   });
@@ -69,6 +70,6 @@ describe('roadSegmentRisk calculations', () => {
     // First segment must have highest risk
     expect(segments[0].riskScore).toBeGreaterThanOrEqual(segments[segments.length - 1].riskScore);
     expect(segments[0].dominantClass).toBe('D40');
-    expect(segments[0].estimatedBudgetTnd).toBeGreaterThan(0);
+    expect(segments[0].estimatedBudgetTnd).toBeNull();
   });
 });

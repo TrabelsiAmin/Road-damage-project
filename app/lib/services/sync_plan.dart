@@ -638,12 +638,45 @@ QueueSyncState queueSyncState(Observation obs,
   if (obs.mediaSyncStatus == MediaSyncStatus.originalUploaded) {
     return QueueSyncState.laterStepIncomplete;
   }
-  if (obs.mediaSyncStatus == MediaSyncStatus.failed ||
-      (obs.syncStatus == SyncStatus.synced &&
-          obs.mediaSyncStatus != MediaSyncStatus.uploaded)) {
+  // A photo failure is only a photo failure after metadata was stored.
+  // `failed` + a failed photo is the coordinator's incomplete-upload outcome.
+  // `synced` + anything short of `uploaded` is the same partial row.
+  // Pending or uploading plus a failed photo has not confirmed metadata.
+  final metadataStored = obs.syncStatus == SyncStatus.synced ||
+      obs.syncStatus == SyncStatus.failed;
+  if (metadataStored && obs.mediaSyncStatus == MediaSyncStatus.failed) {
+    return QueueSyncState.metadataSyncedPhotoFailed;
+  }
+  if (obs.syncStatus == SyncStatus.synced &&
+      obs.mediaSyncStatus != MediaSyncStatus.uploaded) {
     return QueueSyncState.metadataSyncedPhotoFailed;
   }
   return QueueSyncState.notYetSynced;
+}
+
+/// Metadata is already stored and the original photo or thumbnail is not.
+bool metadataSyncedMediaIncomplete(Observation obs) {
+  return obs.syncStatus == SyncStatus.synced &&
+      obs.mediaSyncStatus != MediaSyncStatus.uploaded;
+}
+
+/// Short label shared by the offline queue and every sync chip.
+/// A photo is named only after metadata is stored.
+String queueStatusLabel(Observation obs, {bool manualRetryInProgress = false}) {
+  final state =
+      queueSyncState(obs, manualRetryInProgress: manualRetryInProgress);
+  return switch (state) {
+    QueueSyncState.notYetSynced when obs.syncStatus == SyncStatus.uploading =>
+      'UPLOADING',
+    QueueSyncState.notYetSynced when obs.syncStatus == SyncStatus.failed =>
+      'FAILED',
+    QueueSyncState.notYetSynced => 'NOT SYNCED',
+    QueueSyncState.metadataSyncedPhotoFailed => 'PHOTO FAILED',
+    QueueSyncState.laterStepIncomplete => 'THUMBNAIL FAILED',
+    QueueSyncState.fullySynced => 'SYNCED',
+    QueueSyncState.manualReview => 'NEEDS REVIEW',
+    QueueSyncState.manualRetryInProgress => 'RETRYING',
+  };
 }
 
 String queueStatusMessage(Observation obs, {bool manualRetryInProgress = false}) {

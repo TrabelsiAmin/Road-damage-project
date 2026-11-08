@@ -232,7 +232,10 @@ class _CameraDetectionScreenState extends State<CameraDetectionScreen>
                       onTap: (_cameras.length > 1 && !_analyzing) ? _switchCamera : null,
                     ),
                     // Shutter button
-                    GestureDetector(
+                    Semantics(
+                      button: true,
+                      label: 'Take photo',
+                      child: GestureDetector(
                       onTap: _analyzing ? null : _capture,
                       child: AnimatedContainer(
                         duration: const Duration(milliseconds: 150),
@@ -250,6 +253,7 @@ class _CameraDetectionScreenState extends State<CameraDetectionScreen>
                             ? const Center(child: CircularProgressIndicator(strokeWidth: 2, color: AppColors.teal))
                             : const Icon(Icons.camera, color: Colors.black, size: 32),
                       ),
+                    ),
                     ),
                     const _ControlButton(icon: Icons.info_outline, label: 'Info', onTap: null),
                   ],
@@ -283,7 +287,7 @@ class _CameraDetectionScreenState extends State<CameraDetectionScreen>
                         CircularProgressIndicator(color: AppColors.teal, strokeWidth: 3),
                         SizedBox(height: 18),
                         Text(
-                          'Analyzing…',
+                          'Taking the photo…',
                           style: TextStyle(
                             color: Colors.white,
                             fontSize: 16,
@@ -292,7 +296,7 @@ class _CameraDetectionScreenState extends State<CameraDetectionScreen>
                         ),
                         SizedBox(height: 6),
                         Text(
-                          'Detecting road surface anomalies',
+                          'Detection starts after you confirm.',
                           style: TextStyle(
                             color: Colors.white70,
                             fontSize: 12,

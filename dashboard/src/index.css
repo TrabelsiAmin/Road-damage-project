@@ -2528,7 +2528,8 @@ h1, h2, h3, h4 {
   background: var(--bg-secondary);
   border: 1px solid var(--border-subtle);
   border-radius: 0 0 var(--radius-md) var(--radius-md);
-  overflow-x: auto;
+  overflow: auto;
+  max-height: min(68vh, 720px);
   box-shadow: var(--shadow-card);
 }
 
@@ -2540,6 +2541,9 @@ h1, h2, h3, h4 {
 }
 
 .action-table th {
+  position: sticky;
+  top: 0;
+  z-index: 1;
   background: #f8fafc;
   padding: 10px 14px;
   font-size: 0.72rem;
@@ -2551,17 +2555,22 @@ h1, h2, h3, h4 {
   white-space: nowrap;
 }
 
+.action-table tbody tr:nth-child(even):not(.row-selected):not(:hover) {
+  background: rgba(15, 23, 42, 0.025);
+}
+
 .action-table td {
   padding: 10px 14px;
   border-bottom: 1px solid var(--border-subtle);
   vertical-align: middle;
 }
 
-.action-table tr:hover {
+.action-table tbody tr:hover {
   background: #f8fafc;
 }
 
-.action-table tr.row-selected {
+.action-table tbody tr.row-selected,
+.action-table tbody tr.row-selected:hover {
   background: #eff6ff;
 }
 
@@ -3648,18 +3657,28 @@ h1, h2, h3, h4 {
 
 .evidence-image-wrap {
   width: 100%;
-  max-height: 380px;
+  min-height: 240px;
+  max-height: 420px;
   border-radius: var(--radius-md);
   overflow: hidden;
   position: relative;
   cursor: pointer;
   box-shadow: var(--shadow-card);
+  background: #0f172a;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.evidence-image-wrap:focus-visible {
+  outline: 2px solid var(--color-primary);
+  outline-offset: 2px;
 }
 
 .evidence-img {
   width: 100%;
-  height: 100%;
-  object-fit: cover;
+  max-height: 420px;
+  object-fit: contain;
   display: block;
 }
 
@@ -5037,4 +5056,34 @@ body[data-theme="dark"] *::-webkit-scrollbar-thumb:hover,
     flex-wrap: wrap;
     gap: 8px;
   }
+
+  .command-filter-bar {
+    margin: 12px;
+    padding: 12px;
+  }
+}
+
+button:focus-visible,
+a:focus-visible,
+select:focus-visible,
+input:focus-visible,
+.command-nav-tab:focus-visible {
+  outline: 2px solid var(--color-primary);
+  outline-offset: 2px;
+}
+
+body[data-theme="dark"] .action-table th,
+.dark-mode .action-table th {
+  background: var(--bg-card);
+  color: var(--text-muted);
+}
+
+body[data-theme="dark"] .action-table tbody tr:nth-child(even):not(.row-selected):not(:hover),
+.dark-mode .action-table tbody tr:nth-child(even):not(.row-selected):not(:hover) {
+  background: rgba(255, 255, 255, 0.04);
+}
+
+body[data-theme="dark"] .action-table tbody tr:hover,
+.dark-mode .action-table tbody tr:hover {
+  background: rgba(255, 255, 255, 0.06);
 }

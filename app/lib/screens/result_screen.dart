@@ -7,8 +7,10 @@ import '../core/app_colors.dart';
 import '../core/class_codes.dart';
 import '../core/constants.dart';
 import '../models/observation.dart';
+import '../services/sync_plan.dart';
 import '../widgets/annotated_image.dart';
 import '../widgets/observation_photo.dart';
+import '../widgets/sync_status_chip.dart';
 
 class ResultScreen extends StatefulWidget {
   const ResultScreen({super.key, required this.observation});
@@ -192,6 +194,11 @@ class _ResultScreenState extends State<ResultScreen>
 
                             // Stats strip
                             _StatsStrip(obs: obs),
+                            const SizedBox(height: 10),
+                            Align(
+                              alignment: Alignment.centerLeft,
+                              child: ObservationSyncChip(observation: obs),
+                            ),
                             const SizedBox(height: 16),
 
                             if (obs.failedAgents > 0) ...[
@@ -670,18 +677,30 @@ class _MetaSection extends StatelessWidget {
         const Divider(height: 1, indent: 44, endIndent: 16,
           color: AppColors.borderLight),
         _MetaRow(
-          icon: switch (obs.syncStatus) {
-            SyncStatus.synced    => Icons.cloud_done_rounded,
-            SyncStatus.failed    => Icons.cloud_off_rounded,
-            SyncStatus.uploading => Icons.cloud_sync_rounded,
-            _                   => Icons.cloud_upload_outlined,
+          icon: switch (queueSyncState(obs)) {
+            QueueSyncState.fullySynced => Icons.cloud_done_rounded,
+            QueueSyncState.manualReview => Icons.error_outline_rounded,
+            QueueSyncState.manualRetryInProgress => Icons.cloud_sync_rounded,
+            QueueSyncState.metadataSyncedPhotoFailed => Icons.cloud_off_rounded,
+            QueueSyncState.laterStepIncomplete => Icons.cloud_off_rounded,
+            QueueSyncState.notYetSynced =>
+              obs.syncStatus == SyncStatus.uploading
+                  ? Icons.cloud_sync_rounded
+                  : obs.syncStatus == SyncStatus.failed
+                      ? Icons.cloud_off_rounded
+                      : Icons.cloud_upload_outlined,
           },
           label: 'Sync',
-          value: obs.syncStatus.name.toUpperCase(),
-          valueColor: switch (obs.syncStatus) {
-            SyncStatus.synced => AppColors.syncDone,
-            SyncStatus.failed => AppColors.syncFailed,
-            _                => AppColors.syncPending,
+          value: queueStatusLabel(obs),
+          valueColor: switch (queueSyncState(obs)) {
+            QueueSyncState.fullySynced => AppColors.syncDone,
+            QueueSyncState.notYetSynced
+                when obs.syncStatus == SyncStatus.uploading =>
+              AppColors.tealLight,
+            QueueSyncState.notYetSynced
+                when obs.syncStatus != SyncStatus.failed =>
+              AppColors.syncPending,
+            _ => AppColors.syncFailed,
           },
         ),
         const Divider(height: 1, indent: 44, endIndent: 16,

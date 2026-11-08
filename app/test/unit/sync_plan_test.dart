@@ -488,6 +488,57 @@ void main() {
         contains('Manual review after retry exhaustion'));
   });
 
+  test('a photo is not described as unsynced before metadata is stored', () {
+    final pendingPhoto = _obs(SyncStatus.pending, MediaSyncStatus.failed);
+    final uploadingPhoto = _obs(SyncStatus.uploading, MediaSyncStatus.failed);
+    final metadataFailed = _obs(SyncStatus.failed, MediaSyncStatus.pending);
+    final photoFailed = _obs(SyncStatus.failed, MediaSyncStatus.failed);
+    final syncedPhoto = _obs(SyncStatus.synced, MediaSyncStatus.failed);
+    final thumbnail = _obs(SyncStatus.synced, MediaSyncStatus.originalUploaded);
+    final syncedPendingPhoto = _obs(SyncStatus.synced, MediaSyncStatus.pending);
+
+    expect(queueSyncState(pendingPhoto), QueueSyncState.notYetSynced);
+    expect(queueStatusMessage(pendingPhoto), 'Observation not yet synced.');
+    expect(queueStatusMessage(pendingPhoto),
+        isNot(contains('Metadata synced')));
+    expect(queueStatusLabel(pendingPhoto), 'NOT SYNCED');
+
+    expect(queueSyncState(uploadingPhoto), QueueSyncState.notYetSynced);
+    expect(queueStatusLabel(uploadingPhoto), 'UPLOADING');
+    expect(queueStatusMessage(uploadingPhoto),
+        isNot(contains('photo upload failed')));
+
+    expect(queueSyncState(metadataFailed), QueueSyncState.notYetSynced);
+    expect(queueStatusLabel(metadataFailed), 'FAILED');
+    expect(queueStatusMessage(metadataFailed), 'Observation not yet synced.');
+    expect(queueStatusMessage(metadataFailed),
+        isNot(contains('photo upload failed')));
+
+    expect(queueSyncState(photoFailed), QueueSyncState.metadataSyncedPhotoFailed);
+    expect(queueStatusLabel(photoFailed), 'PHOTO FAILED');
+    expect(queueStatusMessage(photoFailed),
+        contains('Metadata synced, but the photo upload failed'));
+
+    expect(queueSyncState(syncedPhoto), QueueSyncState.metadataSyncedPhotoFailed);
+    expect(queueStatusLabel(syncedPhoto), 'PHOTO FAILED');
+    expect(queueStatusLabel(thumbnail), 'THUMBNAIL FAILED');
+    expect(queueSyncState(syncedPendingPhoto),
+        QueueSyncState.metadataSyncedPhotoFailed);
+    expect(metadataSyncedMediaIncomplete(syncedPendingPhoto), isTrue);
+    expect(
+      metadataSyncedMediaIncomplete(
+        _obs(SyncStatus.synced, MediaSyncStatus.uploaded),
+      ),
+      isFalse,
+    );
+    expect(
+      metadataSyncedMediaIncomplete(
+        _obs(SyncStatus.needsReview, MediaSyncStatus.failed),
+      ),
+      isFalse,
+    );
+  });
+
   test('storage 409 matches only the expected bucket and object path', () async {
     const bucket = 'observation-images';
     const path = 'obs-1/original.webp';

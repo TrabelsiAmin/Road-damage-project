@@ -89,9 +89,10 @@ pip install -q fastapi uvicorn pyngrok nest-asyncio
 
 ### 5.1 Exécution du notebook
 
-1. Activer le GPU : *Exécution → Modifier le type d'exécution → T4 GPU*.
-2. Uploader les fichiers `.txt` dans `/content/road_damage_rag/data`.
-3. Exécuter les cellules dans l'ordre.
+1. Dans Colab : *Fichier → Ouvrir un notebook → GitHub*, dépôt `TrabelsiAmin/Road-damage-project`, branche `feature/tariqmap-ui-and-functionality`, fichier `rag/RDDRAG.ipynb`. La branche `main` ne contient pas ce notebook.
+2. Activer le GPU : *Exécution → Modifier le type d'exécution → T4 GPU*.
+3. À la cellule « Manuels à uploader », envoyer les six `.txt`. Le dossier `/content/road_damage_rag/data` est vide tant que ces fichiers n'y sont pas. Sans eux, FAISS s'arrête sur `chunk_embeddings.shape[1]`.
+4. Exécuter les cellules dans l'ordre. Le secret Colab `NGROK_AUTH_TOKEN` est demandé seulement à la dernière cellule.
 
 ### 5.2 Interrogation directe
 

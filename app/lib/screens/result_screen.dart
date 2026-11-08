@@ -8,6 +8,7 @@ import '../core/class_codes.dart';
 import '../core/constants.dart';
 import '../models/observation.dart';
 import '../widgets/annotated_image.dart';
+import '../widgets/observation_photo.dart';
 
 class ResultScreen extends StatefulWidget {
   const ResultScreen({super.key, required this.observation});
@@ -39,9 +40,17 @@ class _ResultScreenState extends State<ResultScreen>
   }
 
   Future<void> _share() async {
+    final path = widget.observation.imagePath;
+    if (!kIsWeb && !File(path).existsSync()) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Photo is not on this device.')),
+      );
+      return;
+    }
     final box = context.findRenderObject() as RenderBox?;
     await Share.shareXFiles(
-      [XFile(widget.observation.imagePath)],
+      [XFile(path)],
       text: 'TariqMap: ${widget.observation.detections.length} anomaly detected, '
             'Score: ${widget.observation.priorityScore.toStringAsFixed(0)}/100',
       sharePositionOrigin:
@@ -69,13 +78,7 @@ class _ResultScreenState extends State<ResultScreen>
               fit: StackFit.expand,
               children: [
                 // Image
-                detections.isEmpty
-                    ? _buildPlainImage(obs)
-                    : AnnotatedImageWidget(
-                        imagePath:        obs.imagePath,
-                        detections:       detections,
-                        highlightedIndex: _highlightedIndex,
-                      ),
+                _buildPhoto(obs, detections),
 
                 // Dark gradient overlay at top
                 Positioned(
@@ -241,9 +244,19 @@ class _ResultScreenState extends State<ResultScreen>
     );
   }
 
-  Widget _buildPlainImage(Observation obs) => kIsWeb
-      ? Image.network(obs.imagePath, fit: BoxFit.cover)
-      : Image.file(File(obs.imagePath), fit: BoxFit.cover);
+  Widget _buildPhoto(Observation obs, List<Detection> detections) {
+    final local = !kIsWeb &&
+        obs.imagePath.isNotEmpty &&
+        File(obs.imagePath).existsSync();
+    if (local && detections.isNotEmpty) {
+      return AnnotatedImageWidget(
+        imagePath: obs.imagePath,
+        detections: detections,
+        highlightedIndex: _highlightedIndex,
+      );
+    }
+    return ObservationPhoto(observation: obs);
+  }
 }
 
 // ── Icon pill button ──────────────────────────────────────────────────────────

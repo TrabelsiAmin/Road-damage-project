@@ -4,19 +4,13 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:intl/intl.dart';
-import 'package:geolocator/geolocator.dart';
-import 'package:uuid/uuid.dart';
 import '../core/app_colors.dart';
-import '../core/constants.dart';
-import '../inference/preprocessing.dart';
-
 import '../models/observation.dart';
 import '../models/organization.dart';
 import '../services/detection_service.dart';
 import '../services/observation_repository.dart';
 import '../services/organization_service.dart';
 import '../data/remote/api_client.dart';
-import '../services/territorial_service.dart';
 import 'camera_detection_screen.dart';
 import 'drive_awareness_screen.dart';
 import 'model_status_screen.dart';
@@ -27,6 +21,7 @@ import 'result_screen.dart';
 import 'settings_screen.dart';
 import 'video_import_screen.dart';
 import '../widgets/dashboard_map.dart';
+import '../widgets/observation_photo.dart';
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key, this.initialActor = 'Municipality'});
@@ -38,12 +33,10 @@ class HomeScreen extends StatefulWidget {
 
 class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
   final _picker = ImagePicker();
-  final _uuid = const Uuid();
   final _orgService = OrganizationService();
 
   late DetectionService _detection;
   late ObservationRepository _repository;
-  final _location = LocationService();
 
   bool _servicesReady = false;
   bool _busy = false;
@@ -133,76 +126,38 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
     }
   }
 
-  Future<void> _importFromGallery() async {
+  Future<File?> _acquirePhoto(ImageSource source) async {
+    if (source == ImageSource.camera) {
+      if (kIsWeb) {
+        setState(() => _message = 'Live camera is not supported in browser.');
+        return null;
+      }
+      final path = await Navigator.of(context).push<String>(
+        MaterialPageRoute<String>(
+          builder: (_) => const CameraDetectionScreen(),
+          fullscreenDialog: true,
+        ),
+      );
+      if (path == null) return null;
+      return File(path);
+    }
+
     setState(() { _busy = true; _message = null; });
     try {
       final picked = await _picker.pickImage(
-          source: ImageSource.gallery, imageQuality: 92, maxWidth: 1600);
-      if (picked == null) return;
-
-      Position? position;
-      try {
-        position = await _location.currentPosition();
-      } catch (_) {}
-
-      final imageFile = File(picked.path);
-      final bytes = await imageFile.readAsBytes();
-      final decoded = decodeAndOrient(bytes);
-      final imageWidth = decoded.width;
-      final imageHeight = decoded.height;
-
-      final results = await _detection.detectAll(imageFile);
-      final obs = Observation(
-        id: _uuid.v4(),
-        captureId: _uuid.v4(),
-        organizationId: _selectedOrg?.id,
-        imagePath: picked.path,
-        createdAt: DateTime.now().toUtc(),
-        latitude: position?.latitude ?? 0.0,
-        longitude: position?.longitude ?? 0.0,
-        accuracyMeters: position?.accuracy,
-        actor: _actor,
-        agentResults: results,
-        imageWidth: imageWidth,
-        imageHeight: imageHeight,
-        modelBundleVersion: TariqMapConstants.modelBundleVersion,
+        source: ImageSource.gallery,
+        imageQuality: 92,
+        maxWidth: 1600,
       );
-
-      debugPrint('[Pipeline:ResultObject] Gallery observation created: ${obs.id}, '
-          'org: ${obs.organizationId}, detections: ${obs.detections.length}');
-
-      await _repository.save(obs);
-      final storedObs = await _repository.findById(obs.id) ?? obs;
-      if (mounted) {
-        setState(() => _observations.insert(0, storedObs));
-        await Navigator.of(context).push(MaterialPageRoute<void>(
-          builder: (_) => ResultScreen(observation: storedObs)));
-      }
+      if (picked == null) return null;
+      return File(picked.path);
     } catch (error) {
-      setState(() => _message = error.toString().replaceFirst('Bad state: ', ''));
+      if (mounted) {
+        setState(() => _message = error.toString().replaceFirst('Bad state: ', ''));
+      }
+      return null;
     } finally {
       if (mounted) setState(() => _busy = false);
-    }
-  }
-
-  Future<void> _openCamera() async {
-    if (kIsWeb) {
-      setState(() => _message = 'Live camera is not supported in browser.');
-      return;
-    }
-    final result = await Navigator.of(context).push<Observation>(
-      MaterialPageRoute<Observation>(
-        builder: (_) => CameraDetectionScreen(
-          detectionService: _detection,
-          repository: _repository,
-          actor: _actor,
-          organizationId: _selectedOrg?.id,
-        ),
-        fullscreenDialog: true,
-      ),
-    );
-    if (result != null && mounted) {
-      setState(() => _observations.insert(0, result));
     }
   }
 
@@ -219,41 +174,27 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
       ),
     );
     if (source == null || !mounted) return;
-    if (source == ImageSource.camera) {
-      await _openCamera();
-      return;
-    }
-    if (source == ImageSource.gallery) {
-      await _importFromGallery();
-      return;
-    }
 
-    setState(() { _busy = true; _message = null; });
-    try {
-      final picked = await _picker.pickImage(
-        source: source,
-        imageQuality: 92,
-        maxWidth: 1600,
-      );
-      if (picked == null || !mounted) return;
-      await Navigator.of(context).push(
-        MaterialPageRoute<void>(
-          builder: (_) => PhotoConfirmScreen(
-            imageFile: File(picked.path),
-            detectionService: _detection,
-            repository: _repository,
-            actor: _actor,
-            organizationId: _selectedOrg?.id,
+    await runPhotoConfirmLoop(
+      source: source,
+      acquire: _acquirePhoto,
+      confirm: (file) {
+        return Navigator.of(context).push<PhotoConfirmOutcome>(
+          MaterialPageRoute<PhotoConfirmOutcome>(
+            builder: (_) => PhotoConfirmScreen(
+              imageFile: file,
+              detectionService: _detection,
+              repository: _repository,
+              actor: _actor,
+              organizationId: _selectedOrg?.id,
+            ),
           ),
-        ),
-      );
-      final loaded = await _repository.list();
-      if (mounted) setState(() => _observations = loaded);
-    } catch (error) {
-      setState(() => _message = error.toString().replaceFirst('Bad state: ', ''));
-    } finally {
-      if (mounted) setState(() => _busy = false);
-    }
+        );
+      },
+    );
+    if (!mounted) return;
+    final loaded = await _repository.list();
+    setState(() => _observations = loaded);
   }
 
   Future<void> _openVideoImport() async {
@@ -285,7 +226,11 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
       if (mounted) {
         setState(() {
           _observations = loaded;
-          _lastSyncTime = DateTime.now();
+          if (result.blocked) {
+            _message = result.message;
+          } else {
+            _lastSyncTime = DateTime.now();
+          }
         });
       }
       return result;
@@ -297,6 +242,41 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
         totalCount: 0,
         cancelled: false,
         message: 'Sync failed.',
+      );
+    } finally {
+      if (mounted) setState(() => _isSyncing = false);
+    }
+  }
+
+  Future<SyncResult> _retryNeedsReview(
+    String observationId, {
+    SyncCancelToken? cancelToken,
+  }) async {
+    setState(() => _isSyncing = true);
+    try {
+      final sync = SyncCoordinator(_repository, ApiClient());
+      final result =
+          await sync.retryNeedsReview(observationId, cancelToken: cancelToken);
+      final loaded = await _repository.list();
+      if (mounted) {
+        setState(() {
+          _observations = loaded;
+          if (result.blocked) {
+            _message = result.message;
+          } else {
+            _lastSyncTime = DateTime.now();
+          }
+        });
+      }
+      return result;
+    } catch (e) {
+      debugPrint('[Sync] $e');
+      if (mounted) setState(() => _message = 'Manual retry failed.');
+      return const SyncResult(
+        uploadedCount: 0,
+        totalCount: 1,
+        cancelled: false,
+        message: 'Manual retry failed.',
       );
     } finally {
       if (mounted) setState(() => _isSyncing = false);
@@ -341,15 +321,25 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
                     onQueue: () => Navigator.of(context).push(
                       MaterialPageRoute<void>(
                         builder: (_) => OfflineQueueScreen(
-                          repository: _repository, onSync: _syncAll))),
+                          repository: _repository,
+                          onSync: _syncAll,
+                          onManualRetry: _retryNeedsReview))),
                     onSettings: () async {
                       await Navigator.of(context).push(
                         MaterialPageRoute<void>(builder: (_) => const SettingsScreen()));
                       final currentOrg = await _orgService.getSelectedOrganization();
-                      if (mounted && currentOrg != null) {
+                      if (_servicesReady) {
+                        await SyncCoordinator(_repository, ApiClient())
+                            .applyPhotoRetention();
+                      }
+                      final loaded = await _repository.list();
+                      if (mounted) {
                         setState(() {
-                          _selectedOrg = currentOrg;
-                          _actor = currentOrg.name;
+                          _observations = loaded;
+                          if (currentOrg != null) {
+                            _selectedOrg = currentOrg;
+                            _actor = currentOrg.name;
+                          }
                         });
                       }
                     },
@@ -374,7 +364,9 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
                           onOpenQueue: () => Navigator.of(context).push(
                             MaterialPageRoute<void>(
                               builder: (_) => OfflineQueueScreen(
-                                repository: _repository, onSync: _syncAll))),
+                                repository: _repository,
+                                onSync: _syncAll,
+                                onManualRetry: _retryNeedsReview))),
                         ),
                         const SizedBox(height: 18),
 
@@ -432,7 +424,7 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
                           const _EmptyState()
                         else
                           ..._observations.asMap().entries.map((e) =>
-                            _ObservationCard(
+                            HistoryObservationCard(
                               observation: e.value,
                               index: e.key,
                               onTap: () => Navigator.of(context).push(
@@ -1280,8 +1272,9 @@ class _EmptyState extends StatelessWidget {
 
 // ── Observation card ──────────────────────────────────────────────────────────
 
-class _ObservationCard extends StatelessWidget {
-  const _ObservationCard({
+class HistoryObservationCard extends StatelessWidget {
+  const HistoryObservationCard({
+    super.key,
     required this.observation,
     required this.index,
     required this.onTap,
@@ -1339,11 +1332,7 @@ class _ObservationCard extends StatelessWidget {
                   borderRadius: BorderRadius.zero,
                   child: SizedBox(
                     width: 84, height: 84,
-                    child: kIsWeb
-                        ? Image.network(o.imagePath, fit: BoxFit.cover,
-                            errorBuilder: (_, __, ___) => _thumb())
-                        : Image.file(File(o.imagePath), fit: BoxFit.cover,
-                            errorBuilder: (_, __, ___) => _thumb()),
+                    child: ObservationPhoto(observation: o),
                   ),
                 ),
                 // Info
@@ -1406,10 +1395,6 @@ class _ObservationCard extends StatelessWidget {
     );
   }
 
-  Widget _thumb() => Container(
-    color: AppColors.offWhite,
-    child: const Icon(Icons.image_not_supported_outlined, color: Colors.black26),
-  );
 }
 
 class _SyncDot extends StatelessWidget {

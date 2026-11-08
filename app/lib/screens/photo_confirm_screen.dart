@@ -1,4 +1,5 @@
 import 'dart:io';
+import 'dart:typed_data';
 import 'package:flutter/material.dart';
 import '../core/app_colors.dart';
 import '../core/constants.dart';
@@ -9,7 +10,28 @@ import '../services/observation_repository.dart';
 import '../services/territorial_service.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:uuid/uuid.dart';
+import 'package:image_picker/image_picker.dart';
 import 'result_screen.dart';
+
+/// Popped by [PhotoConfirmScreen] when the user chooses Retake.
+enum PhotoConfirmOutcome { retake }
+
+/// Acquires one file for [source], then shows confirm. Retake asks again.
+/// A null file, or leaving confirm without [PhotoConfirmOutcome.retake], stops
+/// the loop and does not save.
+Future<void> runPhotoConfirmLoop({
+  required ImageSource source,
+  required Future<File?> Function(ImageSource source) acquire,
+  required Future<PhotoConfirmOutcome?> Function(File file) confirm,
+}) async {
+  while (true) {
+    final file = await acquire(source);
+    if (file == null) return;
+    final outcome = await confirm(file);
+    if (outcome == PhotoConfirmOutcome.retake) continue;
+    return;
+  }
+}
 
 /// Shown after the user takes/picks a photo.
 /// Displays the image full-screen and asks for confirmation before running AI.
@@ -21,6 +43,8 @@ class PhotoConfirmScreen extends StatefulWidget {
     required this.repository,
     required this.actor,
     this.organizationId,
+    this.preview,
+    this.imageBytes,
   });
 
   final File imageFile;
@@ -29,16 +53,24 @@ class PhotoConfirmScreen extends StatefulWidget {
   final String actor;
   final String? organizationId;
 
+  /// Pixels for the preview. Production leaves this null and shows [imageFile].
+  final ImageProvider? preview;
+
+  /// Preloaded image bytes. Production leaves this null and reads [imageFile].
+  final Uint8List? imageBytes;
+
   @override
   State<PhotoConfirmScreen> createState() => _PhotoConfirmScreenState();
 }
 
 class _PhotoConfirmScreenState extends State<PhotoConfirmScreen> {
   bool _analyzing = false;
+  bool _saved = false;
   final _uuid = const Uuid();
   final _location = LocationService();
 
   Future<void> _analyze() async {
+    if (_analyzing || _saved) return;
     setState(() => _analyzing = true);
     try {
       Position? position;
@@ -49,12 +81,13 @@ class _PhotoConfirmScreenState extends State<PhotoConfirmScreen> {
       }
 
       // Read image dimensions
-      final bytes = await widget.imageFile.readAsBytes();
+      final bytes = widget.imageBytes ?? await widget.imageFile.readAsBytes();
       final decoded = decodeAndOrient(bytes);
       final imageWidth = decoded.width;
       final imageHeight = decoded.height;
 
       final results = await widget.detectionService.detectAll(widget.imageFile);
+      if (!mounted) return;
       final obs = Observation(
         id: _uuid.v4(),
         captureId: _uuid.v4(),
@@ -77,19 +110,19 @@ class _PhotoConfirmScreenState extends State<PhotoConfirmScreen> {
           'anomaly: ${obs.detections.firstOrNull?.classCode}');
 
       await widget.repository.save(obs);
+      _saved = true;
 
       // Read back from storage to ensure detail screen reads only from storage
       final storedObs = await widget.repository.findById(obs.id) ?? obs;
 
-      if (mounted) {
-        await Navigator.of(context).pushReplacement(
-          MaterialPageRoute<void>(
-            builder: (_) => ResultScreen(observation: storedObs),
-          ),
-        );
-      }
+      if (!mounted) return;
+      await Navigator.of(context).pushReplacement(
+        MaterialPageRoute<void>(
+          builder: (_) => ResultScreen(observation: storedObs),
+        ),
+      );
     } catch (e) {
-      if (mounted) {
+      if (!_saved && mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(content: Text('Analysis failed: $e'), backgroundColor: AppColors.critical),
         );
@@ -100,7 +133,9 @@ class _PhotoConfirmScreenState extends State<PhotoConfirmScreen> {
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
+    return PopScope(
+      canPop: !_analyzing,
+      child: Scaffold(
       backgroundColor: Colors.black,
       appBar: AppBar(
         backgroundColor: Colors.transparent,
@@ -128,7 +163,12 @@ class _PhotoConfirmScreenState extends State<PhotoConfirmScreen> {
               child: Stack(
                 fit: StackFit.expand,
                 children: [
-                  Image.file(widget.imageFile, fit: BoxFit.cover),
+                  Image(
+                    key: const ValueKey('photo-confirm-preview'),
+                    image: widget.preview ?? FileImage(widget.imageFile),
+                    fit: BoxFit.cover,
+                    errorBuilder: (context, error, stackTrace) => const SizedBox.shrink(),
+                  ),
                   if (_analyzing)
                     Container(
                       color: Colors.black.withAlpha(140),
@@ -191,7 +231,9 @@ class _PhotoConfirmScreenState extends State<PhotoConfirmScreen> {
                               shape: RoundedRectangleBorder(
                                 borderRadius: BorderRadius.circular(14)),
                             ),
-                            onPressed: () => Navigator.of(context).pop(),
+                            onPressed: _analyzing
+                                ? null
+                                : () => Navigator.of(context).pop(PhotoConfirmOutcome.retake),
                             icon: const Icon(Icons.close_rounded),
                             label: const Text('Retake',
                               style: TextStyle(fontWeight: FontWeight.w700)),
@@ -211,7 +253,7 @@ class _PhotoConfirmScreenState extends State<PhotoConfirmScreen> {
                               shape: RoundedRectangleBorder(
                                 borderRadius: BorderRadius.circular(14)),
                             ),
-                            onPressed: _analyze,
+                            onPressed: _analyzing ? null : _analyze,
                             icon: const Icon(Icons.search_rounded),
                             label: const Text('Analyse',
                               style: TextStyle(
@@ -225,6 +267,7 @@ class _PhotoConfirmScreenState extends State<PhotoConfirmScreen> {
               ),
             ),
         ],
+      ),
       ),
     );
   }

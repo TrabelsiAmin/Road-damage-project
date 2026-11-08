@@ -7,6 +7,7 @@ import '../core/model_config.dart';
 import '../inference/confidence_threshold.dart';
 import '../models/organization.dart';
 import '../services/organization_service.dart';
+import '../services/sync_policy.dart';
 
 class SettingsScreen extends StatefulWidget {
   const SettingsScreen({super.key});
@@ -49,8 +50,8 @@ class _SettingsScreenState extends State<SettingsScreen> {
             ) ??
             TariqMapConstants.defaultConfidenceThreshold;
         _confidenceThreshold = _savedThreshold;
-        _wifiOnly = prefs.getBool('wifi_only') ?? true;
-        _retentionDays = prefs.getInt('retention_days') ?? 90;
+        _wifiOnly = SyncSettings.fromPrefs(prefs).wifiOnly;
+        _retentionDays = SyncSettings.fromPrefs(prefs).retentionDays;
         _shareBlurredPublicPhoto =
             prefs.getBool('share_blurred_public_photo') ?? true;
         _organizations = orgs;
@@ -70,8 +71,10 @@ class _SettingsScreenState extends State<SettingsScreen> {
     _confidenceApplied = true;
     await prefs.setDouble('confidence_threshold', savedThreshold);
     await prefs.setBool('confidence_threshold_set', true);
-    await prefs.setBool('wifi_only', _wifiOnly);
-    await prefs.setInt('retention_days', _retentionDays);
+    await SyncSettings(
+      wifiOnly: _wifiOnly,
+      retentionDays: _retentionDays,
+    ).write(prefs);
     await prefs.setBool('share_blurred_public_photo', _shareBlurredPublicPhoto);
 
     if (_selectedOrg != null) {
@@ -271,18 +274,21 @@ class _SettingsScreenState extends State<SettingsScreen> {
                     const _SectionDivider(),
                     _ToggleRow(
                       label: 'Wi-Fi only uploads',
-                      description: 'Prevents mobile data usage for cloud sync.',
+                      description: _wifiOnly
+                          ? 'Active. Sync now, Retry, and Retry once upload only on Wi-Fi. Mobile data and an unknown connection do not upload.'
+                          : 'Off. Sync now, Retry, and Retry once use the current connection. Wi-Fi is not required.',
                       value: _wifiOnly,
                       onChanged: (v) => setState(() => _wifiOnly = v),
                     ),
                     const _SectionDivider(),
                     _SliderRow(
-                      label: 'Local data retention',
+                      label: 'Local photo retention',
                       valueLabel: _retentionDays == 0
                           ? 'Forever'
                           : '$_retentionDays days',
-                      description:
-                          'Synced data older than this may be cleaned up.',
+                      description: _retentionDays == 0
+                          ? 'Active. Forever keeps every local photo, including fully synced ones.'
+                          : 'Active. A fully synced photo is removed from this device after $_retentionDays days. Pending, failed, and needs-review photos stay.',
                       value: _retentionDays.toDouble(),
                       min: 0,
                       max: 365,

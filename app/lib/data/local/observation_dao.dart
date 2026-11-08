@@ -87,8 +87,10 @@ class ObservationDao {
     } else if (error != null) {
       values['sync_error'] = error;
     }
-    if (status == SyncStatus.failed || status == SyncStatus.uploading) {
-      values['upload_attempts'] = _incrementAttempts(db, observationId);
+    // Count a finished failed attempt once. Marking the row uploading must
+    // not reset the counter; a reset would keep the row below the retry cap.
+    if (status == SyncStatus.failed) {
+      values['upload_attempts'] = await _nextAttemptCount(db, observationId);
     }
     await db.update(
       'observations',
@@ -128,6 +130,37 @@ class ObservationDao {
     await db.update(
       'observations',
       {'annotated_image_path': path},
+      where: 'id = ?',
+      whereArgs: [observationId],
+    );
+  }
+
+  /// Fully synced rows with no stored original URL, oldest first.
+  Future<List<String>> idsMissingRemoteImageUrl({int limit = 20}) async {
+    if (limit <= 0) return const [];
+    final db = await _db.database;
+    final rows = await db.query(
+      'observations',
+      columns: const ['id'],
+      where: '''
+        sync_status = ? AND media_sync_status = ?
+        AND (remote_image_url IS NULL OR TRIM(remote_image_url) = '')
+      ''',
+      whereArgs: [SyncStatus.synced.name, MediaSyncStatus.uploaded.name],
+      orderBy: 'created_at ASC',
+      limit: limit,
+    );
+    return [for (final row in rows) row['id']! as String];
+  }
+
+  /// Stores the upload URL. Does not change sync status, detections, or the local path.
+  Future<void> updateRemoteImageUrl(String observationId, String url) async {
+    final trimmed = url.trim();
+    if (trimmed.isEmpty) return;
+    final db = await _db.database;
+    await db.update(
+      'observations',
+      {'remote_image_url': trimmed},
       where: 'id = ?',
       whereArgs: [observationId],
     );
@@ -249,6 +282,7 @@ class ObservationDao {
       'priority_score': obs.priorityScore,
       'failed_agents': obs.failedAgents,
       'any_mock': obs.anyMock ? 1 : 0,
+      'remote_image_url': obs.remoteImageUrl,
     };
   }
 
@@ -351,6 +385,7 @@ class ObservationDao {
       deviceId: row['device_id'] as String?,
       imageWidth: imageWidth,
       imageHeight: imageHeight,
+      remoteImageUrl: row['remote_image_url'] as String?,
     );
     debugPrint(
         '[Pipeline:DatabaseLoad] Loaded observation $id with ${obs.detections.length} detections from SQLite');
@@ -366,8 +401,15 @@ class ObservationDao {
         _ => SyncStatus.pending,
       };
 
-  // Returns the incremented attempt count synchronously
-  int _incrementAttempts(dynamic db, String id) {
-    return 0;
+  Future<int> _nextAttemptCount(Database db, String id) async {
+    final rows = await db.query(
+      'observations',
+      columns: ['upload_attempts'],
+      where: 'id = ?',
+      whereArgs: [id],
+    );
+    if (rows.isEmpty) return 1;
+    final current = (rows.first['upload_attempts'] as int?) ?? 0;
+    return current + 1;
   }
 }

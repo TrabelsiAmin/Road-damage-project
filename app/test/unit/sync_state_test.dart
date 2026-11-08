@@ -1186,6 +1186,177 @@ void main() {
       expect(client.mediaFilesTable, isEmpty);
       expect(image.existsSync(), isTrue);
     });
+
+    test('retries a metadata-synced photo without a second observation or media id',
+        () async {
+      final obs = createObs('obs-partial-photo');
+      obs.syncStatus = SyncStatus.synced;
+      obs.mediaSyncStatus = MediaSyncStatus.failed;
+      obs.uploadAttempts = 1;
+      await repo.save(obs);
+      client.rpcMetadataAccepted = true;
+
+      final result = await coordinator.syncPending();
+
+      expect(result.uploadedCount, 1);
+      expect(result.totalCount, 1);
+      expect(client.uploadCount, 1);
+      expect(client.originalUploadAttempts, 1);
+      expect(client.observationsTable.keys, [obs.id]);
+      final mediaId = stableOriginalMediaId(obs.id);
+      expect(client.mediaFilesTable[obs.id]!['id'], mediaId);
+      expect(client.mediaFilesTable.length, 1);
+      final stored = await repo.findById(obs.id);
+      expect(stored!.syncStatus, SyncStatus.synced);
+      expect(stored.mediaSyncStatus, MediaSyncStatus.uploaded);
+      expect(stored.uploadAttempts, 1);
+      expect((await repo.list()).length, 1);
+
+      final again = await coordinator.syncPending();
+      expect(again.uploadedCount, 0);
+      expect(again.totalCount, 0);
+      expect(client.uploadCount, 1);
+      expect(client.originalUploadAttempts, 1);
+      expect(client.observationsTable.length, 1);
+      expect(client.mediaFilesTable.length, 1);
+      expect(client.receiptsTable.length, 1);
+    });
+
+    test('a stored original retries only the thumbnail and stays unsynced if it fails',
+        () async {
+      final obs = createObs('obs-partial-thumb');
+      obs.syncStatus = SyncStatus.synced;
+      obs.mediaSyncStatus = MediaSyncStatus.originalUploaded;
+      obs.uploadAttempts = 0;
+      await repo.save(obs);
+      client.originalStored = true;
+      client.failThumbnail = true;
+      client.rpcMetadataAccepted = true;
+
+      final result = await coordinator.syncPending();
+
+      expect(result.uploadedCount, 0);
+      expect(client.uploadCount, 1);
+      expect(client.originalUploadAttempts, 0);
+      expect(client.thumbnailAttempts, 1);
+      expect(client.observationsTable.keys, [obs.id]);
+      final stored = await repo.findById(obs.id);
+      expect(stored!.syncStatus, SyncStatus.failed);
+      expect(stored.mediaSyncStatus, MediaSyncStatus.originalUploaded);
+      expect(stored.uploadAttempts, 1);
+      expect(queueSyncState(stored), isNot(QueueSyncState.fullySynced));
+      expect((await repo.list()).length, 1);
+    });
+
+    test('a completed thumbnail retry reuses the observation and does not resend the original',
+        () async {
+      final obs = createObs('obs-partial-thumb-ok');
+      obs.syncStatus = SyncStatus.synced;
+      obs.mediaSyncStatus = MediaSyncStatus.originalUploaded;
+      obs.uploadAttempts = 1;
+      await repo.save(obs);
+      client.originalStored = true;
+      client.rpcMetadataAccepted = true;
+
+      final result = await coordinator.syncPending();
+
+      expect(result.uploadedCount, 1);
+      expect(client.originalUploadAttempts, 0);
+      expect(client.thumbnailAttempts, 1);
+      expect(client.observationsTable.length, 1);
+      final stored = await repo.findById(obs.id);
+      expect(stored!.syncStatus, SyncStatus.synced);
+      expect(stored.mediaSyncStatus, MediaSyncStatus.uploaded);
+      expect(stored.uploadAttempts, 1);
+    });
+
+    test('a fully synced row is not uploaded again', () async {
+      final obs = createObs('obs-complete');
+      obs.syncStatus = SyncStatus.synced;
+      obs.mediaSyncStatus = MediaSyncStatus.uploaded;
+      obs.uploadAttempts = 2;
+      await repo.save(obs);
+
+      final result = await coordinator.syncPending();
+
+      expect(result.uploadedCount, 0);
+      expect(result.totalCount, 0);
+      expect(client.uploadCount, 0);
+      final stored = await repo.findById(obs.id);
+      expect(stored!.syncStatus, SyncStatus.synced);
+      expect(stored.mediaSyncStatus, MediaSyncStatus.uploaded);
+      expect(stored.uploadAttempts, 2);
+    });
+
+    test('needs review stays out of the automatic partial retry', () async {
+      final obs = createObs('obs-review-partial');
+      obs.syncStatus = SyncStatus.needsReview;
+      obs.mediaSyncStatus = MediaSyncStatus.failed;
+      obs.uploadAttempts = 5;
+      await repo.save(obs);
+
+      final result = await coordinator.syncPending();
+
+      expect(result.totalCount, 0);
+      expect(client.uploadCount, 0);
+      final stored = await repo.findById(obs.id);
+      expect(stored!.syncStatus, SyncStatus.needsReview);
+      expect(stored.uploadAttempts, 5);
+      expect(stored.mediaSyncStatus, MediaSyncStatus.failed);
+    });
+
+    test('a partial row at the attempt cap becomes needs review without another upload',
+        () async {
+      final obs = createObs('obs-partial-capped');
+      obs.syncStatus = SyncStatus.synced;
+      obs.mediaSyncStatus = MediaSyncStatus.failed;
+      obs.uploadAttempts = 2;
+      await repo.save(obs);
+
+      final result = await coordinator.syncPending();
+
+      expect(result.uploadedCount, 0);
+      expect(client.uploadCount, 0);
+      final stored = await repo.findById(obs.id);
+      expect(stored!.syncStatus, SyncStatus.needsReview);
+      expect(stored.uploadAttempts, 2);
+      expect(stored.mediaSyncStatus, MediaSyncStatus.failed);
+    });
+
+    test('cancelling a partial retry keeps the same metadata-synced row', () async {
+      final obs = createObs('obs-partial-cancel');
+      obs.syncStatus = SyncStatus.synced;
+      obs.mediaSyncStatus = MediaSyncStatus.failed;
+      obs.uploadAttempts = 1;
+      await repo.save(obs);
+      final token = SyncCancelToken();
+      client.onImageUpload = (observation, cancelToken) {
+        token.cancel();
+      };
+
+      final result = await coordinator.syncPending(cancelToken: token);
+
+      expect(result.cancelled, isTrue);
+      expect(result.uploadedCount, 0);
+      expect(client.observationsTable.keys, [obs.id]);
+      expect(client.mediaFilesTable, isEmpty);
+      final stored = await repo.findById(obs.id);
+      expect(stored!.syncStatus, SyncStatus.synced);
+      expect(stored.mediaSyncStatus, MediaSyncStatus.failed);
+      expect(stored.uploadAttempts, 1);
+      expect((await repo.list()).length, 1);
+
+      client.onImageUpload = null;
+      client.rpcMetadataAccepted = true;
+      final retry = await coordinator.syncPending();
+      expect(retry.uploadedCount, 1);
+      expect(client.observationsTable.length, 1);
+      expect(client.mediaFilesTable.length, 1);
+      expect(
+        client.mediaFilesTable[obs.id]!['id'],
+        stableOriginalMediaId(obs.id),
+      );
+    });
   });
 
   group('Wi-Fi-only sync', () {
@@ -1253,6 +1424,25 @@ void main() {
       expect(client.uploadCount, 1);
       expect((await repo.findById(obs.id))!.syncStatus, SyncStatus.synced);
       expect(File(obs.imagePath).existsSync(), isTrue);
+    });
+
+    test('mobile data blocks a metadata-synced incomplete photo', () async {
+      final obs = await pendingObs('wifi-partial');
+      obs.syncStatus = SyncStatus.synced;
+      obs.mediaSyncStatus = MediaSyncStatus.originalUploaded;
+      obs.uploadAttempts = 1;
+      await repo.save(obs);
+      network = SyncNetworkType.mobile;
+
+      final result = await coordinator().syncPending();
+
+      expect(result.blocked, isTrue);
+      expect(result.message, wifiOnlyBlockedMessage);
+      expect(client.uploadCount, 0);
+      final stored = await repo.findById(obs.id);
+      expect(stored!.syncStatus, SyncStatus.synced);
+      expect(stored.mediaSyncStatus, MediaSyncStatus.originalUploaded);
+      expect(stored.uploadAttempts, 1);
     });
 
     test('mobile data blocks automatic sync when Wi-Fi-only is on', () async {

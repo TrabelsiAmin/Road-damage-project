@@ -565,15 +565,10 @@ class _ObsCard extends StatelessWidget {
         QueueSyncState.manualRetryInProgress => AppColors.tealLight,
       };
 
-  String get _statusLabel => switch (_state) {
-        QueueSyncState.notYetSynced =>
-          obs.syncStatus == SyncStatus.uploading ? 'UPLOADING' : 'NOT SYNCED',
-        QueueSyncState.metadataSyncedPhotoFailed => 'PHOTO FAILED',
-        QueueSyncState.laterStepIncomplete => 'THUMBNAIL FAILED',
-        QueueSyncState.fullySynced => 'SYNCED',
-        QueueSyncState.manualReview => 'NEEDS REVIEW',
-        QueueSyncState.manualRetryInProgress => 'RETRYING',
-      };
+  String get _statusLabel => queueStatusLabel(
+        obs,
+        manualRetryInProgress: manualRetryInProgress,
+      );
 
   IconData get _statusIcon => switch (_state) {
         QueueSyncState.fullySynced => Icons.cloud_done_rounded,

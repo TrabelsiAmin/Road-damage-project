@@ -239,8 +239,9 @@ class SyncCoordinator {
     }
   }
 
-  /// Uploads [SyncStatus.pending] and [SyncStatus.failed] rows.
-  /// [SyncStatus.needsReview] is not included. A manual retry uses [retryNeedsReview].
+  /// Uploads pending, failed, and metadata-synced rows whose photo or
+  /// thumbnail is still incomplete. [SyncStatus.needsReview] is not included.
+  /// A manual retry uses [retryNeedsReview]. A fully synced row is not sent again.
   Future<SyncResult> syncPending({SyncCancelToken? cancelToken}) async {
     if (_running) {
       return SyncResult(
@@ -260,7 +261,18 @@ class SyncCoordinator {
 
       final pending = await _repo.list(status: SyncStatus.pending);
       final failed = await _repo.list(status: SyncStatus.failed);
-      final queue = [...pending, ...failed];
+      final synced = await _repo.list(status: SyncStatus.synced);
+      final seen = <String>{};
+      final queue = <Observation>[];
+      for (final obs in [...pending, ...failed, ...synced]) {
+        if (!seen.add(obs.id)) continue;
+        if (obs.syncStatus == SyncStatus.needsReview) continue;
+        if (obs.syncStatus == SyncStatus.synced &&
+            !metadataSyncedMediaIncomplete(obs)) {
+          continue;
+        }
+        queue.add(obs);
+      }
       _totalCount = queue.length;
       final blocked = await _wifiBlock(queue.length);
       if (blocked != null) return blocked;
@@ -276,6 +288,7 @@ class SyncCoordinator {
           continue;
         }
 
+        final previousStatus = obs.syncStatus;
         await _repo.updateSyncStatus(obs.id, SyncStatus.uploading);
         try {
           cancelToken?.throwIfCancelled();
@@ -288,8 +301,8 @@ class SyncCoordinator {
           );
           cancelToken?.throwIfCancelled();
 
-          // A returned upload is fully synced only when the photo is uploaded.
-          // Metadata without the photo stays unsynced. The local file is kept.
+          // A returned upload is fully synced only when the original photo
+          // and the required thumbnail step are both confirmed.
           final after = await _repo.findById(obs.id);
           final mediaReady =
               after?.mediaSyncStatus == MediaSyncStatus.uploaded;
@@ -306,10 +319,14 @@ class SyncCoordinator {
             await _markIncomplete(obs.id, after);
           }
         } on SyncCancelledException {
-          // Keep item in pending status locally, do NOT mark synced, never delete local data
+          // A metadata-synced row stays metadata-synced. Other rows return
+          // to pending. Nothing is deleted.
+          final restore = previousStatus == SyncStatus.synced
+              ? SyncStatus.synced
+              : SyncStatus.pending;
           debugPrint(
-              '[Sync] Cancelled while processing ${obs.id}, reverting to pending');
-          await _repo.updateSyncStatus(obs.id, SyncStatus.pending);
+              '[Sync] Cancelled while processing ${obs.id}, reverting to ${restore.name}');
+          await _repo.updateSyncStatus(obs.id, restore);
           rethrow;
         } catch (e) {
           final backoff = _backoffDuration(obs.uploadAttempts);

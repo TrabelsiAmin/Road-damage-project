@@ -218,6 +218,15 @@ class _PhotoConfirmScreenState extends State<PhotoConfirmScreen> {
                         fontSize: 14,
                       ),
                     ),
+                    const SizedBox(height: 6),
+                    Text(
+                      'Nothing is saved until you choose Analyse.',
+                      textAlign: TextAlign.center,
+                      style: TextStyle(
+                        color: Colors.white.withAlpha(140),
+                        fontSize: 12,
+                      ),
+                    ),
                     const SizedBox(height: 16),
                     Row(
                       children: [

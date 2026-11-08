@@ -5,11 +5,14 @@ import 'package:flutter/services.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:intl/intl.dart';
 import '../core/app_colors.dart';
+import '../core/class_codes.dart';
 import '../models/observation.dart';
 import '../models/organization.dart';
 import '../services/detection_service.dart';
 import '../services/observation_repository.dart';
 import '../services/organization_service.dart';
+import '../services/home_sync_summary.dart';
+import '../services/sync_plan.dart';
 import '../data/remote/api_client.dart';
 import 'camera_detection_screen.dart';
 import 'drive_awareness_screen.dart';
@@ -22,6 +25,7 @@ import 'settings_screen.dart';
 import 'video_import_screen.dart';
 import '../widgets/dashboard_map.dart';
 import '../widgets/observation_photo.dart';
+import '../widgets/sync_status_chip.dart';
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key, this.initialActor = 'Municipality'});
@@ -285,12 +289,29 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
 
   @override
   Widget build(BuildContext context) {
-    final pending = _observations
-        .where((o) => o.syncStatus == SyncStatus.pending).length;
-    final failed = _observations
-        .where((o) => o.syncStatus == SyncStatus.failed).length;
-    final synced = _observations
-        .where((o) => o.syncStatus == SyncStatus.synced).length;
+    var pending = 0;
+    var failed = 0;
+    var partial = 0;
+    var review = 0;
+    var synced = 0;
+    for (final observation in _observations) {
+      switch (queueSyncState(observation)) {
+        case QueueSyncState.manualReview:
+          review++;
+        case QueueSyncState.metadataSyncedPhotoFailed:
+        case QueueSyncState.laterStepIncomplete:
+          partial++;
+        case QueueSyncState.fullySynced:
+          synced++;
+        case QueueSyncState.notYetSynced:
+        case QueueSyncState.manualRetryInProgress:
+          if (observation.syncStatus == SyncStatus.failed) {
+            failed++;
+          } else {
+            pending++;
+          }
+      }
+    }
 
     return Scaffold(
       backgroundColor: AppColors.offWhite,
@@ -358,6 +379,8 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
                           synced: synced,
                           pending: pending,
                           failed: failed,
+                          partial: partial,
+                          review: review,
                           isSyncing: _isSyncing,
                           lastSyncTime: _lastSyncTime,
                           onSyncNow: _isSyncing ? null : () => _syncAll(),
@@ -448,6 +471,8 @@ class _SyncStatusStrip extends StatelessWidget {
     required this.synced,
     required this.pending,
     required this.failed,
+    required this.partial,
+    required this.review,
     required this.isSyncing,
     required this.lastSyncTime,
     required this.onSyncNow,
@@ -457,6 +482,8 @@ class _SyncStatusStrip extends StatelessWidget {
   final int synced;
   final int pending;
   final int failed;
+  final int partial;
+  final int review;
   final bool isSyncing;
   final DateTime? lastSyncTime;
   final VoidCallback? onSyncNow;
@@ -464,19 +491,22 @@ class _SyncStatusStrip extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final statusText = isSyncing
-        ? 'Syncing observations…'
-        : pending > 0
-            ? '$pending pending sync'
-            : failed > 0
-                ? '$failed failed to sync'
-                : 'All observations synced';
+    final summary = summarizeHomeSync(
+      pending: pending,
+      failed: failed,
+      partial: partial,
+      review: review,
+      synced: synced,
+    );
+    final statusText =
+        isSyncing ? 'Syncing observations…' : summary.headline;
 
-    final statusColor = failed > 0
-        ? AppColors.syncFailed
-        : pending > 0
-            ? AppColors.syncPending
-            : AppColors.syncDone;
+    final statusColor = switch (summary.tone) {
+      HomeSyncTone.review || HomeSyncTone.failed => AppColors.syncFailed,
+      HomeSyncTone.partial || HomeSyncTone.pending => AppColors.syncPending,
+      HomeSyncTone.empty => Colors.black45,
+      HomeSyncTone.synced => AppColors.syncDone,
+    };
 
     final formattedTime = lastSyncTime != null
         ? DateFormat('HH:mm').format(lastSyncTime!.toLocal())
@@ -505,11 +535,7 @@ class _SyncStatusStrip extends StatelessWidget {
             )
           else
             Icon(
-              pending > 0
-                  ? Icons.cloud_upload_outlined
-                  : failed > 0
-                      ? Icons.cloud_off_rounded
-                      : Icons.cloud_done_rounded,
+              summary.icon,
               size: 18,
               color: statusColor,
             ),
@@ -528,13 +554,13 @@ class _SyncStatusStrip extends StatelessWidget {
                   ),
                 ),
                 Text(
-                  'Last synced: $formattedTime · $synced saved',
+                  '${summary.detail} · Last synced: $formattedTime',
                   style: const TextStyle(fontSize: 10, color: Colors.black45),
                 ),
               ],
             ),
           ),
-          if (pending > 0 || failed > 0)
+          if (summary.offersSync)
             ElevatedButton(
               style: ElevatedButton.styleFrom(
                 backgroundColor: AppColors.teal,
@@ -551,7 +577,7 @@ class _SyncStatusStrip extends StatelessWidget {
                       child: CircularProgressIndicator(strokeWidth: 1.5, color: Colors.white),
                     )
                   : Text(
-                      failed > 0 && pending == 0 ? 'Retry' : 'Sync',
+                      summary.syncButtonLabel,
                       style: const TextStyle(fontSize: 11, fontWeight: FontWeight.bold),
                     ),
             ),
@@ -1284,6 +1310,16 @@ class HistoryObservationCard extends StatelessWidget {
   final int index;
   final VoidCallback onTap;
 
+  static List<String> _classCodes(Observation observation) {
+    final codes = observation.detections
+        .map((detection) => displayClassCode(detection.classCode))
+        .where((code) => code != unknownClassLabel)
+        .toSet()
+        .toList();
+    codes.sort();
+    return codes;
+  }
+
   @override
   Widget build(BuildContext context) {
     final o = observation;
@@ -1315,79 +1351,84 @@ class HistoryObservationCard extends StatelessWidget {
           child: InkWell(
             borderRadius: BorderRadius.circular(16),
             onTap: onTap,
-            child: Row(
-              children: [
-                // Priority strip
-                Container(
-                  width: 4,
-                  height: 84,
-                  decoration: BoxDecoration(
-                    color: priorityColor,
-                    borderRadius: const BorderRadius.horizontal(
-                      left: Radius.circular(16)),
-                  ),
-                ),
-                // Thumbnail
-                ClipRRect(
-                  borderRadius: BorderRadius.zero,
-                  child: SizedBox(
-                    width: 84, height: 84,
-                    child: ObservationPhoto(observation: o),
-                  ),
-                ),
-                // Info
-                Expanded(
-                  child: Padding(
-                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Row(children: [
-                          Container(
-                            padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2),
-                            decoration: BoxDecoration(
-                              color: priorityColor.withAlpha(20),
-                              borderRadius: BorderRadius.circular(6),
-                            ),
-                            child: Text(
-                              '${o.priorityScore.toStringAsFixed(0)} · ${o.priorityLabel}',
-                              style: TextStyle(
-                                color: priorityColor,
-                                fontSize: 11,
-                                fontWeight: FontWeight.w700,
-                              )),
-                          ),
-                          const Spacer(),
-                          Text(
-                            DateFormat('HH:mm').format(o.createdAt.toLocal()),
-                            style: const TextStyle(color: Colors.black38, fontSize: 10)),
-                        ]),
-                        const SizedBox(height: 5),
-                        Text(
-                          '${o.detections.length} anomal${o.detections.length == 1 ? 'y' : 'ies'} detected',
-                          style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 13)),
-                        const SizedBox(height: 3),
-                        Row(children: [
-                          const Icon(Icons.business_outlined, size: 11, color: Colors.black45),
-                          const SizedBox(width: 4),
-                          Expanded(
-                            child: Text(
-                              '${o.actor} · ${o.latitude.toStringAsFixed(4)}, ${o.longitude.toStringAsFixed(4)}',
-                              style: const TextStyle(fontSize: 11, color: Colors.black45),
-                              overflow: TextOverflow.ellipsis,
-                            ),
-                          ),
-                        ]),
-                      ],
+            child: IntrinsicHeight(
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  Container(
+                    width: 4,
+                    decoration: BoxDecoration(
+                      color: priorityColor,
+                      borderRadius: const BorderRadius.horizontal(
+                        left: Radius.circular(16)),
                     ),
                   ),
-                ),
-                // Sync status indicator
-                Padding(
-                  padding: const EdgeInsets.only(right: 12),
-                  child: _SyncDot(status: o.syncStatus),
-                ),
-              ],
+                  SizedBox(
+                    width: 96,
+                    child: ObservationPhoto(observation: o),
+                  ),
+                  Expanded(
+                    child: Padding(
+                      padding: const EdgeInsets.fromLTRB(12, 10, 12, 10),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Row(children: [
+                            Container(
+                              padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2),
+                              decoration: BoxDecoration(
+                                color: priorityColor.withAlpha(20),
+                                borderRadius: BorderRadius.circular(6),
+                              ),
+                              child: Text(
+                                '${o.priorityScore.toStringAsFixed(0)} · ${o.priorityLabel}',
+                                style: TextStyle(
+                                  color: priorityColor,
+                                  fontSize: 11,
+                                  fontWeight: FontWeight.w700,
+                                )),
+                            ),
+                            const Spacer(),
+                            Text(
+                              DateFormat('HH:mm').format(o.createdAt.toLocal()),
+                              style: const TextStyle(color: Colors.black38, fontSize: 10)),
+                          ]),
+                          const SizedBox(height: 5),
+                          Text(
+                            '${o.detections.length} anomal${o.detections.length == 1 ? 'y' : 'ies'} detected',
+                            style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 13)),
+                          if (_classCodes(o).isNotEmpty) ...[
+                            const SizedBox(height: 4),
+                            Text(
+                              _classCodes(o).join('  '),
+                              style: const TextStyle(
+                                color: AppColors.navy,
+                                fontSize: 11,
+                                fontWeight: FontWeight.w800,
+                                letterSpacing: 0.3,
+                              ),
+                            ),
+                          ],
+                          const SizedBox(height: 6),
+                          ObservationSyncChip(observation: o),
+                          const SizedBox(height: 4),
+                          Row(children: [
+                            const Icon(Icons.business_outlined, size: 11, color: Colors.black45),
+                            const SizedBox(width: 4),
+                            Expanded(
+                              child: Text(
+                                '${o.actor} · ${o.latitude.toStringAsFixed(4)}, ${o.longitude.toStringAsFixed(4)}',
+                                style: const TextStyle(fontSize: 11, color: Colors.black45),
+                                overflow: TextOverflow.ellipsis,
+                              ),
+                            ),
+                          ]),
+                        ],
+                      ),
+                    ),
+                  ),
+                ],
+              ),
             ),
           ),
         ),
@@ -1395,23 +1436,6 @@ class HistoryObservationCard extends StatelessWidget {
     );
   }
 
-}
-
-class _SyncDot extends StatelessWidget {
-  const _SyncDot({required this.status});
-  final SyncStatus status;
-
-  @override
-  Widget build(BuildContext context) {
-    final (icon, color) = switch (status) {
-      SyncStatus.synced => (Icons.cloud_done_rounded, AppColors.syncDone),
-      SyncStatus.uploading => (Icons.cloud_sync_rounded, AppColors.tealLight),
-      SyncStatus.failed => (Icons.cloud_off_rounded, AppColors.syncFailed),
-      SyncStatus.needsReview => (Icons.error_outline, AppColors.syncFailed),
-      _ => (Icons.cloud_upload_outlined, AppColors.syncPending),
-    };
-    return Icon(icon, color: color, size: 18);
-  }
 }
 
 // ── Source Picker ─────────────────────────────────────────────────────────────

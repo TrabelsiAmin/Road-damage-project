@@ -208,10 +208,23 @@ export function CaseDetailModal({
                   </button>
                 </div>
               ) : imageUrl ? (
-                <div className="evidence-image-wrap" onClick={() => onOpenLightbox && onOpenLightbox({ url: imageUrl, title: `#${observation.id}`, badge: clsCode })}>
+                <div
+                  className="evidence-image-wrap"
+                  role="button"
+                  tabIndex={0}
+                  onClick={() => onOpenLightbox && onOpenLightbox({ url: imageUrl, title: `#${observation.id}`, badge: clsCode })}
+                  onKeyDown={(event) => {
+                    if (event.key === 'Enter' || event.key === ' ') {
+                      event.preventDefault()
+                      if (onOpenLightbox) onOpenLightbox({ url: imageUrl, title: `#${observation.id}`, badge: clsCode })
+                    }
+                  }}
+                >
                   <img
                     src={imageUrl}
-                    alt="Cliché terrain"
+                    alt={lang === 'fr'
+                      ? `Photo de l'observation, classe ${clsCode}`
+                      : `Observation photo, class ${clsCode}`}
                     className="evidence-img"
                     onError={() => setImageError(lang === 'fr' ? 'Impossible de charger la photo.' : 'Could not load the photo.')}
                   />

@@ -1,5 +1,4 @@
 import 'dart:io';
-import 'dart:typed_data';
 import 'dart:ui' show Color;
 import 'package:flutter/foundation.dart';
 import 'package:image/image.dart' as img;
@@ -7,6 +6,7 @@ import 'package:path_provider/path_provider.dart';
 import 'package:path/path.dart' as p;
 import '../core/app_colors.dart';
 import '../models/observation.dart';
+import 'preprocessing.dart';
 
 // ---------------------------------------------------------------------------
 // Annotation renderer
@@ -62,7 +62,7 @@ class AnnotationRenderer {
 
 class _RenderArgs {
   const _RenderArgs({required this.sourceBytes, required this.detections});
-  final Uint8List      sourceBytes;
+  final Uint8List sourceBytes;
   final List<Detection> detections;
 }
 
@@ -70,7 +70,7 @@ Uint8List _renderInIsolate(_RenderArgs args) {
   // 1. Decode and apply EXIF orientation
   final decoded = img.decodeImage(args.sourceBytes);
   if (decoded == null) throw ArgumentError('Cannot decode source image');
-  final oriented = img.bakeOrientation(decoded);
+  final oriented = orientDecodedImage(decoded);
 
   final w = oriented.width;
   final h = oriented.height;
@@ -92,8 +92,10 @@ Uint8List _renderInIsolate(_RenderArgs args) {
     final y2 = ((d.box.y + d.box.height) * h).round().clamp(1, h);
 
     // 4. Draw filled glow rectangle (semi-transparent)
-    final glowColor = img.ColorRgba8(color.r.toInt(), color.g.toInt(), color.b.toInt(), 50);
-    img.fillRect(canvas,
+    final glowColor =
+        img.ColorRgba8(color.r.toInt(), color.g.toInt(), color.b.toInt(), 50);
+    img.fillRect(
+      canvas,
       x1: (x1 - strokeW).clamp(0, w - 1),
       y1: (y1 - strokeW).clamp(0, h - 1),
       x2: (x2 + strokeW).clamp(1, w),
@@ -103,15 +105,19 @@ Uint8List _renderInIsolate(_RenderArgs args) {
 
     // 5. Draw box border
     for (var s = 0; s < strokeW; s++) {
-      img.drawRect(canvas,
-        x1: (x1 - s).clamp(0, w - 1), y1: (y1 - s).clamp(0, h - 1),
-        x2: (x2 + s).clamp(1, w),     y2: (y2 + s).clamp(1, h),
+      img.drawRect(
+        canvas,
+        x1: (x1 - s).clamp(0, w - 1),
+        y1: (y1 - s).clamp(0, h - 1),
+        x2: (x2 + s).clamp(1, w),
+        y2: (y2 + s).clamp(1, h),
         color: color,
       );
     }
 
     // 6. Build label text
-    final label = '${_shortLabel(d.classCode)}  ${(d.confidence * 100).toStringAsFixed(0)}%';
+    final label =
+        '${_shortLabel(d.classCode)}  ${(d.confidence * 100).toStringAsFixed(0)}%';
 
     // 7. Estimate text bounding box (~6 px per character at scale)
     final fontSize = (w / 60).clamp(12.0, 28.0);
@@ -121,19 +127,23 @@ Uint8List _renderInIsolate(_RenderArgs args) {
     final padPx = (fontSize * 0.3).round();
 
     final pillX = x1.clamp(0, w - textW - padPx * 2);
-    var pillY   = y1 - textH - padPx * 2;
+    var pillY = y1 - textH - padPx * 2;
     if (pillY < 0) pillY = y1 + strokeW; // flip inside box if no room above
 
     // 8. Draw label pill background
-    img.fillRect(canvas,
-      x1: pillX, y1: pillY.clamp(0, h - 1),
+    img.fillRect(
+      canvas,
+      x1: pillX,
+      y1: pillY.clamp(0, h - 1),
       x2: (pillX + textW + padPx * 2).clamp(1, w),
       y2: (pillY + textH + padPx * 2).clamp(1, h),
       color: color,
     );
 
     // 9. Draw label text (white)
-    img.drawString(canvas, label,
+    img.drawString(
+      canvas,
+      label,
       font: img.arial14,
       x: pillX + padPx,
       y: pillY.clamp(0, h - 1) + padPx,
@@ -146,7 +156,9 @@ Uint8List _renderInIsolate(_RenderArgs args) {
     final bcx = (x2 - badgeR).clamp(badgeR, w - badgeR);
     final bcy = (y1 + badgeR).clamp(badgeR, h - badgeR);
     img.fillCircle(canvas, x: bcx, y: bcy, radius: badgeR, color: color);
-    img.drawString(canvas, badge,
+    img.drawString(
+      canvas,
+      badge,
       font: img.arial14,
       x: bcx - (badge.length * 4),
       y: bcy - 7,
@@ -162,16 +174,18 @@ Uint8List _renderInIsolate(_RenderArgs args) {
 // Helpers
 // ---------------------------------------------------------------------------
 
-img.ColorRgb8 _toImgColor(Color flutterColor) =>
-    img.ColorRgb8((flutterColor.r * 255).round(), (flutterColor.g * 255).round(), (flutterColor.b * 255).round());
+img.ColorRgb8 _toImgColor(Color flutterColor) => img.ColorRgb8(
+    (flutterColor.r * 255).round(),
+    (flutterColor.g * 255).round(),
+    (flutterColor.b * 255).round());
 
 String _shortLabel(String code) => switch (code) {
-  'D00' => 'Long.Crack',
-  'D10' => 'Trans.Crack',
-  'D20' => 'Alligator',
-  'D40' => 'Pothole',
-  'D50' => 'Faded Xing',
-  'D60' => 'Faded Lane',
-  'D90' => 'Rutting',
-  _     => code,
-};
+      'D00' => 'Long.Crack',
+      'D10' => 'Trans.Crack',
+      'D20' => 'Alligator',
+      'D40' => 'Pothole',
+      'D50' => 'Faded Xing',
+      'D60' => 'Faded Lane',
+      'D90' => 'Rutting',
+      _ => 'Unknown class',
+    };

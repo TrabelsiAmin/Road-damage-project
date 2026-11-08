@@ -185,7 +185,6 @@ function ReportRow({ item, copy, lang, onOpen, onAsk }) {
         <div className="ministry-report-title">
           <strong style={{ color: klass?.color || '#0b1f33' }}>
             {item.classCode || copy.unknownClass}
-            {klass ? ` · ${lang === 'fr' ? klass.fr : klass.en}` : ''}
           </strong>
           {item.isDemo && <span className="badge badge-demo">{copy.demo}</span>}
         </div>
@@ -229,7 +228,7 @@ export function MinistryOverview({
 
   const classItems = ['D40', 'D20', 'D10', 'D00'].map((code) => ({
     key: code,
-    label: `${code} ${lang === 'fr' ? DAMAGE_CLASSES[code].fr : DAMAGE_CLASSES[code].en}`,
+    label: code,
     value: overview?.classCounts?.[code] || 0,
     color: DAMAGE_CLASSES[code].color,
   }));

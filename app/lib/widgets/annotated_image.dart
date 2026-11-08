@@ -3,6 +3,7 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import '../models/observation.dart';
 import '../core/app_colors.dart';
+import '../core/class_codes.dart';
 import '../core/constants.dart';
 
 // ---------------------------------------------------------------------------
@@ -51,7 +52,10 @@ class _BoxPainter extends CustomPainter {
       );
 
       // Label pill
-      final label = '${TariqMapConstants.labelFor(d.classCode)}  ${(d.confidence * 100).toStringAsFixed(0)}%';
+      final name = isKnownClassCode(d.classCode)
+          ? TariqMapConstants.labelFor(d.classCode)
+          : unknownClassLabel;
+      final label = '$name  ${(d.confidence * 100).toStringAsFixed(0)}%';
       final tp = TextPainter(
         text: TextSpan(
           text: label,
@@ -86,17 +90,21 @@ class _BoxPainter extends CustomPainter {
       final badgeTp = TextPainter(
         text: TextSpan(
           text: '${i + 1}',
-          style: const TextStyle(color: Colors.black, fontSize: 10, fontWeight: FontWeight.bold),
+          style: const TextStyle(
+              color: Colors.black, fontSize: 10, fontWeight: FontWeight.bold),
         ),
         textDirection: TextDirection.ltr,
       )..layout();
-      badgeTp.paint(canvas, badgeCenter - Offset(badgeTp.width / 2, badgeTp.height / 2));
+      badgeTp.paint(
+          canvas, badgeCenter - Offset(badgeTp.width / 2, badgeTp.height / 2));
     }
   }
 
   @override
   bool shouldRepaint(_BoxPainter old) =>
-      old.detections != detections || old.highlightedIndex != highlightedIndex || old.imageSize != imageSize;
+      old.detections != detections ||
+      old.highlightedIndex != highlightedIndex ||
+      old.imageSize != imageSize;
 }
 
 // ---------------------------------------------------------------------------
@@ -148,13 +156,15 @@ class _AnnotatedImageWidgetState extends State<AnnotatedImageWidget> {
 
     _stream?.removeListener(_listener);
     _stream = provider.resolve(createLocalImageConfiguration(context));
-    
+
     _listener = ImageStreamListener(
       (info, _) {
-        if (mounted) setState(() {
-          _info = info;
-          _hasError = false;
-        });
+        if (mounted) {
+          setState(() {
+            _info = info;
+            _hasError = false;
+          });
+        }
       },
       onError: (exception, stackTrace) {
         debugPrint('[AnnotatedImage] Failed to load image: $exception');
@@ -179,24 +189,34 @@ class _AnnotatedImageWidgetState extends State<AnnotatedImageWidget> {
           children: [
             Icon(Icons.broken_image_rounded, color: Colors.white54, size: 48),
             SizedBox(height: 8),
-            Text('Failed to load image', style: TextStyle(color: Colors.white54)),
+            Text('Failed to load image',
+                style: TextStyle(color: Colors.white54)),
           ],
         ),
       );
     }
 
     if (_info == null) {
-      return const Center(child: CircularProgressIndicator(strokeWidth: 2, color: AppColors.teal));
+      return const Center(
+          child:
+              CircularProgressIndicator(strokeWidth: 2, color: AppColors.teal));
     }
 
-    final naturalSize = Size(_info!.image.width.toDouble(), _info!.image.height.toDouble());
+    final naturalSize =
+        Size(_info!.image.width.toDouble(), _info!.image.height.toDouble());
     final rawImage = kIsWeb
-        ? Image.network(widget.imagePath, width: naturalSize.width, height: naturalSize.height, fit: BoxFit.fill)
-        : Image.file(File(widget.imagePath), width: naturalSize.width, height: naturalSize.height, fit: BoxFit.fill);
+        ? Image.network(widget.imagePath,
+            width: naturalSize.width,
+            height: naturalSize.height,
+            fit: BoxFit.fill)
+        : Image.file(File(widget.imagePath),
+            width: naturalSize.width,
+            height: naturalSize.height,
+            fit: BoxFit.fill);
 
-    // Using FittedBox ensures that the Stack (which is exactly the size of the 
-    // original image) is scaled down as a single unit. This guarantees that the 
-    // bounding boxes perfectly align with the pixels of the image, regardless of 
+    // Using FittedBox ensures that the Stack (which is exactly the size of the
+    // original image) is scaled down as a single unit. This guarantees that the
+    // bounding boxes perfectly align with the pixels of the image, regardless of
     // whether the parent uses BoxFit.contain or BoxFit.cover!
     return SizedBox.expand(
       child: FittedBox(
@@ -210,7 +230,8 @@ class _AnnotatedImageWidgetState extends State<AnnotatedImageWidget> {
               rawImage,
               Positioned.fill(
                 child: CustomPaint(
-                  painter: _BoxPainter(widget.detections, naturalSize, widget.highlightedIndex),
+                  painter: _BoxPainter(
+                      widget.detections, naturalSize, widget.highlightedIndex),
                 ),
               ),
             ],

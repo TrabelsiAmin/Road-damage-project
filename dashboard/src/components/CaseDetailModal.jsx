@@ -18,6 +18,7 @@ import {
   Send,
 } from 'lucide-react';
 import { DAMAGE_CLASSES, STATUS_LABELS } from '../constants';
+import { displayClassCode, observationClassCode, statClassCode } from '../utils/classCodes';
 import { getSignedMediaUrl, getPublicMediaUrl } from '../supabase';
 import { ORGANIZATIONS_LIST } from './GlobalFilterBar';
 
@@ -33,12 +34,18 @@ export function CaseDetailModal({
   const [activeTab, setActiveTab] = useState('overview'); // 'overview' | 'evidence' | 'workflow' | 'audit'
   const [imageUrl, setImageUrl] = useState(null);
   const [imageLoading, setImageLoading] = useState(false);
+  const [imageError, setImageError] = useState(null);
+  const [imageAttempt, setImageAttempt] = useState(0);
   const [assignedOrg, setAssignedOrg] = useState(observation?.organization_id || '');
   const [repairNotes, setRepairNotes] = useState('');
   const [dueDate, setDueDate] = useState('');
 
-  const clsCode = observation?.anomaly_type || observation?.dominantClass || 'D40';
-  const clsInfo = DAMAGE_CLASSES[clsCode] || { fr: clsCode, en: clsCode, color: '#64748b' };
+  const storedClass = observationClassCode(observation);
+  const knownClass = statClassCode(storedClass);
+  const clsCode = displayClassCode(storedClass);
+  const clsInfo = (knownClass && DAMAGE_CLASSES[knownClass]) || {
+    color: '#64748b',
+  };
   const prio = observation?.priority_label || (observation?.priority_score > 65 ? 'HIGH' : observation?.priority_score > 35 ? 'MEDIUM' : 'LOW');
   const prioColor = prio === 'HIGH' ? '#EF4444' : prio === 'MEDIUM' ? '#F59E0B' : '#3B82F6';
 
@@ -48,6 +55,10 @@ export function CaseDetailModal({
     async function loadImage() {
       const orig = observation?.original_media;
       const thumb = observation?.thumbnail_media;
+      if (active) {
+        setImageError(null);
+        setImageUrl(null);
+      }
 
       if (isAuthorityUser && orig?.storage_path) {
         setImageLoading(true);
@@ -58,18 +69,24 @@ export function CaseDetailModal({
             setImageLoading(false);
           }
         } catch (err) {
-          if (active) setImageLoading(false);
+          if (active) {
+            setImageLoading(false);
+            setImageError(lang === 'fr' ? 'Impossible de charger la photo.' : 'Could not load the photo.');
+          }
         }
       } else if (thumb?.storage_path) {
         const url = getPublicMediaUrl(thumb.storage_path, 'public-photos');
-        if (active) setImageUrl(url);
+        if (active) {
+          if (url) setImageUrl(url);
+          else setImageError(lang === 'fr' ? 'Impossible de charger la photo.' : 'Could not load the photo.');
+        }
       }
     }
     loadImage();
     return () => {
       active = false;
     };
-  }, [observation, isAuthorityUser]);
+  }, [observation, isAuthorityUser, imageAttempt, lang]);
 
   if (!observation) return null;
 
@@ -142,7 +159,7 @@ export function CaseDetailModal({
             <div className="case-overview-grid">
               <div className="detail-item">
                 <span className="detail-label">{lang === 'fr' ? 'Type de dégradation' : 'Damage Type'}</span>
-                <span className="detail-value">{clsCode} — {lang === 'fr' ? clsInfo.fr : clsInfo.en}</span>
+                <span className="detail-value">{clsCode}</span>
               </div>
               <div className="detail-item">
                 <span className="detail-label">{lang === 'fr' ? 'Priorité de danger' : 'Priority'}</span>
@@ -182,9 +199,22 @@ export function CaseDetailModal({
                   <div className="spinner-sm" />
                   <p>{lang === 'fr' ? 'Génération de l\'URL signée sécurisée (10 min)...' : 'Loading signed image...'}</p>
                 </div>
+              ) : imageError ? (
+                <div className="panel-empty-state" style={{ height: '200px' }}>
+                  <Camera size={32} style={{ opacity: 0.3 }} />
+                  <p>{imageError}</p>
+                  <button type="button" className="btn btn-secondary" onClick={() => setImageAttempt((n) => n + 1)}>
+                    {lang === 'fr' ? 'Réessayer' : 'Retry'}
+                  </button>
+                </div>
               ) : imageUrl ? (
                 <div className="evidence-image-wrap" onClick={() => onOpenLightbox && onOpenLightbox({ url: imageUrl, title: `#${observation.id}`, badge: clsCode })}>
-                  <img src={imageUrl} alt="Cliché terrain" className="evidence-img" />
+                  <img
+                    src={imageUrl}
+                    alt="Cliché terrain"
+                    className="evidence-img"
+                    onError={() => setImageError(lang === 'fr' ? 'Impossible de charger la photo.' : 'Could not load the photo.')}
+                  />
                   <span className="evidence-badge">
                     {isAuthorityUser ? 'Original certifié (Autorité)' : 'Vignette publique floutée'}
                   </span>

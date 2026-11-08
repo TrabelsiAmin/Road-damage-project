@@ -92,7 +92,7 @@ export function buildTechnicalQuestion(observation, lang = 'fr') {
   const french = lang !== 'en';
   const known = safe.classCode ? DAMAGE_CLASSES[safe.classCode] : null;
   const classText = known
-    ? `${french ? known.fr : known.en} (classe RDD2022 ${known.code})`
+    ? `code RDD2022 ${known.code}`
     : (french
       ? 'dégradation routière dont la classe RDD2022 n\'est pas renseignée'
       : 'road damage whose RDD2022 class is not recorded');

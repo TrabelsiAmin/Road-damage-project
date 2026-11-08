@@ -8,59 +8,60 @@ void main() {
   // ---------------------------------------------------------------------------
 
   group('Observation.priorityScore', () {
-    AgentResult _result(String code, double conf) => AgentResult(
-      agent: 'test',
-      detections: [
-        Detection(
+    AgentResult result(String code, double conf) => AgentResult(
           agent: 'test',
-          classCode: code,
-          confidence: conf,
-          box: const BoundingBox(x: 0.1, y: 0.1, width: 0.3, height: 0.3),
-        ),
-      ],
-    );
+          detections: [
+            Detection(
+              agent: 'test',
+              classCode: code,
+              confidence: conf,
+              box: const BoundingBox(x: 0.1, y: 0.1, width: 0.3, height: 0.3),
+            ),
+          ],
+        );
 
-    Observation _obs(List<AgentResult> results) => Observation(
-      id: 'test-id',
-      captureId: 'cap-id',
-      imagePath: '/tmp/test.jpg',
-      createdAt: DateTime(2026, 9, 1),
-      latitude: 36.8,
-      longitude: 10.2,
-      actor: 'Municipality',
-      agentResults: results,
-    );
+    Observation obs0(List<AgentResult> results) => Observation(
+          id: 'test-id',
+          captureId: 'cap-id',
+          imagePath: '/tmp/test.jpg',
+          createdAt: DateTime(2026, 9, 1),
+          latitude: 36.8,
+          longitude: 10.2,
+          actor: 'Municipality',
+          agentResults: results,
+        );
 
     test('empty detections → priorityScore = 0', () {
-      final obs = _obs([AgentResult(agent: 'test', detections: const [])]);
+      final obs = obs0([const AgentResult(agent: 'test', detections: [])]);
       expect(obs.priorityScore, equals(0.0));
     });
 
     test('single D40 (pothole) at 100% confidence → high score', () {
-      final obs = _obs([_result('D40', 1.0)]);
+      final obs = obs0([result('D40', 1.0)]);
       expect(obs.priorityScore, greaterThan(65.0));
       expect(obs.priorityLabel, equals('HIGH'));
     });
 
     test('single D00 (crack) at 50% confidence → low score', () {
-      final obs = _obs([_result('D00', 0.5)]);
+      final obs = obs0([result('D00', 0.5)]);
       expect(obs.priorityScore, lessThan(35.0));
       expect(obs.priorityLabel, equals('LOW'));
     });
 
     test('priorityScore is clamped to [0..100]', () {
-      final obs = _obs([_result('D40', 1.0), _result('D40', 1.0), _result('D40', 1.0)]);
+      final obs =
+          obs0([result('D40', 1.0), result('D40', 1.0), result('D40', 1.0)]);
       expect(obs.priorityScore, lessThanOrEqualTo(100.0));
       expect(obs.priorityScore, greaterThanOrEqualTo(0.0));
     });
 
     test('priorityLabel: HIGH for score > 65', () {
-      final obs = _obs([_result('D40', 1.0)]);
+      final obs = obs0([result('D40', 1.0)]);
       expect(obs.priorityLabel, equals('HIGH'));
     });
 
     test('priorityLabel: LOW for score < 35', () {
-      final obs = _obs([_result('D00', 0.3)]);
+      final obs = obs0([result('D00', 0.3)]);
       expect(obs.priorityLabel, equals('LOW'));
     });
   });
@@ -72,11 +73,16 @@ void main() {
   group('Observation.failedAgents', () {
     test('no errors → failedAgents = 0', () {
       final obs = Observation(
-        id: 'x', captureId: 'y', imagePath: '/p', createdAt: DateTime.now(),
-        latitude: 0, longitude: 0, actor: 'A',
+        id: 'x',
+        captureId: 'y',
+        imagePath: '/p',
+        createdAt: DateTime.now(),
+        latitude: 0,
+        longitude: 0,
+        actor: 'A',
         agentResults: [
-          AgentResult(agent: 'cracks', detections: const []),
-          AgentResult(agent: 'pavement', detections: const []),
+          const AgentResult(agent: 'cracks', detections: []),
+          const AgentResult(agent: 'pavement', detections: []),
         ],
       );
       expect(obs.failedAgents, equals(0));
@@ -84,11 +90,17 @@ void main() {
 
     test('one error → failedAgents = 1', () {
       final obs = Observation(
-        id: 'x', captureId: 'y', imagePath: '/p', createdAt: DateTime.now(),
-        latitude: 0, longitude: 0, actor: 'A',
+        id: 'x',
+        captureId: 'y',
+        imagePath: '/p',
+        createdAt: DateTime.now(),
+        latitude: 0,
+        longitude: 0,
+        actor: 'A',
         agentResults: [
-          AgentResult(agent: 'cracks', detections: const [], error: 'load failed'),
-          AgentResult(agent: 'pavement', detections: const []),
+          const AgentResult(
+              agent: 'cracks', detections: [], error: 'load failed'),
+          const AgentResult(agent: 'pavement', detections: []),
         ],
       );
       expect(obs.failedAgents, equals(1));
@@ -102,10 +114,15 @@ void main() {
   group('Observation.anyMock', () {
     test('all real → anyMock = false', () {
       final obs = Observation(
-        id: 'x', captureId: 'y', imagePath: '/p', createdAt: DateTime.now(),
-        latitude: 0, longitude: 0, actor: 'A',
+        id: 'x',
+        captureId: 'y',
+        imagePath: '/p',
+        createdAt: DateTime.now(),
+        latitude: 0,
+        longitude: 0,
+        actor: 'A',
         agentResults: [
-          AgentResult(agent: 'cracks', detections: const [], isMock: false),
+          const AgentResult(agent: 'cracks', detections: [], isMock: false),
         ],
       );
       expect(obs.anyMock, isFalse);
@@ -113,11 +130,16 @@ void main() {
 
     test('one mock → anyMock = true', () {
       final obs = Observation(
-        id: 'x', captureId: 'y', imagePath: '/p', createdAt: DateTime.now(),
-        latitude: 0, longitude: 0, actor: 'A',
+        id: 'x',
+        captureId: 'y',
+        imagePath: '/p',
+        createdAt: DateTime.now(),
+        latitude: 0,
+        longitude: 0,
+        actor: 'A',
         agentResults: [
-          AgentResult(agent: 'cracks', detections: const [], isMock: true),
-          AgentResult(agent: 'pavement', detections: const [], isMock: false),
+          const AgentResult(agent: 'cracks', detections: [], isMock: true),
+          const AgentResult(agent: 'pavement', detections: [], isMock: false),
         ],
       );
       expect(obs.anyMock, isTrue);
@@ -178,14 +200,14 @@ void main() {
         longitude: 10.1815,
         actor: 'Municipality',
         agentResults: [
-          AgentResult(
+          const AgentResult(
             agent: 'pavement',
             detections: [
               Detection(
                 agent: 'pavement',
                 classCode: 'D40',
                 confidence: 0.88,
-                box: const BoundingBox(x: 0.2, y: 0.3, width: 0.4, height: 0.3),
+                box: BoundingBox(x: 0.2, y: 0.3, width: 0.4, height: 0.3),
               ),
             ],
             isMock: true,

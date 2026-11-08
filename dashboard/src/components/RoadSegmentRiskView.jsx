@@ -12,7 +12,8 @@ import {
   Layers,
   Info,
 } from 'lucide-react';
-import { DAMAGE_CLASSES, STATUS_LABELS } from '../constants';
+import { DAMAGE_CLASSES, STATUS_LABELS, repairCostText } from '../constants';
+import { displayClassCode, statClassCode } from '../utils/classCodes';
 
 export function RoadSegmentRiskView({
   corridorRisks = [],
@@ -36,8 +37,8 @@ export function RoadSegmentRiskView({
             </h2>
             <p style={{ fontSize: '0.78rem', color: 'var(--text-muted)', marginTop: '2px' }}>
               {lang === 'fr'
-                ? 'Agrégation spatiale déterministe basée sur la gravité des nids-de-poule, la récurrence des passages, l\'ancienneté des dossiers et la qualité géodésique.'
-                : 'Deterministic spatial corridor aggregation based on pothole severity, report counts, backlog age, and GPS accuracy.'}
+                ? 'Agrégation spatiale à partir des codes de classe stockés, de la récurrence des passages, de l\'ancienneté des dossiers et de la position GPS.'
+                : 'Spatial aggregation from stored class codes, report counts, backlog age, and GPS position.'}
             </p>
           </div>
         </div>
@@ -53,8 +54,9 @@ export function RoadSegmentRiskView({
           corridorRisks.map((corridor, idx) => {
             const isExpanded = expandedCode === corridor.code;
             const riskColor = corridor.levelColor || '#F59E0B';
-            const domCls = corridor.dominantClass || 'D40';
-            const clsInfo = DAMAGE_CLASSES[domCls] || { fr: domCls, color: '#64748b' };
+            const domCls = displayClassCode(corridor.dominantClass);
+            const knownDom = statClassCode(corridor.dominantClass);
+            const clsInfo = (knownDom && DAMAGE_CLASSES[knownDom]) || { color: '#64748b' };
 
             return (
               <div key={corridor.code || idx} className={`corridor-risk-card ${isExpanded ? 'expanded' : ''}`}>
@@ -72,7 +74,7 @@ export function RoadSegmentRiskView({
                         <span>{corridor.anomaliesCount} {lang === 'fr' ? 'anomalie(s) distincte(s)' : 'distinct anomalies'}</span>
                         <span>•</span>
                         <span style={{ color: clsInfo.color, fontWeight: 700 }}>
-                          Dom: {domCls} ({lang === 'fr' ? clsInfo.fr : domCls})
+                          Dom: {domCls}
                         </span>
                       </div>
                     </div>
@@ -85,8 +87,8 @@ export function RoadSegmentRiskView({
                     </div>
 
                     <div className="corridor-stat">
-                      <span className="stat-label">{lang === 'fr' ? 'Budget estimé' : 'Est. Budget'}</span>
-                      <span className="stat-val mono">{(corridor.estimatedBudgetTnd || 0).toLocaleString()} DT</span>
+                      <span className="stat-label">{lang === 'fr' ? 'Coût (TND)' : 'Cost (TND)'}</span>
+                      <span className="stat-val mono">{repairCostText(lang)}</span>
                     </div>
 
                     <div className="corridor-risk-badge-wrap">
@@ -141,8 +143,8 @@ export function RoadSegmentRiskView({
                         </thead>
                         <tbody>
                           {corridor.anomalies.map((a) => {
-                            const cCode = a.anomaly_type || 'D40';
-                            const cCol = DAMAGE_CLASSES[cCode]?.color || '#64748b';
+                            const cCode = displayClassCode(a.anomaly_type);
+                            const cCol = DAMAGE_CLASSES[statClassCode(a.anomaly_type)]?.color || '#64748b';
                             return (
                               <tr key={a.id}>
                                 <td><span className="mono table-id">#{String(a.id).substring(0, 8)}</span></td>

@@ -26,9 +26,9 @@ describe('exportFormats', () => {
     expect(rows.length).toBe(1);
     expect(rows[0].id).toBe('obs-test-1');
     expect(rows[0].classCode).toBe('D40');
-    expect(rows[0].typeLabel).toContain('poule');
+    expect(rows[0].typeLabel).toBe('D40');
     expect(rows[0].governorate).toBe('Tunis');
-    expect(rows[0].estimatedCostTnd).toBe(280);
+    expect(rows[0].estimatedCostTnd).toBeNull();
   });
 
   it('generateCsvString produces valid UTF-8 BOM CSV text', () => {
@@ -37,6 +37,8 @@ describe('exportFormats', () => {
     expect(csv).toContain('ID Signalement');
     expect(csv).toContain('obs-test-1');
     expect(csv).toContain('D40');
+    expect(csv).toContain('unavailable');
+    expect(csv).not.toContain('280');
   });
 
   it('generateGeoJson produces standard GeoJSON FeatureCollection', () => {

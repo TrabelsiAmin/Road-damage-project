@@ -53,8 +53,8 @@ export function DataQualityView({
             </h2>
             <p style={{ fontSize: '0.78rem', color: 'var(--text-muted)', marginTop: '2px' }}>
               {lang === 'fr'
-                ? 'Surveillance de la calibration des réseaux de neurones embarqués (TFLite), de la distribution de confiance et de l\'intégrité géodésique GNSS.'
-                : 'Edge TFLite model inference calibration, confidence telemetry, and field GNSS GPS integrity.'}
+                ? 'Parts des confiances et des précisions GPS déjà stockées. Ce n’est pas une précision, un rappel ou un mAP mesuré.'
+                : 'Shares of confidences and GPS accuracies already stored. This is not measured precision, recall, or mAP.'}
             </p>
           </div>
         </div>
@@ -67,75 +67,77 @@ export function DataQualityView({
             <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
               <Sparkles size={16} color="var(--color-primary)" />
               <h3 style={{ fontSize: '0.92rem', fontWeight: 700 }}>
-                {lang === 'fr' ? 'Précision et confiance des inférences TFLite' : 'TFLite Inference Confidence'}
+                {lang === 'fr' ? 'Confiances stockées' : 'Stored detection confidence'}
               </h3>
             </div>
-            <span className="bundle-badge mono">Bundle v2.1 RoadSense</span>
+            <span className="bundle-badge mono">
+              {lang === 'fr' ? 'Observations stockées' : 'Stored observations'}
+            </span>
           </div>
 
-          <div className="confidence-breakdown">
-            <div className="confidence-stat-item">
-              <div className="conf-header">
-                <span className="conf-label">{lang === 'fr' ? 'Haute confiance (>80%)' : 'High confidence (>80%)'}</span>
-                <strong className="conf-val" style={{ color: 'var(--color-success)' }}>
-                  {metrics.highConfidencePct}% ({metrics.highConfidenceCount})
-                </strong>
-              </div>
-              <div className="bar-track">
-                <div
-                  className="bar-fill"
-                  style={{ width: `${metrics.highConfidencePct}%`, background: 'var(--color-success)' }}
-                />
-              </div>
+          {(metrics.scoredDetectionCount || 0) === 0 ? (
+            <div className="metric-unavailable" role="status">
+              <strong>Not available</strong>
+              <span>
+                {lang === 'fr'
+                  ? 'Aucune confiance de détection stockée à résumer.'
+                  : 'No stored detection confidences to summarize.'}
+              </span>
             </div>
-
-            <div className="confidence-stat-item">
-              <div className="conf-header">
-                <span className="conf-label">{lang === 'fr' ? 'Confiance moyenne (50-80%)' : 'Medium confidence (50-80%)'}</span>
-                <strong className="conf-val" style={{ color: 'var(--color-warning)' }}>
-                  {metrics.mediumConfidencePct}% ({metrics.mediumConfidenceCount})
-                </strong>
-              </div>
-              <div className="bar-track">
-                <div
-                  className="bar-fill"
-                  style={{ width: `${metrics.mediumConfidencePct}%`, background: 'var(--color-warning)' }}
-                />
-              </div>
+          ) : (
+            <div className="confidence-breakdown">
+              <ConfidenceBar
+                label={lang === 'fr' ? 'Haute (≥ 65 %)' : 'High (≥ 65%)'}
+                percent={metrics.highConfidencePercent}
+                count={metrics.highConfidenceCount}
+                color="var(--color-success)"
+              />
+              <ConfidenceBar
+                label={lang === 'fr' ? 'Moyenne (45–65 %)' : 'Medium (45–65%)'}
+                percent={metrics.mediumConfidencePercent}
+                count={metrics.mediumConfidenceCount}
+                color="var(--color-warning)"
+              />
+              <ConfidenceBar
+                label={lang === 'fr' ? 'Faible (< 45 %)' : 'Low (< 45%)'}
+                percent={metrics.lowConfidencePercent}
+                count={metrics.lowConfidenceCount}
+                color="#EF4444"
+              />
+              <p style={{ fontSize: '0.72rem', color: 'var(--text-muted)', marginTop: '8px' }}>
+                {lang === 'fr'
+                  ? 'Part des scores déjà enregistrés. Ce n’est pas une précision ni un mAP.'
+                  : 'Share of scores already stored. This is not precision or mAP.'}
+              </p>
             </div>
+          )}
 
-            <div className="confidence-stat-item">
-              <div className="conf-header">
-                <span className="conf-label">{lang === 'fr' ? 'Faible confiance (<50%)' : 'Low confidence (<50%)'}</span>
-                <strong className="conf-val" style={{ color: '#EF4444' }}>
-                  {metrics.lowConfidencePct}% ({metrics.lowConfidenceCount})
-                </strong>
-              </div>
-              <div className="bar-track">
-                <div
-                  className="bar-fill"
-                  style={{ width: `${metrics.lowConfidencePct}%`, background: '#EF4444' }}
-                />
-              </div>
-            </div>
-          </div>
-
-          {/* Model Class Distribution */}
           <div className="class-dist-section">
             <h4 style={{ fontSize: '0.8rem', fontWeight: 700, marginBottom: '8px' }}>
-              {lang === 'fr' ? 'Distribution des classes détectées' : 'Detected Classes Distribution'}
+              {lang === 'fr' ? 'Codes de classe stockés' : 'Stored class codes'}
             </h4>
+            <p style={{ fontSize: '0.72rem', color: 'var(--text-muted)', marginBottom: '8px' }}>
+              {lang === 'fr'
+                ? 'Le nom courant de ces codes n’est pas vérifié. Seul le code stocké est affiché.'
+                : 'Common names for these codes are not verified. Only the stored code is shown.'}
+            </p>
             <div className="class-pills-row">
-              {Object.entries(metrics.classDistribution || {}).map(([code, count]) => {
-                const cls = DAMAGE_CLASSES[code] || { fr: code, color: '#64748b' };
+              {Object.entries(metrics.classesBreakdown || {}).map(([code, count]) => {
+                const cls = DAMAGE_CLASSES[code] || { color: '#64748b' };
                 return (
                   <div key={code} className="class-dist-chip" style={{ borderColor: `${cls.color}40` }}>
                     <span className="chip-code" style={{ color: cls.color }}>{code}</span>
-                    <span className="chip-name">{lang === 'fr' ? cls.fr : code}</span>
                     <strong className="chip-count mono">{count}</strong>
                   </div>
                 );
               })}
+              {(metrics.unspecifiedClassCount || 0) > 0 && (
+                <div className="class-dist-chip">
+                  <span className="chip-code">—</span>
+                  <span className="chip-name">{lang === 'fr' ? 'Sans code' : 'Unspecified'}</span>
+                  <strong className="chip-count mono">{metrics.unspecifiedClassCount}</strong>
+                </div>
+              )}
             </div>
           </div>
         </div>
@@ -152,50 +154,57 @@ export function DataQualityView({
           </div>
 
           <div className="gnss-metrics-wrap">
-            <div className="gnss-row">
-              <div className="gnss-icon-box" style={{ background: 'rgba(16, 185, 129, 0.1)', color: '#10B981' }}>
-                <CheckCircle2 size={18} />
+            {(metrics.gpsSampleCount || 0) === 0 ? (
+              <div className="metric-unavailable" role="status">
+                <strong>Not available</strong>
+                <span>
+                  {lang === 'fr'
+                    ? 'Aucune précision GPS (accuracy_meters) n’est stockée sur ces observations.'
+                    : 'No stored GPS accuracy (accuracy_meters) on these observations.'}
+                </span>
               </div>
-              <div className="gnss-info">
-                <div className="gnss-label-row">
-                  <span>{lang === 'fr' ? 'Positions GPS haute précision (<15m)' : 'High accuracy GPS (<15m)'}</span>
-                  <strong className="mono">{metrics.goodGpsPct}%</strong>
+            ) : (
+              <div className="gnss-row">
+                <div className="gnss-icon-box" style={{ background: 'rgba(239, 68, 68, 0.1)', color: '#EF4444' }}>
+                  <AlertTriangle size={18} />
                 </div>
-                <div className="bar-track">
-                  <div className="bar-fill" style={{ width: `${metrics.goodGpsPct}%`, background: '#10B981' }} />
+                <div className="gnss-info">
+                  <div className="gnss-label-row">
+                    <span>{lang === 'fr' ? 'Précision GPS stockée > 25 m' : 'Stored GPS accuracy > 25 m'}</span>
+                    <strong className="mono">{metrics.poorGpsPercent}% ({metrics.poorGpsCount})</strong>
+                  </div>
+                  <div className="bar-track">
+                    <div className="bar-fill" style={{ width: `${metrics.poorGpsPercent}%`, background: '#EF4444' }} />
+                  </div>
                 </div>
               </div>
-            </div>
+            )}
 
-            <div className="gnss-row">
-              <div className="gnss-icon-box" style={{ background: 'rgba(239, 68, 68, 0.1)', color: '#EF4444' }}>
-                <AlertTriangle size={18} />
+            {metrics.hasMediaPercent == null ? (
+              <div className="metric-unavailable" role="status">
+                <strong>Not available</strong>
+                <span>
+                  {lang === 'fr'
+                    ? 'Aucun chemin média stocké à compter.'
+                    : 'No stored media paths to count.'}
+                </span>
               </div>
-              <div className="gnss-info">
-                <div className="gnss-label-row">
-                  <span>{lang === 'fr' ? 'Positions GPS imprécises (>25m, exclues de la carte)' : 'Inaccurate GPS (>25m)'}</span>
-                  <strong className="mono">{metrics.poorGpsPct}% ({metrics.poorGpsCount})</strong>
+            ) : (
+              <div className="gnss-row">
+                <div className="gnss-icon-box" style={{ background: 'rgba(59, 130, 246, 0.1)', color: '#3B82F6' }}>
+                  <Camera size={18} />
                 </div>
-                <div className="bar-track">
-                  <div className="bar-fill" style={{ width: `${metrics.poorGpsPct}%`, background: '#EF4444' }} />
-                </div>
-              </div>
-            </div>
-
-            <div className="gnss-row">
-              <div className="gnss-icon-box" style={{ background: 'rgba(59, 130, 246, 0.1)', color: '#3B82F6' }}>
-                <Camera size={18} />
-              </div>
-              <div className="gnss-info">
-                <div className="gnss-label-row">
-                  <span>{lang === 'fr' ? 'Clichés originaux certifiés rattachés' : 'Certified photos attached'}</span>
-                  <strong className="mono">{metrics.hasMediaPct}%</strong>
-                </div>
-                <div className="bar-track">
-                  <div className="bar-fill" style={{ width: `${metrics.hasMediaPct}%`, background: '#3B82F6' }} />
+                <div className="gnss-info">
+                  <div className="gnss-label-row">
+                    <span>{lang === 'fr' ? 'Observations avec un chemin média stocké' : 'Observations with a stored media path'}</span>
+                    <strong className="mono">{metrics.hasMediaPercent}% ({metrics.hasMediaCount})</strong>
+                  </div>
+                  <div className="bar-track">
+                    <div className="bar-fill" style={{ width: `${metrics.hasMediaPercent}%`, background: '#3B82F6' }} />
+                  </div>
                 </div>
               </div>
-            </div>
+            )}
           </div>
 
           {/* Authority Model Feedback Form */}
@@ -209,7 +218,7 @@ export function DataQualityView({
               {feedbackSuccess ? (
                 <div className="feedback-success-msg">
                   <CheckCircle2 size={16} />
-                  <span>{lang === 'fr' ? 'Feedback enregistré pour le réentraînement du modèle.' : 'Feedback recorded for retraining.'}</span>
+                  <span>{lang === 'fr' ? 'Noté dans cette session seulement. Rien n’est envoyé à un jeu d’entraînement.' : 'Noted in this session only. Nothing is sent to a training set.'}</span>
                 </div>
               ) : (
                 <form onSubmit={handleSubmit} className="feedback-form">
@@ -253,6 +262,23 @@ export function DataQualityView({
             </div>
           )}
         </div>
+      </div>
+    </div>
+  );
+}
+
+function ConfidenceBar({ label, percent, count, color }) {
+  const width = Number.isFinite(percent) ? percent : 0;
+  return (
+    <div className="confidence-stat-item">
+      <div className="conf-header">
+        <span className="conf-label">{label}</span>
+        <strong className="conf-val" style={{ color }}>
+          {percent == null ? '—' : `${percent}%`} ({count || 0})
+        </strong>
+      </div>
+      <div className="bar-track">
+        <div className="bar-fill" style={{ width: `${width}%`, background: color }} />
       </div>
     </div>
   );

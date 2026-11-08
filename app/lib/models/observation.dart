@@ -132,6 +132,8 @@ enum SyncStatus {
 enum MediaSyncStatus {
   pending,
   uploading,
+  /// Original object and its media row are stored. A later step may still be open.
+  originalUploaded,
   uploaded,
   failed;
 
@@ -171,6 +173,7 @@ class Observation {
     this.deviceId,
     this.imageWidth,
     this.imageHeight,
+    this.remoteImageUrl,
   });
 
   final String   id;
@@ -200,6 +203,9 @@ class Observation {
   final String? deviceId;
   final int?    imageWidth;
   final int?    imageHeight;
+
+  /// Public URL of the uploaded original. Null until that upload succeeds.
+  String? remoteImageUrl;
 
   // ── Derived ────────────────────────────────────────────────────────────────
 
@@ -241,6 +247,7 @@ class Observation {
     'deviceId':           deviceId,
     'imageWidth':         imageWidth,
     'imageHeight':        imageHeight,
+    'remoteImageUrl':     remoteImageUrl,
     'agentResults':       agentResults.map((r) => r.toJson()).toList(),
     'priorityScore':      priorityScore,
     'priorityLabel':      priorityLabel,

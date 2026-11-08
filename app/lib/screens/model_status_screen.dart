@@ -134,9 +134,9 @@ class _ModelStatusScreenState extends State<ModelStatusScreen> {
                     borderRadius: BorderRadius.circular(12),
                     border: Border.all(color: Colors.orange.withAlpha(60)),
                   ),
-                  child: Column(
+                  child: const Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
-                    children: const [
+                    children: [
                       Text('Known Model Limitations',
                           style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
                       SizedBox(height: 6),

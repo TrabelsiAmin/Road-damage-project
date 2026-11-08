@@ -1,37 +1,14 @@
 import 'dart:async';
-import 'dart:io';
 import 'package:camera/camera.dart';
 import 'package:flutter/material.dart';
-import 'package:geolocator/geolocator.dart';
-import 'package:uuid/uuid.dart';
 import '../core/app_colors.dart';
-import '../core/constants.dart';
-import '../inference/preprocessing.dart';
-import '../models/observation.dart';
-import '../services/detection_service.dart';
-import '../services/observation_repository.dart';
-import 'result_screen.dart';
 
 /// Full-screen camera view with plain preview only.
 ///
-/// Per CHANGE 1:
-/// - No image stream analysis or model calls while previewing.
-/// - When capture is pressed, high-quality photo is taken, inference runs once,
-///   an "Analyzing…" state is displayed, results are saved to local database,
-///   and [ResultScreen] is pushed reading strictly from storage.
+/// Capture returns the photo path and does not run detection or save an
+/// observation. The caller shows the confirm screen before anything is stored.
 class CameraDetectionScreen extends StatefulWidget {
-  const CameraDetectionScreen({
-    super.key,
-    required this.detectionService,
-    required this.repository,
-    required this.actor,
-    this.organizationId,
-  });
-
-  final DetectionService detectionService;
-  final ObservationRepository repository;
-  final String actor;
-  final String? organizationId;
+  const CameraDetectionScreen({super.key});
 
   @override
   State<CameraDetectionScreen> createState() => _CameraDetectionScreenState();
@@ -43,7 +20,8 @@ class _CameraDetectionScreenState extends State<CameraDetectionScreen>
   List<CameraDescription> _cameras = [];
   bool _initialized = false;
   bool _analyzing = false;
-  final _uuid = const Uuid();
+  bool _cameraStarting = true;
+  String? _cameraError;
 
   @override
   void initState() {
@@ -53,12 +31,35 @@ class _CameraDetectionScreenState extends State<CameraDetectionScreen>
   }
 
   Future<void> _initCamera() async {
+    if (mounted) {
+      setState(() {
+        _cameraError = null;
+        _cameraStarting = true;
+        _initialized = false;
+      });
+    }
     try {
       _cameras = await availableCameras();
-      if (_cameras.isEmpty) return;
+      if (_cameras.isEmpty) {
+        if (mounted) {
+          setState(() {
+            _cameraError = 'No camera is available on this device.';
+            _cameraStarting = false;
+          });
+        }
+        return;
+      }
       await _startCamera(_cameras.first);
+      if (mounted) setState(() => _cameraStarting = false);
     } catch (e) {
       debugPrint('[Camera] Init error: $e');
+      if (mounted) {
+        setState(() {
+          _cameraError = 'Camera could not start. Check permission and try again.';
+          _cameraStarting = false;
+          _initialized = false;
+        });
+      }
     }
   }
 
@@ -78,72 +79,22 @@ class _CameraDetectionScreenState extends State<CameraDetectionScreen>
   }
 
   Future<void> _capture() async {
-    if (_analyzing || _controller == null || !_controller!.value.isInitialized) return;
+    if (_analyzing || _controller == null || !_controller!.value.isInitialized) {
+      return;
+    }
     setState(() => _analyzing = true);
 
     try {
       final photo = await _controller!.takePicture();
-      final imageFile = File(photo.path);
-
-      // Read image dimensions and orientation
-      final bytes = await imageFile.readAsBytes();
-      final decoded = decodeAndOrient(bytes);
-      final imageWidth = decoded.width;
-      final imageHeight = decoded.height;
-
-      // GPS snapshot
-      Position? position;
-      try {
-        position = await Geolocator.getCurrentPosition(
-          locationSettings: const LocationSettings(accuracy: LocationAccuracy.high),
-        );
-      } catch (_) {}
-
-      // Run inference ONCE on the captured file
-      final results = await widget.detectionService.detectAll(imageFile);
-
-      final observation = Observation(
-        id: _uuid.v4(),
-        captureId: _uuid.v4(),
-        organizationId: widget.organizationId,
-        imagePath: photo.path,
-        createdAt: DateTime.now().toUtc(),
-        latitude: position?.latitude ?? 0,
-        longitude: position?.longitude ?? 0,
-        accuracyMeters: position?.accuracy,
-        actor: widget.actor,
-        agentResults: results,
-        imageWidth: imageWidth,
-        imageHeight: imageHeight,
-        modelBundleVersion: TariqMapConstants.modelBundleVersion,
-      );
-
-      debugPrint('[Pipeline:ResultObject] Observation created: ${observation.id}, '
-          'detections: ${observation.detections.length}, size: ${imageWidth}x$imageHeight, '
-          'score: ${observation.priorityScore.toStringAsFixed(1)}, '
-          'anomaly: ${observation.detections.firstOrNull?.classCode}');
-
-      // Save to local database
-      await widget.repository.save(observation);
-
-      // Read back from storage to guarantee ResultScreen reads strictly from storage
-      final storedObs = await widget.repository.findById(observation.id) ?? observation;
-
-      if (mounted) {
-        await Navigator.of(context).push(
-          MaterialPageRoute<void>(
-            builder: (_) => ResultScreen(observation: storedObs),
-          ),
-        );
-      }
+      if (!mounted) return;
+      Navigator.of(context).pop(photo.path);
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(content: Text('Capture failed: $e'), backgroundColor: AppColors.critical),
         );
+        setState(() => _analyzing = false);
       }
-    } finally {
-      if (mounted) setState(() => _analyzing = false);
     }
   }
 
@@ -158,8 +109,19 @@ class _CameraDetectionScreenState extends State<CameraDetectionScreen>
     setState(() {
       _controller = null;
       _initialized = false;
+      _cameraError = null;
     });
-    await _startCamera(next);
+    try {
+      await _startCamera(next);
+    } catch (e) {
+      debugPrint('[Camera] Switch error: $e');
+      if (mounted) {
+        setState(() {
+          _cameraError = 'Camera could not start. Check permission and try again.';
+          _initialized = false;
+        });
+      }
+    }
   }
 
   @override
@@ -187,8 +149,31 @@ class _CameraDetectionScreenState extends State<CameraDetectionScreen>
         fit: StackFit.expand,
         children: [
           // ── Camera plain preview ────────────────────────────────
-          if (_initialized && _controller != null)
+          if (_initialized && _controller != null && _cameraError == null)
             CameraPreview(_controller!)
+          else if (_cameraError != null)
+            Center(
+              child: Padding(
+                padding: const EdgeInsets.all(24),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    const Icon(Icons.videocam_off_outlined, color: Colors.white70, size: 36),
+                    const SizedBox(height: 12),
+                    Text(
+                      _cameraError!,
+                      textAlign: TextAlign.center,
+                      style: const TextStyle(color: Colors.white70, fontSize: 14),
+                    ),
+                    const SizedBox(height: 16),
+                    FilledButton(
+                      onPressed: _cameraStarting ? null : _initCamera,
+                      child: const Text('Retry'),
+                    ),
+                  ],
+                ),
+              ),
+            )
           else
             const Center(
               child: Column(

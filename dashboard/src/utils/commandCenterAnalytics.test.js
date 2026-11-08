@@ -83,7 +83,7 @@ describe('commandCenterAnalytics', () => {
     expect(kpis.repairsInProgress).toBe(1); // obs-2
     expect(kpis.repairsCompleted).toBe(1); // obs-3
     expect(kpis.overdueCases).toBe(1); // obs-2 (> 30 days)
-    expect(kpis.estimatedOpenBudgetTnd).toBeGreaterThan(0);
+    expect(kpis.estimatedOpenBudgetTnd).toBeNull();
   });
 
   it('partitions observations into Action Center operational queues', () => {
@@ -101,6 +101,24 @@ describe('commandCenterAnalytics', () => {
     expect(dq.highConfidencePercent).toBeGreaterThan(0);
     expect(dq.poorGpsPercent).toBeGreaterThan(0);
     expect(dq.classesBreakdown.D40).toBe(1);
+  });
+
+  it('does not invent confidence or a D40 class when nothing was stored', () => {
+    const empty = buildDataQualityMetrics([]);
+    expect(empty.highConfidencePercent).toBeNull();
+    expect(empty.poorGpsPercent).toBeNull();
+    expect(empty.hasMediaPercent).toBeNull();
+
+    const missing = buildDataQualityMetrics([
+      {
+        id: 'obs-x',
+        status: 'unconfirmed',
+        detections: [{ confidence: 0.9 }],
+      },
+    ]);
+    expect(missing.classesBreakdown.D40).toBe(0);
+    expect(missing.unspecifiedClassCount).toBe(1);
+    expect(missing.highConfidencePercent).toBe(100);
   });
 
   it('computes regional backlog ranking', () => {

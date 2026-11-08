@@ -22,7 +22,7 @@ class AppDatabase {
   }
 
   static const _dbName    = 'tariqmap.db';
-  static const _dbVersion = 4;
+  static const _dbVersion = 5;
 
   // ── Schema ────────────────────────────────────────────────────────────────
 
@@ -51,7 +51,8 @@ class AppDatabase {
       image_height        INTEGER,
       priority_score      REAL,
       failed_agents       INTEGER NOT NULL DEFAULT 0,
-      any_mock            INTEGER NOT NULL DEFAULT 1
+      any_mock            INTEGER NOT NULL DEFAULT 1,
+      remote_image_url    TEXT
     )
   ''';
 
@@ -164,6 +165,16 @@ class AppDatabase {
       await db.execute(_createCachedAnomalies);
       await db.execute(_createCachedAnomaliesIndex);
     }
+    if (oldVersion < 5) {
+      await addRemoteImageUrlColumn(db);
+    }
+  }
+
+  /// Local column only. Existing rows keep a null URL and still open.
+  static Future<void> addRemoteImageUrlColumn(Database db) async {
+    await db.execute(
+      'ALTER TABLE observations ADD COLUMN remote_image_url TEXT',
+    );
   }
 
   // ── Utilities ─────────────────────────────────────────────────────────────

@@ -9,6 +9,7 @@ from __future__ import annotations
 import hashlib
 import json
 import os
+import re
 import uuid
 from datetime import datetime, timezone
 from typing import Any
@@ -20,6 +21,13 @@ from dotenv import load_dotenv
 from schemas import ObservationUpload
 
 load_dotenv()
+
+_JWT_RE = re.compile(r"eyJ[A-Za-z0-9_\-]{8,}\.[A-Za-z0-9_\-]+\.[A-Za-z0-9_\-]+")
+
+
+def redact_secrets(text: str) -> str:
+    """Strip JWT-shaped tokens before a message is logged or returned."""
+    return _JWT_RE.sub("[redacted]", text)
 
 
 class SupabaseNotConfigured(RuntimeError):
@@ -78,7 +86,7 @@ class SupabaseStore:
             timeout=self.timeout,
         )
         if response.status_code >= 400:
-            detail = response.text[:1000]
+            detail = redact_secrets(response.text[:1000])
             raise RuntimeError(f"Supabase {method} {table} failed ({response.status_code}): {detail}")
         return response
 
@@ -99,59 +107,108 @@ class SupabaseStore:
         )
         return bool(response.json())
 
-    def insert_observation(self, body: ObservationUpload, idempotency_key: str) -> dict[str, str]:
-        """Persist one mobile observation and its normalized child records."""
-        if self._existing_receipt(body.id):
-            return {"status": "already_received", "id": body.id}
+    def _row_exists(self, table: str, row_id: str) -> bool:
+        response = self._request(
+            "GET",
+            table,
+            params={"id": f"eq.{quote(row_id, safe='')}", "select": "id", "limit": "1"},
+        )
+        return bool(response.json())
 
+    def _has_value(self, table: str, column: str, value: str) -> bool:
+        response = self._request(
+            "GET",
+            table,
+            params={column: f"eq.{quote(value, safe='')}", "select": column, "limit": "1"},
+        )
+        return bool(response.json())
+
+    def _ids_for_observation(self, table: str, observation_id: str) -> set[str]:
+        response = self._request(
+            "GET",
+            table,
+            params={
+                "observation_id": f"eq.{quote(observation_id, safe='')}",
+                "select": "id",
+                "limit": "1000",
+            },
+        )
+        return {row["id"] for row in response.json() if row.get("id")}
+
+    def insert_observation(self, body: ObservationUpload, idempotency_key: str) -> dict[str, str]:
+        """Insert an observation and only the child rows whose stable ids are absent.
+
+        Media bytes are uploaded by the mobile client, not by this method.
+        A receipt is written only after the observation, location, agent runs,
+        and detections for this payload are present. A network or auth error
+        from `_request` is not turned into already_received.
+
+        Schema limit: a child written earlier with a random id is not deleted.
+        This method only recognizes the UUID v5 ids derived from the local
+        observation id. A second random row can therefore remain.
+        """
         captured_at = self._timestamp(body.createdAt)
         organization_id = body.organizationId or self._organization_id(body.actor)
-        observation = {
-            "id": body.id,
-            "capture_id": body.captureId,
-            "parent_observation_id": None,
-            # The current offline mobile app has no Supabase Auth user yet.
-            "created_by": None,
-            "organization_id": organization_id,
-            "device_id": body.deviceId,
-            "source": "camera",
-            "captured_at": captured_at,
-            "image_width": body.imageWidth,
-            "image_height": body.imageHeight,
-            "priority_score": body.priorityScore,
-            "priority_label": body.priorityLabel,
-            "model_bundle_version": body.modelBundleVersion,
-            "created_at": captured_at,
-        }
-        self._request("POST", "observations", payload=observation, prefer="return=minimal")
+        inserted_any = False
+        observation_was_new = False
 
-        location = {
-            "observation_id": body.id,
-            "latitude": body.latitude,
-            "longitude": body.longitude,
-            "accuracy_meters": body.accuracyMeters,
-            "captured_at": captured_at,
-        }
-        self._request("POST", "locations", payload=location, prefer="return=minimal")
-
-        for result in body.agentResults:
-            agent_run_id = str(uuid.uuid4())
-            agent_run = {
-                "id": agent_run_id,
-                "observation_id": body.id,
-                "agent": result.agent,
-                "error": result.error,
-                "is_mock": result.isMock,
-                "latency_ms": result.latencyMs,
+        if not self._row_exists("observations", body.id):
+            observation_was_new = True
+            observation = {
+                "id": body.id,
+                "capture_id": body.captureId,
+                "parent_observation_id": None,
+                "created_by": None,
+                "organization_id": organization_id,
+                "device_id": body.deviceId,
+                "source": "camera",
+                "captured_at": captured_at,
+                "image_width": body.imageWidth,
+                "image_height": body.imageHeight,
+                "priority_score": body.priorityScore,
+                "priority_label": body.priorityLabel,
                 "model_bundle_version": body.modelBundleVersion,
+                "created_at": captured_at,
             }
-            self._request("POST", "agent_runs", payload=agent_run, prefer="return=minimal")
+            self._request("POST", "observations", payload=observation, prefer="return=minimal")
+            inserted_any = True
 
-            detections = []
-            for detection in result.detections:
-                detections.append(
+        if not self._has_value("locations", "observation_id", body.id):
+            location = {
+                "observation_id": body.id,
+                "latitude": body.latitude,
+                "longitude": body.longitude,
+                "accuracy_meters": body.accuracyMeters,
+                "captured_at": captured_at,
+            }
+            self._request("POST", "locations", payload=location, prefer="return=minimal")
+            inserted_any = True
+
+        existing_runs = self._ids_for_observation("agent_runs", body.id)
+        existing_detections = self._ids_for_observation("detections", body.id)
+        for index, result in enumerate(body.agentResults):
+            agent_run_id = str(uuid.uuid5(uuid.NAMESPACE_URL, f"{body.id}:agent:{index}:{result.agent}"))
+            if agent_run_id not in existing_runs:
+                agent_run = {
+                    "id": agent_run_id,
+                    "observation_id": body.id,
+                    "agent": result.agent,
+                    "error": result.error,
+                    "is_mock": result.isMock,
+                    "latency_ms": result.latencyMs,
+                    "model_bundle_version": body.modelBundleVersion,
+                }
+                self._request("POST", "agent_runs", payload=agent_run, prefer="return=minimal")
+                inserted_any = True
+
+            missing = []
+            for det_index, detection in enumerate(result.detections):
+                detection_id = str(uuid.uuid5(uuid.NAMESPACE_URL, f"{body.id}:det:{index}:{det_index}"))
+                if detection_id in existing_detections:
+                    continue
+                missing.append(
                     {
-                        "id": str(uuid.uuid4()),
+                        "id": detection_id,
                         "observation_id": body.id,
                         "agent_run_id": agent_run_id,
                         "media_id": None,
@@ -167,23 +224,33 @@ class SupabaseStore:
                         "detected_at": detection.timestamp or captured_at,
                     }
                 )
-            if detections:
-                self._request("POST", "detections", payload=detections, prefer="return=minimal")
+            if missing:
+                self._request("POST", "detections", payload=missing, prefer="return=minimal")
+                inserted_any = True
 
-        try:
-            receipt_uuid = str(uuid.UUID(idempotency_key))
-        except ValueError:
-            receipt_uuid = str(uuid.uuid5(uuid.NAMESPACE_URL, idempotency_key))
-        payload_hash = hashlib.sha256(
-            json.dumps(body.model_dump(mode="json"), sort_keys=True, separators=(",", ":")).encode()
-        ).hexdigest()
-        receipt = {
-            "observation_id": body.id,
-            "idempotency_key": receipt_uuid,
-            "payload_hash": payload_hash,
-        }
-        self._request("POST", "sync_receipts", payload=receipt, prefer="return=minimal")
-        return {"status": "created", "id": body.id}
+        if not self._existing_receipt(body.id):
+            try:
+                receipt_uuid = str(uuid.UUID(idempotency_key))
+            except ValueError:
+                receipt_uuid = str(uuid.uuid5(uuid.NAMESPACE_URL, idempotency_key))
+            payload_hash = hashlib.sha256(
+                json.dumps(body.model_dump(mode="json"), sort_keys=True, separators=(",", ":")).encode()
+            ).hexdigest()
+            receipt = {
+                "observation_id": body.id,
+                "idempotency_key": receipt_uuid,
+                "payload_hash": payload_hash,
+            }
+            self._request("POST", "sync_receipts", payload=receipt, prefer="return=minimal")
+            inserted_any = True
+
+        if observation_was_new:
+            status = "created"
+        elif inserted_any:
+            status = "repaired"
+        else:
+            status = "already_received"
+        return {"status": status, "id": body.id}
 
     def list_observations(self, actor: str | None, limit: int) -> list[dict[str, Any]]:
         params = {
@@ -229,11 +296,15 @@ class SupabaseStore:
         for observation in observations:
             actor = organization_names.get(observation.get("organization_id"), "Unknown")
             by_actor[actor] = by_actor.get(actor, 0) + 1
-            label = observation.get("priority_label") or "LOW"
-            by_priority[label] = by_priority.get(label, 0) + 1
+            label = observation.get("priority_label")
+            if label:
+                by_priority[label] = by_priority.get(label, 0) + 1
         by_class: dict[str, int] = {}
         for detection in detections:
-            code = detection.get("class_code", "UNKNOWN")
+            raw = detection.get("class_code")
+            if raw is None or not str(raw).strip():
+                continue
+            code = str(raw).strip()
             by_class[code] = by_class.get(code, 0) + 1
         return {
             "total": len(observations),

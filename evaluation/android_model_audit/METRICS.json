@@ -1,0 +1,61 @@
+{
+  "audit": "android-model-audit",
+  "head": "cd7d16898465174c06a1362953c052f156e0485b",
+  "date": "2026-11-05",
+  "scientific_validation": "NOT VERIFIED",
+  "map50": {"value": null, "tag": "NOT VERIFIED", "reason": "0 label files"},
+  "map50_95": {"value": null, "tag": "NOT VERIFIED", "reason": "0 label files"},
+  "models": {
+    "road_damage.tflite": {
+      "role": "default Android model",
+      "bytes": 44768844,
+      "mib": 42.69,
+      "sha256": "830f99bd8c31c5d24138c16db7862dfb62293b96cc1dec241c36140bff8a813f",
+      "input": [1, 640, 640, 3],
+      "input_layout": "NHWC float32",
+      "output": [1, 8, 8400],
+      "embedded_string": "YOLOv8_Small_RDD",
+      "tag": "VERIFIED"
+    },
+    "road_damage_roadsense.tflite": {
+      "role": "not loaded unless USE_ROADSENSE_MODEL=true",
+      "bytes": 37347282,
+      "mib": 35.62,
+      "sha256": "300798be883a7003a1a20f3d13757f9338a8cbec5e0ece9f990a2a5179286ccb",
+      "input": [1, 3, 640, 640],
+      "input_layout": "NCHW float32",
+      "output": [1, 9, 8400],
+      "blocks_present": ["A2C2f", "AAttn", "C2f"],
+      "tag": "VERIFIED"
+    }
+  },
+  "dataset": {
+    "git_jpg_count": 29120,
+    "git_non_jpg_in_dataset": 0,
+    "annotation_status_file": "UNLABELED",
+    "working_tree_jpg_this_sparse_clone": 200,
+    "tag": "VERIFIED"
+  },
+  "linux_cpu_invoke_not_android": {
+    "tag": "VERIFIED",
+    "device": "Linux VM CPU, XNNPACK, 2 threads, float32, invoke only",
+    "zero_tensor_n8_mean_ms": 112.36,
+    "zero_tensor_n8_median_ms": 112.07,
+    "zero_tensor_n8_min_ms": 110.74,
+    "zero_tensor_n8_max_ms": 115.12,
+    "allocate_ms": 55.43,
+    "earlier_real_image_n12_mean_ms": 103.71,
+    "earlier_real_image_n12_p95_ms": 104.63,
+    "android_latency_ms": null,
+    "android_tag": "BLOCKED"
+  },
+  "tests": {
+    "training_contract_before": "2 passed",
+    "training_contract_after": "2 passed",
+    "dashboard_vitest_before": "80 passed",
+    "dashboard_vitest_after": "80 passed",
+    "lock_android_contract": "passed",
+    "spec_decoder_math": "passed",
+    "flutter_unit_including_new": "BLOCKED no flutter SDK"
+  }
+}

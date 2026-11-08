@@ -3,7 +3,9 @@ import 'dart:math' as math;
 import 'package:flutter/foundation.dart';
 import 'package:image/image.dart' as img;
 import '../core/app_colors.dart';
+import '../core/class_codes.dart';
 import '../core/constants.dart';
+import '../inference/preprocessing.dart';
 import '../models/observation.dart';
 
 // ---------------------------------------------------------------------------
@@ -77,8 +79,9 @@ File _annotateInIsolate(_AnnotateArgs args) {
   final bytes = File(args.inputPath).readAsBytesSync();
   final src   = img.decodeImage(bytes);
   if (src == null) return File(args.inputPath);
+  final oriented = orientDecodedImage(src);
 
-  final canvas = img.Image.from(src);
+  final canvas = img.Image.from(oriented);
   final W = canvas.width;
   final H = canvas.height;
 
@@ -110,7 +113,7 @@ File _annotateInIsolate(_AnnotateArgs args) {
 
     // Label pill above the box
     final label =
-        '${TariqMapConstants.labelFor(d.classCode)} '
+        '${isKnownClassCode(d.classCode) ? TariqMapConstants.labelFor(d.classCode) : unknownClassLabel} '
         '${(d.confidence * 100).toStringAsFixed(0)}%';
     _drawLabelPill(canvas, x1, y1, label, color);
   }
@@ -126,7 +129,7 @@ File _annotateInIsolate(_AnnotateArgs args) {
 void _drawFilledRect(
   img.Image canvas, int x1, int y1, int x2, int y2, img.ColorRgb8 color,
 ) {
-  final alpha = _fillAlpha / 255.0;
+  const alpha = _fillAlpha / 255.0;
   final minY = y1.clamp(0, canvas.height - 1);
   final maxY = y2.clamp(0, canvas.height - 1);
   final minX = x1.clamp(0, canvas.width  - 1);
@@ -194,7 +197,7 @@ void _drawLabelPill(
   const padY  = 4;
 
   final pillW = label.length * charW + padX * 2;
-  final pillH = charH + padY * 2;
+  const pillH = charH + padY * 2;
   // .toInt() needed because clamp() on int vs num returns num in Dart
   final pillX = x1.clamp(0, math.max(0, canvas.width  - pillW)).toInt();
   final pillY = (y1 - pillH - 2).clamp(0, math.max(0, canvas.height - pillH)).toInt();

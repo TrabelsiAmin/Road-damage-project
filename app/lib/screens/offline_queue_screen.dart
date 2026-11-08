@@ -1,11 +1,11 @@
-import 'dart:io';
-import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:intl/intl.dart';
 import '../core/app_colors.dart';
 import '../models/observation.dart';
 import '../services/observation_repository.dart';
+import '../services/sync_plan.dart';
+import '../widgets/observation_photo.dart';
 import 'result_screen.dart';
 
 class OfflineQueueScreen extends StatefulWidget {
@@ -13,10 +13,15 @@ class OfflineQueueScreen extends StatefulWidget {
     super.key,
     required this.repository,
     required this.onSync,
+    this.onManualRetry,
   });
 
   final ObservationRepository repository;
   final Future<SyncResult> Function({SyncCancelToken? cancelToken}) onSync;
+
+  /// One explicit retry of a needsReview row. Automatic sync does not call this.
+  final Future<SyncResult> Function(String observationId,
+      {SyncCancelToken? cancelToken})? onManualRetry;
 
   @override
   State<OfflineQueueScreen> createState() => _OfflineQueueScreenState();
@@ -27,8 +32,11 @@ class _OfflineQueueScreenState extends State<OfflineQueueScreen>
   List<Observation> _all = [];
   bool _loading = true;
   bool _syncing = false;
+  String? _manualRetryId;
   SyncCancelToken? _cancelToken;
   String? _statusBanner;
+  bool _statusBlocked = false;
+  String? _loadError;
 
   late TabController _tab;
 
@@ -46,13 +54,27 @@ class _OfflineQueueScreenState extends State<OfflineQueueScreen>
   }
 
   Future<void> _load() async {
-    setState(() => _loading = true);
-    final obs = await widget.repository.list();
-    if (mounted)
-      setState(() {
-        _all = obs;
-        _loading = false;
-      });
+    setState(() {
+      _loading = true;
+      _loadError = null;
+    });
+    try {
+      final obs = await widget.repository.list();
+      if (mounted) {
+        setState(() {
+          _all = obs;
+          _loading = false;
+        });
+      }
+    } catch (e) {
+      debugPrint('[Queue] Load error: $e');
+      if (mounted) {
+        setState(() {
+          _loading = false;
+          _loadError = 'Could not load the local queue.';
+        });
+      }
+    }
   }
 
   Future<void> _syncAll() async {
@@ -61,6 +83,7 @@ class _OfflineQueueScreenState extends State<OfflineQueueScreen>
       _syncing = true;
       _cancelToken = token;
       _statusBanner = null;
+      _statusBlocked = false;
     });
     try {
       final result = await widget.onSync(cancelToken: token);
@@ -68,14 +91,24 @@ class _OfflineQueueScreenState extends State<OfflineQueueScreen>
       if (mounted) {
         setState(() {
           _statusBanner = result.message;
+          _statusBlocked = result.blocked;
         });
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text(result.message),
-            backgroundColor:
-                result.cancelled ? Colors.orange.shade800 : AppColors.teal,
+            backgroundColor: result.cancelled || result.blocked
+                ? Colors.orange.shade800
+                : AppColors.teal,
             duration: const Duration(seconds: 4),
           ),
+        );
+      }
+    } catch (e) {
+      debugPrint('[Queue] Sync error: $e');
+      if (mounted) {
+        setState(() => _statusBanner = 'Sync failed.');
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Sync failed.')),
         );
       }
     } finally {
@@ -90,6 +123,28 @@ class _OfflineQueueScreenState extends State<OfflineQueueScreen>
 
   void _cancelSync() {
     _cancelToken?.cancel();
+  }
+
+  Future<void> _retryNeedsReview(Observation obs) async {
+    final retry = widget.onManualRetry;
+    if (retry == null || _syncing || _manualRetryId != null) return;
+    setState(() => _manualRetryId = obs.id);
+    try {
+      final result = await retry(obs.id);
+      await _load();
+      if (!mounted) return;
+      setState(() {
+        _statusBanner = result.message;
+        _statusBlocked = result.blocked;
+      });
+    } catch (e) {
+      debugPrint('[Queue] Manual retry error: $e');
+      await _load();
+      if (!mounted) return;
+      setState(() => _statusBanner = 'Manual retry failed');
+    } finally {
+      if (mounted) setState(() => _manualRetryId = null);
+    }
   }
 
   Future<void> _deleteObservation(Observation obs) async {
@@ -146,18 +201,28 @@ class _OfflineQueueScreenState extends State<OfflineQueueScreen>
     }
   }
 
+  bool _isFullySynced(Observation obs) =>
+      queueSyncState(obs) == QueueSyncState.fullySynced;
+
+  bool _needsAttention(Observation obs) {
+    final state = queueSyncState(obs);
+    return state == QueueSyncState.metadataSyncedPhotoFailed ||
+        state == QueueSyncState.laterStepIncomplete ||
+        state == QueueSyncState.manualReview ||
+        state == QueueSyncState.manualRetryInProgress ||
+        obs.syncStatus == SyncStatus.failed;
+  }
+
   List<Observation> get _pending => _all
       .where((o) =>
-          o.syncStatus == SyncStatus.pending ||
-          o.syncStatus == SyncStatus.uploading)
+          !_isFullySynced(o) &&
+          !_needsAttention(o) &&
+          (o.syncStatus == SyncStatus.pending ||
+              o.syncStatus == SyncStatus.uploading))
       .toList();
-  List<Observation> get _failed => _all
-      .where((o) =>
-          o.syncStatus == SyncStatus.failed ||
-          o.syncStatus == SyncStatus.needsReview)
-      .toList();
-  List<Observation> get _synced =>
-      _all.where((o) => o.syncStatus == SyncStatus.synced).toList();
+  List<Observation> get _failed =>
+      _all.where((o) => !_isFullySynced(o) && _needsAttention(o)).toList();
+  List<Observation> get _synced => _all.where(_isFullySynced).toList();
 
   @override
   Widget build(BuildContext context) {
@@ -243,6 +308,24 @@ class _OfflineQueueScreenState extends State<OfflineQueueScreen>
           ? const Center(
               child: CircularProgressIndicator(
                   valueColor: AlwaysStoppedAnimation<Color>(AppColors.teal)))
+          : _loadError != null
+          ? Center(
+              child: Padding(
+                padding: const EdgeInsets.all(24),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    const Icon(Icons.error_outline, color: AppColors.syncFailed, size: 36),
+                    const SizedBox(height: 12),
+                    Text(_loadError!,
+                        textAlign: TextAlign.center,
+                        style: const TextStyle(fontWeight: FontWeight.w700)),
+                    const SizedBox(height: 16),
+                    FilledButton(onPressed: _load, child: const Text('Retry')),
+                  ],
+                ),
+              ),
+            )
           : Column(
               children: [
                 if (_syncing)
@@ -286,7 +369,7 @@ class _OfflineQueueScreenState extends State<OfflineQueueScreen>
                 else if (_statusBanner != null)
                   Container(
                     width: double.infinity,
-                    color: _statusBanner!.contains('cancelled')
+                    color: _statusBlocked || _statusBanner!.contains('cancelled')
                         ? Colors.orange.shade900
                         : AppColors.navyLight,
                     padding: const EdgeInsets.symmetric(
@@ -294,10 +377,11 @@ class _OfflineQueueScreenState extends State<OfflineQueueScreen>
                     child: Row(
                       children: [
                         Icon(
-                          _statusBanner!.contains('cancelled')
+                          _statusBlocked || _statusBanner!.contains('cancelled')
                               ? Icons.warning_amber_rounded
                               : Icons.check_circle_outline,
-                          color: _statusBanner!.contains('cancelled')
+                          color: _statusBlocked ||
+                                  _statusBanner!.contains('cancelled')
                               ? Colors.orangeAccent
                               : AppColors.syncDone,
                           size: 16,
@@ -335,7 +419,10 @@ class _OfflineQueueScreenState extends State<OfflineQueueScreen>
                               emptyIcon: Icons.check_circle_outline_rounded,
                               emptyColor: AppColors.syncDone,
                               onDelete: _deleteObservation,
-                              deletingDisabled: _syncing,
+                              deletingDisabled: _syncing || _manualRetryId != null,
+                              onRetry: _syncing ? null : _syncAll,
+                              onManualRetry: _retryNeedsReview,
+                              manualRetryId: _manualRetryId,
                             ),
                             _ObsList(
                               observations: _synced,
@@ -388,6 +475,9 @@ class _ObsList extends StatelessWidget {
     required this.emptyColor,
     required this.onDelete,
     required this.deletingDisabled,
+    this.onRetry,
+    this.onManualRetry,
+    this.manualRetryId,
   });
 
   final List<Observation> observations;
@@ -396,6 +486,9 @@ class _ObsList extends StatelessWidget {
   final Color emptyColor;
   final Future<void> Function(Observation) onDelete;
   final bool deletingDisabled;
+  final Future<void> Function()? onRetry;
+  final Future<void> Function(Observation)? onManualRetry;
+  final String? manualRetryId;
 
   @override
   Widget build(BuildContext context) {
@@ -423,9 +516,13 @@ class _ObsList extends StatelessWidget {
         padding: const EdgeInsets.fromLTRB(16, 16, 16, 32),
         itemCount: observations.length,
         itemBuilder: (_, i) => _ObsCard(
+          key: ValueKey('queue-card-${observations[i].id}'),
           obs: observations[i],
           onDelete: onDelete,
           deletingDisabled: deletingDisabled,
+          onRetry: onRetry,
+          onManualRetry: onManualRetry,
+          manualRetryInProgress: manualRetryId == observations[i].id,
         ),
       ),
     );
@@ -436,37 +533,57 @@ class _ObsList extends StatelessWidget {
 
 class _ObsCard extends StatelessWidget {
   const _ObsCard({
+    super.key,
     required this.obs,
     required this.onDelete,
     required this.deletingDisabled,
+    this.onRetry,
+    this.onManualRetry,
+    this.manualRetryInProgress = false,
   });
 
   final Observation obs;
   final Future<void> Function(Observation) onDelete;
   final bool deletingDisabled;
+  final Future<void> Function()? onRetry;
+  final Future<void> Function(Observation)? onManualRetry;
+  final bool manualRetryInProgress;
 
-  Color get _statusColor => switch (obs.syncStatus) {
-        SyncStatus.pending => AppColors.syncPending,
-        SyncStatus.uploading => AppColors.tealLight,
-        SyncStatus.synced => AppColors.syncDone,
-        SyncStatus.failed => AppColors.syncFailed,
-        SyncStatus.needsReview => AppColors.syncFailed,
+  QueueSyncState get _state => queueSyncState(
+        obs,
+        manualRetryInProgress: manualRetryInProgress,
+      );
+
+  Color get _statusColor => switch (_state) {
+        QueueSyncState.notYetSynced => obs.syncStatus == SyncStatus.uploading
+            ? AppColors.tealLight
+            : AppColors.syncPending,
+        QueueSyncState.metadataSyncedPhotoFailed => AppColors.syncFailed,
+        QueueSyncState.laterStepIncomplete => AppColors.syncFailed,
+        QueueSyncState.fullySynced => AppColors.syncDone,
+        QueueSyncState.manualReview => AppColors.syncFailed,
+        QueueSyncState.manualRetryInProgress => AppColors.tealLight,
       };
 
-  String get _statusLabel => switch (obs.syncStatus) {
-        SyncStatus.pending => 'PENDING',
-        SyncStatus.uploading => 'UPLOADING',
-        SyncStatus.synced => 'SYNCED',
-        SyncStatus.failed => 'FAILED',
-        SyncStatus.needsReview => 'NEEDS REVIEW',
+  String get _statusLabel => switch (_state) {
+        QueueSyncState.notYetSynced =>
+          obs.syncStatus == SyncStatus.uploading ? 'UPLOADING' : 'NOT SYNCED',
+        QueueSyncState.metadataSyncedPhotoFailed => 'PHOTO FAILED',
+        QueueSyncState.laterStepIncomplete => 'THUMBNAIL FAILED',
+        QueueSyncState.fullySynced => 'SYNCED',
+        QueueSyncState.manualReview => 'NEEDS REVIEW',
+        QueueSyncState.manualRetryInProgress => 'RETRYING',
       };
 
-  IconData get _statusIcon => switch (obs.syncStatus) {
-        SyncStatus.synced => Icons.cloud_done_rounded,
-        SyncStatus.uploading => Icons.cloud_sync_rounded,
-        SyncStatus.failed => Icons.cloud_off_rounded,
-        SyncStatus.needsReview => Icons.error_outline_rounded,
-        _ => Icons.cloud_upload_outlined,
+  IconData get _statusIcon => switch (_state) {
+        QueueSyncState.fullySynced => Icons.cloud_done_rounded,
+        QueueSyncState.manualReview => Icons.error_outline_rounded,
+        QueueSyncState.manualRetryInProgress => Icons.cloud_sync_rounded,
+        QueueSyncState.metadataSyncedPhotoFailed => Icons.cloud_off_rounded,
+        QueueSyncState.laterStepIncomplete => Icons.cloud_off_rounded,
+        QueueSyncState.notYetSynced => obs.syncStatus == SyncStatus.uploading
+            ? Icons.cloud_sync_rounded
+            : Icons.cloud_upload_outlined,
       };
 
   @override
@@ -505,13 +622,7 @@ class _ObsCard extends StatelessWidget {
                     child: SizedBox(
                       width: 52,
                       height: 52,
-                      child: kIsWeb
-                          ? Image.network(obs.imagePath,
-                              fit: BoxFit.cover,
-                              errorBuilder: (_, __, ___) => _thumb())
-                          : Image.file(File(obs.imagePath),
-                              fit: BoxFit.cover,
-                              errorBuilder: (_, __, ___) => _thumb()),
+                      child: ObservationPhoto(observation: obs),
                     ),
                   ),
                   const SizedBox(width: 12),
@@ -577,6 +688,19 @@ class _ObsCard extends StatelessWidget {
                             '${obs.detections.length} anomaly${obs.detections.length == 1 ? '' : 's'} · ${obs.actor}',
                             style: const TextStyle(
                                 fontWeight: FontWeight.w700, fontSize: 13)),
+                        const SizedBox(height: 4),
+                        Text(
+                          queueStatusMessage(
+                            obs,
+                            manualRetryInProgress: manualRetryInProgress,
+                          ),
+                          key: ValueKey('queue-status-${obs.id}'),
+                          style: TextStyle(
+                            color: _statusColor,
+                            fontSize: 12,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
                         Text(
                             '${obs.latitude.toStringAsFixed(4)}, ${obs.longitude.toStringAsFixed(4)}  ·  '
                             '${DateFormat('dd MMM HH:mm').format(obs.createdAt.toLocal())}',
@@ -587,6 +711,34 @@ class _ObsCard extends StatelessWidget {
                     ),
                   ),
                 ]),
+                if (_state == QueueSyncState.manualReview) ...[
+                  const SizedBox(height: 8),
+                  Align(
+                    alignment: Alignment.centerLeft,
+                    child: TextButton.icon(
+                      onPressed: deletingDisabled || onManualRetry == null
+                          ? null
+                          : () => onManualRetry!(obs),
+                      icon: const Icon(Icons.refresh, size: 16),
+                      label: Text(onManualRetry == null
+                          ? 'Manual retry is unavailable.'
+                          : 'Retry once'),
+                    ),
+                  ),
+                ] else if (onRetry != null &&
+                    (_state == QueueSyncState.metadataSyncedPhotoFailed ||
+                        _state == QueueSyncState.laterStepIncomplete ||
+                        obs.syncStatus == SyncStatus.failed)) ...[
+                  const SizedBox(height: 8),
+                  Align(
+                    alignment: Alignment.centerLeft,
+                    child: TextButton.icon(
+                      onPressed: deletingDisabled ? null : onRetry,
+                      icon: const Icon(Icons.refresh, size: 16),
+                      label: const Text('Retry'),
+                    ),
+                  ),
+                ],
                 if (obs.syncError != null) ...[
                   const SizedBox(height: 8),
                   Container(
@@ -635,8 +787,4 @@ class _ObsCard extends StatelessWidget {
     );
   }
 
-  Widget _thumb() => Container(
-      color: AppColors.offWhite,
-      child: const Icon(Icons.image_not_supported_outlined,
-          color: Colors.black26));
 }

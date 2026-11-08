@@ -7,15 +7,60 @@ import '../models/observation.dart';
 // EXIF orientation — fix rotation before drawing bounding boxes
 // ---------------------------------------------------------------------------
 
+/// Reads the EXIF orientation tag. Missing or malformed metadata returns null.
+int? readExifOrientation(img.Image image) {
+  try {
+    final value = image.exif.imageIfd.orientation;
+    if (value == null) return null;
+    if (value < 1 || value > 8) return null;
+    return value;
+  } catch (_) {
+    return null;
+  }
+}
+
+/// Applies EXIF orientation once. Orientation 1 and missing tags return the
+/// same image object and do not rewrite pixels. A bake failure keeps the
+/// decoded image.
+img.Image orientDecodedImage(img.Image decoded) {
+  final orientation = readExifOrientation(decoded);
+  if (orientation == null || orientation == 1) return decoded;
+  try {
+    return img.bakeOrientation(decoded);
+  } catch (_) {
+    return decoded;
+  }
+}
+
 /// Returns an [img.Image] decoded from [bytes] with EXIF orientation applied.
 ///
 /// This must be called before rendering bounding boxes; otherwise boxes will
-/// be offset relative to the display orientation.
+/// be offset relative to the display orientation. Stretch is unchanged.
 img.Image decodeAndOrient(Uint8List bytes) {
   final decoded = img.decodeImage(bytes);
   if (decoded == null) throw ArgumentError('Cannot decode image bytes');
-  // img.bakeOrientation applies the EXIF rotation/flip and clears the tag.
-  return img.bakeOrientation(decoded);
+  return orientDecodedImage(decoded);
+}
+
+/// Bytes sent to upload. Upright images are returned unchanged so they are
+/// not JPEG-encoded a second time. Rotated images are baked once at quality 95
+/// before the existing WebP upload compression.
+Uint8List bytesForUpload(Uint8List bytes) {
+  img.Image? decoded;
+  try {
+    decoded = img.decodeImage(bytes);
+  } catch (_) {
+    return bytes;
+  }
+  if (decoded == null) return bytes;
+  final orientation = readExifOrientation(decoded);
+  if (orientation == null || orientation == 1) return bytes;
+  try {
+    final oriented = img.bakeOrientation(decoded);
+    return Uint8List.fromList(img.encodeJpg(oriented, quality: 95));
+  } catch (_) {
+    return bytes;
+  }
 }
 
 // ---------------------------------------------------------------------------
@@ -83,8 +128,8 @@ LetterboxResult letterboxProcess(img.Image source, {int inputSize = 640}) {
   final newW = (origW * scale).round();
   final newH = (origH * scale).round();
 
-  final resized = img.copyResize(source, width: newW, height: newH,
-      interpolation: img.Interpolation.linear);
+  final resized = img.copyResize(source,
+      width: newW, height: newH, interpolation: img.Interpolation.linear);
   final padded = img.Image(width: inputSize, height: inputSize, numChannels: 3);
   padded.clear(img.ColorRgb8(114, 114, 114));
 
@@ -110,6 +155,19 @@ LetterboxResult letterboxProcess(img.Image source, {int inputSize = 640}) {
 /// letterboxing (fills unused area with 114-grey, matching Ultralytics default).
 img.Image letterboxResize(img.Image source, int size) =>
     letterboxProcess(source, inputSize: size).image;
+
+/// Locked preprocess for the default Android model `road_damage.tflite` only.
+///
+/// Stretches [source] to [inputSize]×[inputSize]. Aspect ratio is not kept
+/// and there is no gray-114 pad. [letterboxProcess] is the RoadSense path.
+/// The two models are not interchangeable.
+///
+/// Ultralytics training code letterboxes. The `.pt` that was exported to
+/// `road_damage.tflite` is not in this repo, so this function does not switch
+/// the shipped model to letterbox. It freezes the stretch the app already runs.
+img.Image stretchToModelInput(img.Image source, {int inputSize = 640}) {
+  return img.copyResize(source, width: inputSize, height: inputSize);
+}
 
 /// Converts an [img.Image] (typically 640x640) into an NCHW [1, 3, H, W]
 /// Float32List normalized to [0..1] in RGB order.
@@ -144,8 +202,9 @@ List<List<List<List<double>>>> imageToFloat32Tensor(img.Image image) {
   final w = image.width;
   final h = image.height;
   return [
-    List.generate(h, (y) =>
-      List.generate(w, (x) {
+    List.generate(
+      h,
+      (y) => List.generate(w, (x) {
         final px = image.getPixel(x, y);
         return [
           px.rNormalized.toDouble(),
@@ -175,12 +234,12 @@ class PreprocessingResult {
   });
 
   final List<List<List<List<double>>>> tensor;
-  final int    originalWidth;
-  final int    originalHeight;
+  final int originalWidth;
+  final int originalHeight;
   final double scale;
-  final int    padX;
-  final int    padY;
-  final int    inputSize;
+  final int padX;
+  final int padY;
+  final int inputSize;
 
   /// Converts normalised model-output coordinates (relative to the letterboxed
   /// input) back to coordinates normalised to the original image dimensions.
@@ -196,9 +255,9 @@ class PreprocessingResult {
     final ph = nh * inputSize;
 
     // Remove padding
-    final ox = (px - padX) / (originalWidth  * scale);
+    final ox = (px - padX) / (originalWidth * scale);
     final oy = (py - padY) / (originalHeight * scale);
-    final ow = pw / (originalWidth  * scale);
+    final ow = pw / (originalWidth * scale);
     final oh = ph / (originalHeight * scale);
 
     return (
@@ -211,14 +270,15 @@ class PreprocessingResult {
 }
 
 /// Full preprocessing pipeline: decode file → orient → letterbox → tensor.
-Future<PreprocessingResult> preprocessImageFile(File file, {int inputSize = 640}) async {
+Future<PreprocessingResult> preprocessImageFile(File file,
+    {int inputSize = 640}) async {
   final bytes = await file.readAsBytes();
   return preprocessImageBytes(bytes, inputSize: inputSize);
 }
 
 /// Full preprocessing pipeline from raw bytes.
-Future<PreprocessingResult> preprocessImageBytes(
-    Uint8List bytes, {int inputSize = 640}) async {
+Future<PreprocessingResult> preprocessImageBytes(Uint8List bytes,
+    {int inputSize = 640}) async {
   // Run CPU-heavy work off the UI thread
   return compute(_preprocessInIsolate, _PreprocessArgs(bytes, inputSize));
 }
@@ -247,7 +307,7 @@ PreprocessingResult _preprocessInIsolate(_PreprocessArgs args) {
 
   return PreprocessingResult(
     tensor: tensor,
-    originalWidth:  origW,
+    originalWidth: origW,
     originalHeight: origH,
     scale: scale,
     padX: padX,

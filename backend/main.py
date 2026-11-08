@@ -29,12 +29,15 @@ from __future__ import annotations
 import logging
 from datetime import datetime, timezone
 
-from fastapi import FastAPI, HTTPException, Request, status
+from fastapi import FastAPI, HTTPException, Query, Request, status
+from fastapi.encoders import jsonable_encoder
+from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
-from pydantic import BaseModel
+from fastapi.responses import JSONResponse
+from pydantic import BaseModel, Field
 
 from schemas import ObservationUpload, HealthResponse, StatsResponse
-from supabase_store import SupabaseNotConfigured, SupabaseStore
+from supabase_store import SupabaseNotConfigured, SupabaseStore, redact_secrets
 
 # Server-side inference — optional (degrades gracefully if onnxruntime not installed)
 try:
@@ -63,6 +66,27 @@ logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger("tariqmap")
 
 store = SupabaseStore()
+
+
+def _scrub_validation_error(error: dict) -> dict:
+    """Keep the standard detail fields, but do not echo images or tokens."""
+    item = dict(error)
+    loc = item.get("loc") or ()
+    raw = item.get("input")
+    sensitive = "image_b64" in loc
+    if isinstance(raw, str) and (sensitive or len(raw) > 256 or redact_secrets(raw) != raw):
+        item["input"] = "[redacted]"
+    return item
+
+
+@app.exception_handler(RequestValidationError)
+async def hide_sensitive_validation_input(
+    request: Request,
+    exc: RequestValidationError,
+) -> JSONResponse:
+    del request
+    details = [_scrub_validation_error(err) for err in jsonable_encoder(exc.errors())]
+    return JSONResponse(status_code=422, content={"detail": details})
 
 
 # ---------------------------------------------------------------------------
@@ -94,8 +118,11 @@ async def create_observation(
     except SupabaseNotConfigured as exc:
         raise HTTPException(status_code=503, detail=str(exc)) from exc
     except RuntimeError as exc:
-        logger.exception("Supabase observation write failed")
-        raise HTTPException(status_code=502, detail=str(exc)) from exc
+        logger.warning("Supabase observation write failed")
+        raise HTTPException(
+            status_code=502,
+            detail="The observation store rejected the request",
+        ) from exc
     logger.info("Supabase observation sync: id=%s status=%s", body.id, result["status"])
     return result
 
@@ -108,14 +135,18 @@ async def create_observation(
 def list_observations(
     actor: str | None = None,
     sync_status: str | None = None,
-    limit: int = 100,
+    limit: int = Query(default=100, ge=1, le=500),
 ) -> list[dict]:
     try:
         return store.list_observations(actor, limit)
     except SupabaseNotConfigured as exc:
-        raise HTTPException(status_code=503, detail=str(exc)) from exc
+        raise HTTPException(status_code=503, detail="Supabase is not configured") from exc
     except RuntimeError as exc:
-        raise HTTPException(status_code=502, detail=str(exc)) from exc
+        logger.warning("Supabase observation list failed")
+        raise HTTPException(
+            status_code=502,
+            detail="The observation store rejected the request",
+        ) from exc
 
 
 @app.get("/v1/observations/{obs_id}", tags=["observations"])
@@ -125,7 +156,11 @@ def get_observation(obs_id: str) -> dict:
     except SupabaseNotConfigured as exc:
         raise HTTPException(status_code=503, detail=str(exc)) from exc
     except RuntimeError as exc:
-        raise HTTPException(status_code=502, detail=str(exc)) from exc
+        logger.warning("Supabase observation read failed")
+        raise HTTPException(
+            status_code=502,
+            detail="The observation store rejected the request",
+        ) from exc
     if obs is None:
         raise HTTPException(status_code=404, detail=f"Observation not found: {obs_id}")
     return obs
@@ -137,8 +172,8 @@ def get_observation(obs_id: str) -> dict:
 
 class DetectRequest(BaseModel):
     """Request body for POST /v1/detect."""
-    image_b64: str
-    """Base64-encoded JPEG or PNG image bytes."""
+    image_b64: str = Field(min_length=16, max_length=12_000_000)
+    """Base64-encoded JPEG or PNG image bytes. Not logged."""
     agents: list[str] | None = None
     """Subset of agents to run ('cracks', 'pavement', 'surface').
     Defaults to all agents with available ONNX models."""
@@ -174,8 +209,8 @@ async def detect(body: DetectRequest) -> dict:
     try:
         result = detect_image(body.image_b64, agents=body.agents)
     except Exception as exc:
-        logger.exception("Inference error: %s", exc)
-        raise HTTPException(status_code=500, detail=f"Inference error: {exc}") from exc
+        logger.warning("Inference failed")
+        raise HTTPException(status_code=500, detail="Inference failed") from exc
 
     logger.info(
         "Detect: total=%d latency=%.1fms agents=%s",
@@ -202,7 +237,11 @@ def stats() -> StatsResponse:
     except SupabaseNotConfigured as exc:
         raise HTTPException(status_code=503, detail=str(exc)) from exc
     except RuntimeError as exc:
-        raise HTTPException(status_code=502, detail=str(exc)) from exc
+        logger.warning("Supabase stats read failed")
+        raise HTTPException(
+            status_code=502,
+            detail="The observation store rejected the request",
+        ) from exc
 
 
 # ---------------------------------------------------------------------------

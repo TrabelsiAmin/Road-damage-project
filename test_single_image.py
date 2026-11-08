@@ -7,6 +7,9 @@ import ai_edge_litert.interpreter as tflite
 MODEL_PATH = "app/assets/models/road_damage.tflite"
 IMAGE_PATH = r"C:\manus\TariqMap\Global_Potholes_Dataset-image\images\0a90c98c-345f-4a1a-a5a7-26010f1d356f.jpg"
 OUTPUT_DIR = "inference_results"
+# UNPROVEN display strings. Android uses D00, D10, D20, D40 for the same
+# four output channels. Equivalence is not proven. Do not rename app labels
+# from this script. See evaluation/android_model_audit/CLASS_MAPPING.md.
 CLASS_NAMES = ['Crack', 'Pothole', 'Rutting', 'Uneven-Surface']
 INPUT_SIZE = 640
 CONF_THRESHOLD = 0.25

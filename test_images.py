@@ -9,6 +9,12 @@ import glob
 MODEL_PATH = "app/assets/models/road_damage.tflite"
 IMAGE_DIR = "Global_Potholes_Dataset-image"
 OUTPUT_DIR = "inference_results"
+# UNPROVEN display strings. Do not treat these as the Android class contract.
+# Flutter road_damage.tflite uses index order D00, D10, D20, D40
+# (app/lib/services/tflite_agent_runner.dart). Nothing in the TFLite metadata
+# or in a labeled export proves that index 0..3 equals
+# Crack / Pothole / Rutting / Uneven-Surface. These strings are left unchanged
+# so old result images stay comparable. Do not relabel the app from this list.
 CLASS_NAMES = ['Crack', 'Pothole', 'Rutting', 'Uneven-Surface']
 INPUT_SIZE = 640
 CONF_THRESHOLD = 0.25

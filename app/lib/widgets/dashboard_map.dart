@@ -4,6 +4,7 @@ import 'package:flutter_map/flutter_map.dart';
 import 'package:latlong2/latlong.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../core/app_colors.dart';
+import '../core/class_codes.dart';
 import '../core/constants.dart';
 import '../models/observation.dart';
 import '../services/observation_repository.dart';
@@ -551,14 +552,17 @@ class _ObservationCard extends StatelessWidget {
         (obs['anomaly_type'] != null &&
             TariqMapConstants.allCodes.contains(obs['anomaly_type']));
 
+    final storedClass = obs['dominant_class']?.toString();
     final classCode = hasAnomaly
-        ? (obs['dominant_class']?.toString() ?? 'D40')
+        ? displayClassCode(storedClass)
         : 'NONE';
-    final classLabel = hasAnomaly
-        ? TariqMapConstants.labelFor(classCode)
-        : 'No anomaly detected';
-    final color = hasAnomaly
-        ? AppColors.forClassCode(classCode)
+    final classLabel = !hasAnomaly
+        ? 'No anomaly detected'
+        : isKnownClassCode(storedClass)
+            ? TariqMapConstants.labelFor(storedClass!)
+            : unknownClassLabel;
+    final color = hasAnomaly && isKnownClassCode(storedClass)
+        ? AppColors.forClassCode(storedClass!)
         : Colors.grey.shade600;
 
     final priorityScore = (obs['priority_score'] as num?)?.toDouble() ?? 0.0;
@@ -909,7 +913,7 @@ class _ObservationImageSectionState extends State<_ObservationImageSection> {
             final map = Map<String, dynamic>.from(d as Map);
             return Detection(
               agent: 'road_damage',
-              classCode: map['class_code']?.toString() ?? 'D40',
+              classCode: map['class_code']?.toString() ?? '',
               confidence: ((map['confidence'] as num?) ?? 0.0).toDouble(),
               box: BoundingBox(
                 x: ((map['box_x'] as num?) ?? 0.0).toDouble(),

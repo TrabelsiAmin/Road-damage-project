@@ -6,6 +6,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:tariqmap/core/supabase_config.dart';
 import 'package:tariqmap/models/observation.dart';
 import 'package:tariqmap/services/observation_repository.dart';
+import 'package:tariqmap/services/sync_plan.dart';
 import 'package:tariqmap/services/thumbnail_service.dart';
 
 import 'package:uuid/uuid.dart';
@@ -17,6 +18,8 @@ class MockPublicThumbnailClient {
 
   bool simulateStorage409 = false;
   bool simulateMedia409 = false;
+  ConfirmedStorageObject? confirmedStorage;
+  Map<String, Object?>? storedMediaRow;
   bool simulateStorageFailure = false;
   bool simulateMediaFailure = false;
 
@@ -43,7 +46,17 @@ class MockPublicThumbnailClient {
     }
 
     if (simulateStorage409) {
-      // 409 treated as success
+      final decision = decideRemoteConflict(RemoteConflictQuery.storage(
+        expectedBucket: SupabaseCfg.publicPhotosBucket,
+        expectedPath: storagePath,
+        confirmedBucket: confirmedStorage?.bucket,
+        confirmedPath: confirmedStorage?.path,
+      ));
+      if (decision != RemoteConflictDecision.accept) {
+        throw StateError(
+          'Storage conflict is not the intended object at ${SupabaseCfg.publicPhotosBucket}/$storagePath',
+        );
+      }
     } else {
       publicStorageObjects[storagePath] = thumbnailBytes;
     }
@@ -61,9 +74,25 @@ class MockPublicThumbnailClient {
       throw Exception('Simulated media_files Check Constraint Violation (HTTP 23514)');
     }
 
-    final mediaId = const Uuid().v5(Namespace.url.value, '$observationId:thumbnail');
+    final mediaId = stableThumbnailMediaId(observationId);
     if (simulateMedia409) {
-      // 409 conflict treated as success
+      final decision = decideRemoteConflict(RemoteConflictQuery.row(
+        childId: mediaId,
+        observationId: observationId,
+        expectedIdentity: {
+          'id': mediaId,
+          'observation_id': observationId,
+          'bucket': SupabaseCfg.publicPhotosBucket,
+          'storage_path': storagePath,
+          'media_type': 'thumbnail',
+        },
+        storedRow: storedMediaRow,
+      ));
+      if (decision != RemoteConflictDecision.accept) {
+        throw StateError(
+          'Unique conflict does not match the stored media_files row',
+        );
+      }
     } else {
       mediaFilesRows.add({
         'id': mediaId,
@@ -235,15 +264,91 @@ void main() {
 
     test('409 Conflict in storage or media_files is treated as success', () async {
       const obsId = 'obs-conflict-409';
+      final storagePath = publicThumbnailObjectPath(obsId);
+      final mediaId = stableThumbnailMediaId(obsId);
       mockClient.simulateStorage409 = true;
       mockClient.simulateMedia409 = true;
+      mockClient.confirmedStorage = ConfirmedStorageObject(
+        bucket: SupabaseCfg.publicPhotosBucket,
+        path: storagePath,
+      );
+      mockClient.storedMediaRow = {
+        'id': mediaId,
+        'observation_id': obsId,
+        'bucket': SupabaseCfg.publicPhotosBucket,
+        'storage_path': storagePath,
+        'media_type': 'thumbnail',
+      };
 
       final url = await mockClient.uploadPublicThumbnail(
         observationId: obsId,
         thumbnailBytes: dummyThumbnailBytes,
       );
 
-      expect(url, isNotNull, reason: '409 Conflict must be treated as success without throwing');
+      expect(url, isNotNull,
+          reason: 'A confirmed same-object 409 is success without throwing');
+    });
+
+    test('409 for a different thumbnail object fails', () async {
+      const obsId = 'obs-conflict-409-other';
+      mockClient.simulateStorage409 = true;
+      mockClient.confirmedStorage = const ConfirmedStorageObject(
+        bucket: SupabaseCfg.publicPhotosBucket,
+        path: 'someone-else/other.webp',
+      );
+
+      expect(
+        () => mockClient.uploadPublicThumbnail(
+          observationId: obsId,
+          thumbnailBytes: dummyThumbnailBytes,
+        ),
+        throwsA(isA<StateError>()),
+      );
+    });
+
+    test('unconfirmed thumbnail 409 fails', () async {
+      mockClient.simulateStorage409 = true;
+      expect(
+        () => mockClient.uploadPublicThumbnail(
+          observationId: 'obs-conflict-409-none',
+          thumbnailBytes: dummyThumbnailBytes,
+        ),
+        throwsA(isA<StateError>()),
+      );
+    });
+
+    test('matching media_files identity continues and a mismatch fails', () async {
+      const obsId = 'obs-media-identity';
+      final storagePath = publicThumbnailObjectPath(obsId);
+      final mediaId = stableThumbnailMediaId(obsId);
+      mockClient.simulateMedia409 = true;
+      mockClient.storedMediaRow = {
+        'id': mediaId,
+        'observation_id': obsId,
+        'bucket': SupabaseCfg.publicPhotosBucket,
+        'storage_path': storagePath,
+        'media_type': 'thumbnail',
+      };
+      final url = await mockClient.uploadPublicThumbnail(
+        observationId: obsId,
+        thumbnailBytes: dummyThumbnailBytes,
+      );
+      expect(url, isNotNull);
+
+      mockClient.storedMediaRow = {
+        'id': mediaId,
+        'observation_id': 'other-observation',
+        'bucket': SupabaseCfg.publicPhotosBucket,
+        'storage_path': storagePath,
+        'media_type': 'thumbnail',
+      };
+      expect(
+        () => mockClient.uploadPublicThumbnail(
+          observationId: obsId,
+          thumbnailBytes: dummyThumbnailBytes,
+        ),
+        throwsA(isA<StateError>()),
+      );
     });
 
     test('storage failure or media_files insert error is NOT swallowed and rethrows', () async {

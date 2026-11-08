@@ -53,8 +53,9 @@ describe('Source Code UTF-8 Encoding Verification', () => {
     for (const pattern of BAD_PATTERNS) {
       expect(pattern.test(content)).toBe(false);
     }
-    expect(content).toContain('Fissure longitudinale');
-    expect(content).toContain('Fissure transversale');
-    expect(content).toContain('Nid-de-poule');
+    expect(content).toContain('Non confirmé');
+    expect(content).toContain('Indisponible');
+    expect(content).not.toContain('Nid-de-poule');
+    expect(content).not.toContain('Fissure longitudinale');
   });
 });

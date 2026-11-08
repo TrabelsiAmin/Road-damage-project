@@ -1,5 +1,4 @@
 import 'dart:io';
-import 'dart:typed_data';
 import 'package:flutter/foundation.dart';
 import 'package:flutter_image_compress/flutter_image_compress.dart';
 import 'package:path_provider/path_provider.dart';
@@ -28,31 +27,30 @@ class ImageCompressor {
   static Future<CompressedImage> compressToWebP(
     File file, {
     int quality = defaultQuality,
-    int maxDim  = maxDimension,
+    int maxDim = maxDimension,
   }) async {
     try {
       final Uint8List? compressed = await FlutterImageCompress.compressWithFile(
         file.absolute.path,
-        minWidth:  maxDim,
+        minWidth: maxDim,
         minHeight: maxDim,
-        quality:   quality,
-        format:    CompressFormat.webp,
-        keepExif:  false,   // strip GPS/EXIF metadata — not needed in the DB
+        quality: quality,
+        format: CompressFormat.webp,
+        keepExif: false, // strip GPS/EXIF metadata — not needed in the DB
       );
 
       if (compressed != null && compressed.isNotEmpty) {
         final originalSize = await file.length();
         final saving = ((1 - compressed.length / originalSize) * 100).round();
-        debugPrint(
-          '[ImageCompressor] ${p.basename(file.path)}: '
-          '${_kb(originalSize)} → ${_kb(compressed.length)} '
-          '(-$saving%)');
+        debugPrint('[ImageCompressor] ${p.basename(file.path)}: '
+            '${_kb(originalSize)} → ${_kb(compressed.length)} '
+            '(-$saving%)');
 
         return CompressedImage(
-          bytes:    compressed,
+          bytes: compressed,
           mimeType: 'image/webp',
           extension: 'webp',
-          originalSizeBytes:   originalSize,
+          originalSizeBytes: originalSize,
           compressedSizeBytes: compressed.length,
         );
       }
@@ -63,10 +61,10 @@ class ImageCompressor {
     // Fallback: return original bytes
     final bytes = await file.readAsBytes();
     return CompressedImage(
-      bytes:    bytes,
+      bytes: bytes,
       mimeType: 'image/jpeg',
       extension: 'jpg',
-      originalSizeBytes:   bytes.length,
+      originalSizeBytes: bytes.length,
       compressedSizeBytes: bytes.length,
     );
   }
@@ -75,27 +73,25 @@ class ImageCompressor {
   static Future<CompressedImage> compressBytes(
     Uint8List input, {
     int quality = defaultQuality,
-    int maxDim  = maxDimension,
+    int maxDim = maxDimension,
   }) async {
     try {
-      final Uint8List? compressed =
-          await FlutterImageCompress.compressWithList(
+      final Uint8List compressed = await FlutterImageCompress.compressWithList(
         input,
-        minWidth:  maxDim,
+        minWidth: maxDim,
         minHeight: maxDim,
-        quality:   quality,
-        format:    CompressFormat.webp,
-        keepExif:  false,
+        quality: quality,
+        format: CompressFormat.webp,
+        keepExif: false,
       );
-      if (compressed != null && compressed.isNotEmpty) {
-        debugPrint(
-          '[ImageCompressor] bytes: ${_kb(input.length)} → '
-          '${_kb(compressed.length)}');
+      if (compressed.isNotEmpty) {
+        debugPrint('[ImageCompressor] bytes: ${_kb(input.length)} → '
+            '${_kb(compressed.length)}');
         return CompressedImage(
-          bytes:    compressed,
+          bytes: compressed,
           mimeType: 'image/webp',
           extension: 'webp',
-          originalSizeBytes:   input.length,
+          originalSizeBytes: input.length,
           compressedSizeBytes: compressed.length,
         );
       }
@@ -103,10 +99,10 @@ class ImageCompressor {
       debugPrint('[ImageCompressor] Byte compression failed: $e');
     }
     return CompressedImage(
-      bytes:    input,
+      bytes: input,
       mimeType: 'image/jpeg',
       extension: 'jpg',
-      originalSizeBytes:   input.length,
+      originalSizeBytes: input.length,
       compressedSizeBytes: input.length,
     );
   }
@@ -118,9 +114,9 @@ class ImageCompressor {
     int quality = defaultQuality,
   }) async {
     final result = await compressToWebP(source, quality: quality);
-    final dir    = await getTemporaryDirectory();
-    final name   = '${p.basenameWithoutExtension(source.path)}.webp';
-    final out    = File(p.join(dir.path, name));
+    final dir = await getTemporaryDirectory();
+    final name = '${p.basenameWithoutExtension(source.path)}.webp';
+    final out = File(p.join(dir.path, name));
     await out.writeAsBytes(result.bytes);
     return out;
   }
@@ -139,16 +135,14 @@ class CompressedImage {
   });
 
   final Uint8List bytes;
-  final String    mimeType;
-  final String    extension;
-  final int       originalSizeBytes;
-  final int       compressedSizeBytes;
+  final String mimeType;
+  final String extension;
+  final int originalSizeBytes;
+  final int compressedSizeBytes;
 
   /// How much space was saved (0.0–1.0).
   double get compressionRatio =>
-      originalSizeBytes > 0
-          ? 1 - (compressedSizeBytes / originalSizeBytes)
-          : 0;
+      originalSizeBytes > 0 ? 1 - (compressedSizeBytes / originalSizeBytes) : 0;
 
   int get savedBytes => originalSizeBytes - compressedSizeBytes;
 }

@@ -3,25 +3,89 @@
 /// IMPORTANT SECURITY NOTE:
 /// - [anonKey] is the Supabase "anon/public" key. It is safe to embed in
 ///   client code; it is governed by Row Level Security (RLS) policies.
-/// - The service-role secret (sb_secret_…) MUST remain server-side only
-///   (backend/.env) and must NEVER appear in the Flutter app.
+/// - The values below are the public project URL and the public anon key.
+///   `--dart-define=SUPABASE_URL` and `--dart-define=SUPABASE_ANON_KEY`
+///   override them. The literals stay so a local run without defines still
+///   starts. Do not replace them with an empty string.
+/// - No service-role key is stored in the Flutter app. The service-role
+///   secret MUST remain server-side only (backend process environment)
+///   and must NEVER appear in the Flutter app or in logs.
 library tariqmap.supabase_config;
+
+import 'dart:convert';
+
+import 'package:flutter/foundation.dart';
 
 class SupabaseCfg {
   SupabaseCfg._();
 
   // ── Project credentials ────────────────────────────────────────────────────
 
-  /// Supabase project URL.
-  static const String url = 'https://lendqcjihusqkmxansbl.supabase.co';
+  /// Supabase project URL. Override with --dart-define=SUPABASE_URL=...
+  /// Release builds do not use the debug fallback.
+  static const String _envUrl = String.fromEnvironment('SUPABASE_URL');
 
-  /// Supabase anon / public key (safe for client bundles).
-  /// Obtain from: Supabase Dashboard → Settings → API → anon public.
-  /// This is NOT the service-role secret.
-  /// IMPORTANT: Replace the placeholder below with your real anon key.
-  static const String anonKey =
+  /// Supabase anon / public key. Override with --dart-define=SUPABASE_ANON_KEY=...
+  /// The literal is used only when [kDebugMode] is true so `flutter run` still
+  /// starts. A release build without the define fails in [assertPublicConfig]
+  /// and does not log the key. This is not a service-role secret.
+  static const String _envKey = String.fromEnvironment('SUPABASE_ANON_KEY');
+
+  static const String _debugUrl = 'https://lendqcjihusqkmxansbl.supabase.co';
+  static const String _debugKey =
       'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImxlbmRxY2ppaHVzcWtteGFuc2JsIiwicm9sZSI6ImFub24iLCJpYXQiOjE3OTAyODA3ODYsImV4cCI6MjEwNTg1Njc4Nn0.F1FS2HZNf7qEbTx14WBSAOHeCWTGsA5OMZghgw_YNNs';
 
+  static String get url {
+    final fromEnv = _envUrl.trim();
+    if (fromEnv.isNotEmpty) return fromEnv;
+    if (kDebugMode) return _debugUrl;
+    return '';
+  }
+
+  static String get anonKey {
+    final fromEnv = _envKey.trim();
+    if (fromEnv.isNotEmpty) return fromEnv;
+    if (kDebugMode) return _debugKey;
+    return '';
+  }
+
+  /// Fails startup when the public config is empty or is a service-role key.
+  /// The key value is not included in the error.
+  static void assertPublicConfig() {
+    final projectUrl = url.trim();
+    final key = anonKey.trim();
+    if (projectUrl.isEmpty || !projectUrl.startsWith('https://')) {
+      throw StateError(
+        'Supabase URL is missing. Pass --dart-define=SUPABASE_URL=https://...',
+      );
+    }
+    if (key.isEmpty || key.length < 20) {
+      throw StateError(
+        'Supabase anon key is missing. Pass --dart-define=SUPABASE_ANON_KEY=... '
+        'The value is not logged.',
+      );
+    }
+    if (_jwtRole(key) == 'service_role') {
+      throw StateError(
+        'Refusing to start: the Flutter client must not use a service-role key.',
+      );
+    }
+  }
+
+  static String? _jwtRole(String token) {
+    try {
+      final parts = token.split('.');
+      if (parts.length < 2) return null;
+      var payload = parts[1];
+      final pad = payload.length % 4;
+      if (pad > 0) payload += '=' * (4 - pad);
+      final json = utf8.decode(base64Url.decode(payload));
+      final match = RegExp(r'"role"\s*:\s*"([^"]+)"').firstMatch(json);
+      return match?.group(1);
+    } catch (_) {
+      return null;
+    }
+  }
 
   // ── Storage buckets ────────────────────────────────────────────────────────
 
@@ -34,10 +98,9 @@ class SupabaseCfg {
   // ── Database tables ────────────────────────────────────────────────────────
 
   static const String tableObservations = 'observations';
-  static const String tableLocations    = 'locations';
-  static const String tableAgentRuns    = 'agent_runs';
-  static const String tableDetections   = 'detections';
+  static const String tableLocations = 'locations';
+  static const String tableAgentRuns = 'agent_runs';
+  static const String tableDetections = 'detections';
   static const String tableSyncReceipts = 'sync_receipts';
-  static const String tableMediaFiles   = 'media_files';
+  static const String tableMediaFiles = 'media_files';
 }
-

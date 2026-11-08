@@ -91,7 +91,7 @@ void main() {
       final restored = await service.getSelectedOrganization();
       expect(restored, isNull, reason: 'Invalid or unknown org ID should not be accepted');
 
-      final fakeOrg = const Organization(
+      const fakeOrg = Organization(
         id: 'bad-uuid-1234',
         name: 'Hacked Org',
         code: 'HACK',
@@ -101,7 +101,7 @@ void main() {
     });
 
     test('6. Canonical list contains all required Tunisian road authorities', () {
-      final canonical = Organization.canonicalList;
+      const canonical = Organization.canonicalList;
       expect(canonical.length, equals(3));
 
       final codes = canonical.map((o) => o.code).toList();

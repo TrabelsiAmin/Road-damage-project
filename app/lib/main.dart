@@ -7,14 +7,25 @@ import 'screens/home_screen.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
+
   // Lock orientation to portrait (road inspection is portrait-first)
-  await SystemChrome.setPreferredOrientations([
-    DeviceOrientation.portraitUp,
-    DeviceOrientation.portraitDown,
-  ]);
+  try {
+    await SystemChrome.setPreferredOrientations([
+      DeviceOrientation.portraitUp,
+      DeviceOrientation.portraitDown,
+    ]);
+  } catch (e) {
+    debugPrint('[main] setPreferredOrientations failed: $e');
+  }
+
   // Initialize Supabase — required for direct mobile → Supabase Storage uploads.
   // The anon key in SupabaseCfg is safe for client bundles; it is governed by RLS.
-  await SupabaseService.initialize();
+  try {
+    await SupabaseService.initialize();
+  } catch (e, st) {
+    debugPrint('[main] SupabaseService.initialize failed: $e\n$st');
+  }
+
   runApp(const TariqMapApp());
 }
 

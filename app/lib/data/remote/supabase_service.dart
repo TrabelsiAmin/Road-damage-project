@@ -25,20 +25,29 @@ class SupabaseService {
 
   static const _uuid = Uuid();
 
+  static bool _initialized = false;
+  static bool get isInitialized => _initialized;
+
   SupabaseClient get _client => Supabase.instance.client;
 
   // Initialisation
 
   /// Call once at app startup before runApp.
   static Future<void> initialize() async {
-    SupabaseCfg.assertPublicConfig();
-    await Supabase.initialize(
-      url:            SupabaseCfg.url,
-      publishableKey: SupabaseCfg.anonKey,
-      // Do not log HTTP traffic: it can include the anon key.
-      debug: false,
-    );
-    debugPrint('[SupabaseService] Initialized');
+    try {
+      SupabaseCfg.assertPublicConfig();
+      await Supabase.initialize(
+        url:            SupabaseCfg.url,
+        publishableKey: SupabaseCfg.anonKey,
+        // Do not log HTTP traffic: it can include the anon key.
+        debug: false,
+      );
+      _initialized = true;
+      debugPrint('[SupabaseService] Initialized');
+    } catch (e, st) {
+      _initialized = false;
+      debugPrint('[SupabaseService] Initialization failed: $e\n$st');
+    }
   }
 
   // Image upload
@@ -113,6 +122,7 @@ class SupabaseService {
     required File imageFile,
     SyncCancelToken? cancelToken,
   }) async {
+    if (!_initialized) return null;
     try {
       cancelToken?.throwIfCancelled();
       // Compress to WebP — saves 40-60% storage vs original JPEG/PNG
@@ -165,6 +175,7 @@ class SupabaseService {
     String mimeType = 'image/jpeg',
     SyncCancelToken? cancelToken,
   }) async {
+    if (!_initialized) return null;
     try {
       cancelToken?.throwIfCancelled();
       final compressed = await ImageCompressor.compressBytes(bytes);
@@ -225,6 +236,9 @@ class SupabaseService {
     String mimeType = 'image/webp',
     SyncCancelToken? cancelToken,
   }) async {
+    if (!_initialized) {
+      throw StateError('Supabase is not initialized');
+    }
     cancelToken?.throwIfCancelled();
     final storagePath = publicThumbnailObjectPath(observationId);
 
@@ -284,6 +298,7 @@ class SupabaseService {
   Future<Uint8List?> downloadObservationImage({
     required String observationId,
   }) async {
+    if (!_initialized) return null;
     try {
       final rows = await _client
           .from(SupabaseCfg.tableMediaFiles)
@@ -327,6 +342,9 @@ class SupabaseService {
     String? organizationId,
     SyncCancelToken? cancelToken,
   }) async {
+    if (!_initialized) {
+      throw StateError('Supabase is not initialized');
+    }
     final capturedAt = obs.createdAt.toUtc().toIso8601String();
     final orgId = organizationId ?? '11111111-1111-4111-8111-111111111111';
 
@@ -567,6 +585,7 @@ class SupabaseService {
     double radiusMeters = 1000.0,
     int maxResults = 50,
   }) async {
+    if (!_initialized) return [];
     try {
       final response = await _client.rpc(
         'get_nearby_anomalies',

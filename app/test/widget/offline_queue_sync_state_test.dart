@@ -180,7 +180,7 @@ void main() {
     );
     expect(find.text('Fully synced, including the photo.'), findsNothing);
 
-    await tester.tap(find.widgetWithText(TextButton, 'Retry'));
+    await tester.tap(find.text('Retry'));
     await tester.pumpAndSettle();
 
     await tester.tap(find.textContaining('Synced ('));

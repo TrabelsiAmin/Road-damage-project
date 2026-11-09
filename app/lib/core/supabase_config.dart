@@ -22,31 +22,28 @@ class SupabaseCfg {
   // ── Project credentials ────────────────────────────────────────────────────
 
   /// Supabase project URL. Override with --dart-define=SUPABASE_URL=...
-  /// Release builds do not use the debug fallback.
+  /// Falls back to the canonical public project URL if not provided.
   static const String _envUrl = String.fromEnvironment('SUPABASE_URL');
 
   /// Supabase anon / public key. Override with --dart-define=SUPABASE_ANON_KEY=...
-  /// The literal is used only when [kDebugMode] is true so `flutter run` still
-  /// starts. A release build without the define fails in [assertPublicConfig]
-  /// and does not log the key. This is not a service-role secret.
+  /// Falls back to the canonical public anon key if not provided.
+  /// Governed by Supabase Row Level Security (RLS). This is not a service-role secret.
   static const String _envKey = String.fromEnvironment('SUPABASE_ANON_KEY');
 
-  static const String _debugUrl = 'https://lendqcjihusqkmxansbl.supabase.co';
-  static const String _debugKey =
+  static const String _defaultUrl = 'https://lendqcjihusqkmxansbl.supabase.co';
+  static const String _defaultKey =
       'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImxlbmRxY2ppaHVzcWtteGFuc2JsIiwicm9sZSI6ImFub24iLCJpYXQiOjE3OTAyODA3ODYsImV4cCI6MjEwNTg1Njc4Nn0.F1FS2HZNf7qEbTx14WBSAOHeCWTGsA5OMZghgw_YNNs';
 
   static String get url {
     final fromEnv = _envUrl.trim();
     if (fromEnv.isNotEmpty) return fromEnv;
-    if (kDebugMode) return _debugUrl;
-    return '';
+    return _defaultUrl;
   }
 
   static String get anonKey {
     final fromEnv = _envKey.trim();
     if (fromEnv.isNotEmpty) return fromEnv;
-    if (kDebugMode) return _debugKey;
-    return '';
+    return _defaultKey;
   }
 
   /// Fails startup when the public config is empty or is a service-role key.

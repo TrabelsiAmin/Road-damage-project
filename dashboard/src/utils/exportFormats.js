@@ -193,6 +193,45 @@ export function exportToExcelTsv(observations, filename = 'tariqmap-export.tsv')
 /**
  * Triggers browser download of GeoJSON.
  */
+function publicCsvCell(value) {
+  const text = value == null ? '' : String(value);
+  if (/[;"\r\n]/.test(text)) return `"${text.replace(/"/g, '""')}"`;
+  return text;
+}
+
+function formatCellCenter(value) {
+  const number = Number(value);
+  if (!Number.isFinite(number)) return '';
+  return number.toFixed(3);
+}
+
+/**
+ * Public export. Counts and coarse cell centers only.
+ * Observation ids and measured coordinates are not accepted as columns.
+ */
+export function generatePublicAggregateCsv(summary = [], cells = []) {
+  const lines = ['anomaly_type;priority_band;open_count;repaired_count'];
+  summary.forEach((row) => {
+    lines.push([
+      publicCsvCell(row.anomaly_type),
+      publicCsvCell(row.priority_band),
+      Number(row.open_count) || 0,
+      Number(row.repaired_count) || 0,
+    ].join(';'));
+  });
+  lines.push('');
+  lines.push('centre_maille_lat;centre_maille_lng;report_count;dominant_class');
+  cells.forEach((cell) => {
+    lines.push([
+      formatCellCenter(cell.cell_lat),
+      formatCellCenter(cell.cell_lng),
+      Number(cell.report_count) || 0,
+      publicCsvCell(cell.dominant_class),
+    ].join(';'));
+  });
+  return lines.join('\r\n');
+}
+
 export function exportToGeoJson(observations, filename = 'tariqmap-sig.geojson') {
   const geojson = generateGeoJson(observations);
   downloadFile(JSON.stringify(geojson, null, 2), filename, 'application/geo+json;charset=utf-8;');

@@ -21,8 +21,6 @@ export function DashboardShell({
   onLogout,
   lang = 'fr',
   onToggleLang,
-  theme = 'light',
-  onToggleTheme,
   children,
 }) {
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
@@ -45,8 +43,6 @@ export function DashboardShell({
         onLogout={onLogout}
         lang={lang}
         onToggleLang={onToggleLang}
-        theme={theme}
-        onToggleTheme={onToggleTheme}
       />
 
       {/* Main Viewport */}

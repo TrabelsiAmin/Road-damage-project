@@ -3,6 +3,7 @@ import {
   buildExportRows,
   generateCsvString,
   generateGeoJson,
+  generatePublicAggregateCsv,
 } from './exportFormats';
 
 describe('exportFormats', () => {
@@ -49,5 +50,22 @@ describe('exportFormats', () => {
     expect(geoJson.features[0].geometry.coordinates[0]).toBeCloseTo(10.1815);
     expect(geoJson.features[0].geometry.coordinates[1]).toBeCloseTo(36.8065);
     expect(geoJson.features[0].properties.class_code).toBe('D40');
+  });
+
+  it('public aggregate csv omits observation ids and measured coordinates', () => {
+    const csv = generatePublicAggregateCsv(
+      [{ anomaly_type: 'D40', priority_band: 'high', open_count: 2, repaired_count: 1 }],
+      [{ cell_lat: 36.805, cell_lng: 10.185, report_count: 2, dominant_class: 'D40' }]
+    );
+    expect(csv).toContain('anomaly_type;priority_band;open_count;repaired_count');
+    expect(csv).toContain('centre_maille_lat;centre_maille_lng;report_count;dominant_class');
+    expect(csv).toContain('D40;high;2;1');
+    expect(csv).toContain('36.805;10.185;2;D40');
+    expect(csv).not.toContain('obs-test-1');
+    expect(csv).not.toContain('cccccccc-cccc-4ccc-8ccc-ccccccccccc1');
+    expect(csv).not.toContain('36.80651');
+    expect(csv).not.toContain('10.18151');
+    expect(csv.toLowerCase()).not.toContain('device');
+    expect(csv.toLowerCase()).not.toContain('budget');
   });
 });

@@ -15,8 +15,6 @@ import {
   LogIn,
   LogOut,
   Globe,
-  Sun,
-  Moon,
   X,
 } from 'lucide-react';
 
@@ -95,8 +93,6 @@ export function Sidebar({
   onLogout,
   lang = 'fr',
   onToggleLang,
-  theme = 'light',
-  onToggleTheme,
 }) {
   const handleNavClick = (tabId) => {
     onSelectNavTab(tabId);
@@ -250,7 +246,6 @@ export function Sidebar({
             )}
           </div>
 
-          {/* Quick Utility Actions (Lang & Theme Switcher) */}
           <div className="tm-sidebar-controls-row">
             <button
               type="button"
@@ -260,28 +255,7 @@ export function Sidebar({
               aria-label="Changer de langue"
             >
               <Globe size={14} />
-              {!isCollapsed && <span>{lang.toUpperCase()}</span>}
-            </button>
-
-            <button
-              type="button"
-              className="tm-sidebar-control-btn"
-              onClick={onToggleTheme}
-              title={
-                theme === 'dark'
-                  ? (lang === 'fr' ? 'Passer en mode clair' : 'Switch to light mode')
-                  : (lang === 'fr' ? 'Passer en mode sombre' : 'Switch to dark mode')
-              }
-              aria-label={theme === 'dark' ? 'Mode clair' : 'Mode sombre'}
-            >
-              {theme === 'dark' ? (
-                <Sun size={14} color="#F59E0B" />
-              ) : (
-                <Moon size={14} color="#64748B" />
-              )}
-              {!isCollapsed && (
-                <span>{theme === 'dark' ? (lang === 'fr' ? 'Clair' : 'Light') : (lang === 'fr' ? 'Sombre' : 'Dark')}</span>
-              )}
+              {!isCollapsed && <span>{lang === 'fr' ? 'FR' : 'EN'}</span>}
             </button>
           </div>
         </div>

@@ -9,7 +9,7 @@ import {
   FileText,
   Table,
 } from 'lucide-react';
-import { exportToCsv, exportToExcelTsv, exportToGeoJson } from '../utils/exportFormats';
+import { exportToCsv, exportToExcelTsv, exportToGeoJson, generatePublicAggregateCsv, downloadFile } from '../utils/exportFormats';
 import { repairCostText } from '../constants';
 
 export function ReportsExportsView({
@@ -17,7 +17,56 @@ export function ReportsExportsView({
   kpis,
   filters,
   lang = 'fr',
+  publicMode = false,
+  publicSummary = [],
+  publicCells = [],
 }) {
+  if (publicMode) {
+    const downloadPublic = () => {
+      const csv = generatePublicAggregateCsv(publicSummary, publicCells);
+      downloadFile(
+        `\uFEFF${csv}`,
+        `tariqmap-public-${new Date().toISOString().slice(0, 10)}.csv`,
+        'text/csv;charset=utf-8;'
+      );
+    };
+    const openCount = publicSummary.reduce((sum, row) => sum + (Number(row.open_count) || 0), 0);
+    const repairedCount = publicSummary.reduce((sum, row) => sum + (Number(row.repaired_count) || 0), 0);
+    return (
+      <div className="reports-exports-container">
+        <div className="section-intro">
+          <div className="intro-title-row">
+            <FileSpreadsheet size={20} color="var(--color-primary)" />
+            <div>
+              <h2 style={{ fontSize: '1.1rem', fontWeight: 800 }}>
+                {lang === 'fr' ? 'Export public' : 'Public export'}
+              </h2>
+              <p style={{ fontSize: '0.78rem', color: 'var(--text-muted)', marginTop: '2px' }}>
+                {lang === 'fr'
+                  ? 'Totaux par classe et centres de mailles d\'environ 1 km. Aucune position mesurée et aucun identifiant de signalement.'
+                  : 'Counts by class and centers of roughly 1 km cells. No measured position and no report identifier.'}
+              </p>
+            </div>
+          </div>
+        </div>
+        <div className="export-cards-grid">
+          <div className="export-card">
+            <h3 className="export-card-title">{lang === 'fr' ? 'CSV agrégé' : 'Aggregate CSV'}</h3>
+            <p className="export-card-desc">
+              {lang === 'fr'
+                ? `${openCount} signalements ouverts, ${repairedCount} réparés, ${publicCells.length} mailles.`
+                : `${openCount} open reports, ${repairedCount} repaired, ${publicCells.length} cells.`}
+            </p>
+            <button type="button" className="btn btn-secondary btn-export-action" onClick={downloadPublic}>
+              <Download size={14} />
+              <span>{lang === 'fr' ? 'Télécharger CSV' : 'Download CSV'}</span>
+            </button>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
   const handleExportCsv = () => {
     exportToCsv(filteredObservations, `tariqmap-rapport-${new Date().toISOString().slice(0, 10)}.csv`);
   };

@@ -504,3 +504,28 @@ export function subscribeToCommandCenterUpdates(onUpdate) {
     supabase.removeChannel(channel);
   };
 }
+
+/**
+ * National counts for the public dashboard. No row ids and no coordinates.
+ * A missing function is an error. Callers must not fall back to table reads.
+ */
+export async function fetchPublicDamageSummary() {
+  const { data, error } = await supabase.rpc('public_damage_summary');
+  if (error) {
+    throw new Error('Les totaux publics ne sont pas disponibles.');
+  }
+  return data || [];
+}
+
+/**
+ * Coarse map cells. The coordinates are cell centers, not measured points.
+ */
+export async function fetchPublicMapCells(cellDegrees = 0.01) {
+  const { data, error } = await supabase.rpc('public_map_cells', {
+    cell_degrees: cellDegrees,
+  });
+  if (error) {
+    throw new Error('La carte publique n\'est pas disponible.');
+  }
+  return data || [];
+}

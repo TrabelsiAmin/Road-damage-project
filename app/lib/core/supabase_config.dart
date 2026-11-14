@@ -14,8 +14,6 @@ library tariqmap.supabase_config;
 
 import 'dart:convert';
 
-import 'package:flutter/foundation.dart';
-
 class SupabaseCfg {
   SupabaseCfg._();
 

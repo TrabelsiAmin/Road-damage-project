@@ -25,9 +25,12 @@ import {
   fetchMaintenanceEvents,
   recordMaintenanceEvent,
   subscribeToCommandCenterUpdates,
+  fetchPublicDamageSummary,
+  fetchPublicMapCells,
   supabase,
 } from './supabase';
 import { mergeObservationPages, OBSERVATION_PAGE_SIZE } from './utils/records';
+import { downloadFile, generatePublicAggregateCsv } from './utils/exportFormats';
 import { GlobalFilterBar } from './components/GlobalFilterBar';
 import { DashboardShell } from './components/layout/DashboardShell';
 import { ExecutiveKpiGrid } from './components/ExecutiveKpiGrid';
@@ -53,7 +56,7 @@ import { MinistryOverview } from './components/MinistryOverview';
 import { TechnicalRecommendation } from './components/TechnicalRecommendation';
 import { displayClassCode } from './utils/classCodes';
 import { filterValidClusters } from './utils/mapValidation';
-import { THEME_STORAGE_KEY, getInitialTheme, resolveNextTheme } from './utils/theme';
+import { THEME_STORAGE_KEY } from './utils/theme';
 import {
   buildMinistryOverview,
   isWithinPeriod,
@@ -338,37 +341,25 @@ export default function App() {
   const [lang, setLang] = useState('fr');
   const [dataVersion, setDataVersion] = useState(0);
 
-  // Theme State: 'light' | 'dark'
-  const [theme, setTheme] = useState(() => {
-    const prefersDark = typeof window !== 'undefined' && window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches;
-    const storage = typeof localStorage !== 'undefined' ? localStorage : null;
-    return getInitialTheme(storage, prefersDark);
-  });
-
   useEffect(() => {
+    document.documentElement.setAttribute('data-theme', 'light');
+    document.body.setAttribute('data-theme', 'light');
+    document.documentElement.classList.remove('dark-mode');
+    document.body.classList.remove('dark-mode');
     try {
-      localStorage.setItem(THEME_STORAGE_KEY, theme);
+      localStorage.removeItem(THEME_STORAGE_KEY);
     } catch (err) {
-      console.warn('Failed to persist theme:', err);
+      console.warn('Failed to clear stored theme:', err);
     }
-    document.documentElement.setAttribute('data-theme', theme);
-    document.body.setAttribute('data-theme', theme);
-    if (theme === 'dark') {
-      document.documentElement.classList.add('dark-mode');
-      document.body.classList.add('dark-mode');
-    } else {
-      document.documentElement.classList.remove('dark-mode');
-      document.body.classList.remove('dark-mode');
-    }
-  }, [theme]);
-
-  function toggleTheme() {
-    setTheme((prev) => resolveNextTheme(prev));
-  }
+  }, []);
 
   // Auth State
   const [currentUser, setCurrentUser] = useState(null);
   const [isAuthorityUser, setIsAuthorityUser] = useState(false);
+  const [authReady, setAuthReady] = useState(false);
+  const [publicSummary, setPublicSummary] = useState([]);
+  const [publicCells, setPublicCells] = useState([]);
+  const fetchGenRef = useRef(0);
   const [showLoginModal, setShowLoginModal] = useState(false);
   const [authEmail, setAuthEmail] = useState('');
   const [authPassword, setAuthPassword] = useState('');
@@ -493,6 +484,8 @@ export default function App() {
       } catch (_) {
         setCurrentUser(null);
         setIsAuthorityUser(false);
+      } finally {
+        setAuthReady(true);
       }
     }
     checkAuth();
@@ -519,18 +512,39 @@ export default function App() {
 
   // ── 1. Fetch Observations & Server Clusters from Supabase ────────────────────
   const loadData = useCallback(async (isBackground = false) => {
-    if (isFetchingRef.current) return;
+    if (!authReady) return;
+    const gen = ++fetchGenRef.current;
     isFetchingRef.current = true;
     if (!isBackground) setLoading(true);
     else setIsRefreshing(true);
     setError(null);
     try {
+      if (!isAuthorityUser) {
+        const [summary, cells] = await Promise.all([
+          fetchPublicDamageSummary(),
+          fetchPublicMapCells(0.01),
+        ]);
+        if (gen !== fetchGenRef.current) return;
+        setObservations([]);
+        setListTruncated(false);
+        setServerClusters([]);
+        setMaintenanceCases({});
+        setAuditEvents([]);
+        setSelectedCluster(null);
+        setPublicSummary(summary || []);
+        setPublicCells(cells || []);
+        setLastUpdated(new Date());
+        return;
+      }
       const [obsPage, clusterData, casesData, eventsData] = await Promise.all([
         fetchObservations(),
         fetchServerClusters(20, 1),
         fetchMaintenanceCases().catch(() => ({})),
         fetchMaintenanceEvents(100).catch(() => []),
       ]);
+      if (gen !== fetchGenRef.current) return;
+      setPublicSummary([]);
+      setPublicCells([]);
       setObservations(obsPage?.rows || []);
       setListTruncated(Boolean(obsPage?.truncated));
       setServerClusters(clusterData || []);
@@ -546,19 +560,29 @@ export default function App() {
         }
       }
     } catch (err) {
+      if (gen !== fetchGenRef.current) return;
+      if (!isAuthorityUser) {
+        setObservations([]);
+        setServerClusters([]);
+        setPublicSummary([]);
+        setPublicCells([]);
+      }
       setError(err.message || 'Error fetching data from Supabase');
     } finally {
-      setLoading(false);
-      setIsRefreshing(false);
-      isFetchingRef.current = false;
+      if (gen === fetchGenRef.current) {
+        setLoading(false);
+        setIsRefreshing(false);
+        isFetchingRef.current = false;
+      }
     }
-  }, []);
+  }, [authReady, isAuthorityUser]);
 
   useEffect(() => {
     loadData();
   }, [loadData, dataVersion]);
 
   const loadOlderObservations = useCallback(async () => {
+    if (!isAuthorityUser) return;
     const dated = observations
       .map((obs) => obs.created_at)
       .filter(Boolean)
@@ -575,7 +599,7 @@ export default function App() {
     } finally {
       setLoadingOlder(false);
     }
-  }, [observations, loadingOlder]);
+  }, [observations, loadingOlder, isAuthorityUser]);
 
   // Controlled auto-polling & Realtime subscription
   useEffect(() => {
@@ -585,21 +609,23 @@ export default function App() {
       }
     }, 30000);
 
-    const unsubRealtime = subscribeToCommandCenterUpdates(() => {
-      console.log('[Realtime] Command center update received, refreshing data...');
-      loadData(true);
-    });
+    const unsubRealtime = isAuthorityUser
+      ? subscribeToCommandCenterUpdates(() => {
+          console.log('[Realtime] Command center update received, refreshing data...');
+          loadData(true);
+        })
+      : () => {};
 
     return () => {
       clearInterval(timer);
       unsubRealtime();
     };
-  }, [loadData]);
+  }, [loadData, isAuthorityUser]);
 
   // ── 1b. Refetch Media for Open Cluster when Cluster or Auth Changes ────────
   useEffect(() => {
     let active = true;
-    if (!selectedCluster || !selectedCluster.members || selectedCluster.members.length === 0) {
+    if (!isAuthorityUser || !selectedCluster || !selectedCluster.members || selectedCluster.members.length === 0) {
       setClusterMediaMap({});
       return;
     }
@@ -741,6 +767,22 @@ export default function App() {
   const validClusters = useMemo(() => {
     return filterValidClusters(filteredClusters);
   }, [filteredClusters]);
+
+  const mapMarkers = useMemo(() => {
+    if (isAuthorityUser) return validClusters;
+    return (publicCells || [])
+      .map((cell, index) => ({
+        id: `public-cell-${index}`,
+        latitude: Number(cell.cell_lat),
+        longitude: Number(cell.cell_lng),
+        count: Number(cell.report_count) || 0,
+        priorityLabel: 'MEDIUM',
+        dominantClass: cell.dominant_class || '',
+        members: [],
+        publicCell: true,
+      }))
+      .filter((cell) => Number.isFinite(cell.latitude) && Number.isFinite(cell.longitude));
+  }, [isAuthorityUser, validClusters, publicCells]);
 
   const ministry = useMemo(() => {
     const scoped = observations.filter((obs) => matchesObservationFilters(obs, {
@@ -1006,7 +1048,7 @@ export default function App() {
     const markersGroup = markersLayerRef.current;
     markersGroup.clearLayers();
 
-    validClusters.forEach((cluster) => {
+    mapMarkers.forEach((cluster) => {
       // Colour = Priority
       const pinColor = PRIORITY_PIN_COLORS[cluster.priorityLabel] || '#3B82F6';
 
@@ -1046,6 +1088,20 @@ export default function App() {
 
       const popup = L.popup({ maxWidth: 320, minWidth: 220, className: 'rag-leaflet-popup' });
       popup.setContent('<div class="rag-map-popup-root"></div>');
+      if (cluster.publicCell) {
+        const isFr = langRef.current !== 'en';
+        const safeClass = String(cluster.dominantClass || '—').replace(/[^A-Za-z0-9-]/g, '');
+        marker.bindPopup(
+          `<strong>${Number(cluster.count) || 0}</strong> ${isFr ? 'signalements' : 'reports'}<br/>${safeClass || '—'}<br/>${
+            isFr
+              ? 'Centre d\'une maille d\'environ 1 km. Ce n\'est pas la position mesurée.'
+              : 'Center of a roughly 1 km cell. This is not the measured position.'
+          }`
+        );
+        marker.addTo(markersGroup);
+        return;
+      }
+
       marker.bindPopup(popup);
       marker.on('popupopen', () => {
         const root = popup.getElement()?.querySelector('.rag-map-popup-root');
@@ -1075,7 +1131,7 @@ export default function App() {
       marker.addTo(markersGroup);
     });
 
-    if (mapLayers.roadSegments) {
+    if (mapLayers.roadSegments && isAuthorityUser) {
       REFERENCE_CORRIDORS.forEach((corr) => {
         const corrIcon = L.divIcon({
           className: 'custom-corridor-marker',
@@ -1104,15 +1160,15 @@ export default function App() {
       });
     }
 
-    if (validClusters.length > 0 && mapInstanceRef.current) {
+    if (mapMarkers.length > 0 && mapInstanceRef.current) {
       const bounds = L.latLngBounds(
-        validClusters.map((c) => [Number(c.latitude), Number(c.longitude)])
+        mapMarkers.map((c) => [Number(c.latitude), Number(c.longitude)])
       );
       if (bounds.isValid()) {
-        mapInstanceRef.current.fitBounds(bounds, { padding: [40, 40], maxZoom: 15 });
+        mapInstanceRef.current.fitBounds(bounds, { padding: [40, 40], maxZoom: isAuthorityUser ? 15 : 12 });
       }
     }
-  }, [mapReady, validClusters, mapLayers.roadSegments]);
+  }, [mapReady, mapMarkers, mapLayers.roadSegments, isAuthorityUser]);
 
   // ── 5d. Map Focus Marker & Camera Navigation ────────────────────────────────
   useEffect(() => {
@@ -1307,6 +1363,15 @@ export default function App() {
 
   // ── 7. CSV Export (Strictly omitting device_id) ────────────────────────────
   function handleExportCsv() {
+    if (!isAuthorityUser) {
+      const csv = generatePublicAggregateCsv(publicSummary, publicCells);
+      downloadFile(
+        `\uFEFF${csv}`,
+        `tariqmap-public-${new Date().toISOString().slice(0, 10)}.csv`,
+        'text/csv;charset=utf-8;'
+      );
+      return;
+    }
     const headers = [
       'ClusterID',
       'DominantClass',
@@ -1363,7 +1428,7 @@ export default function App() {
       setDataVersion((v) => v + 1);
       if (!isAuth) {
         alert(
-          'Compte authentifié, mais absent de la table authority_users. Accès en lecture seule conservé.'
+          'Ce compte n\'a pas d\'accès opérationnel. L\'aperçu public reste affiché.'
         );
       }
     } catch (err) {
@@ -1411,11 +1476,9 @@ export default function App() {
       onLogout={handleLogout}
       lang={lang}
       onToggleLang={() => setLang((prev) => (prev === 'fr' ? 'en' : 'fr'))}
-      theme={theme}
-      onToggleTheme={toggleTheme}
     >
 
-      {/* Global Filter Bar */}
+      {isAuthorityUser && (
       <GlobalFilterBar
         filters={filters}
         onChange={setFilters}
@@ -1435,9 +1498,32 @@ export default function App() {
         totalCount={observations.length}
         filteredCount={filteredObservations.length}
       />
+      )}
+
+      {activeNavTab === 'overview' && !isAuthorityUser && (
+        <section className="section-intro">
+          <h2 style={{ fontSize: '1.1rem', fontWeight: 800 }}>
+            {lang === 'fr' ? 'Situation publique' : 'Public situation'}
+          </h2>
+          <p style={{ fontSize: '0.78rem', color: 'var(--text-muted)', marginTop: '2px' }}>
+            {lang === 'fr'
+              ? 'Totaux nationaux et mailles d\'environ 1 km. Les dossiers individuels restent réservés aux comptes autorisés.'
+              : 'National totals and roughly 1 km cells. Individual cases stay with authorized accounts.'}
+          </p>
+          {!loading && !error && (
+            <p style={{ marginTop: '8px' }}>
+              {(publicSummary || []).length === 0
+                ? (lang === 'fr' ? 'Aucun total public pour le moment.' : 'No public totals yet.')
+                : (publicSummary || []).map((row) => (
+                    `${row.anomaly_type || '—'} · ${row.priority_band || '—'} · ${Number(row.open_count) || 0} ${lang === 'fr' ? 'ouverts' : 'open'} · ${Number(row.repaired_count) || 0} ${lang === 'fr' ? 'réparés' : 'repaired'}`
+                  )).join(' · ')}
+            </p>
+          )}
+        </section>
+      )}
 
       {/* ── Tab 1: Executive Overview ── */}
-      {activeNavTab === 'overview' && (
+      {activeNavTab === 'overview' && isAuthorityUser && (
         <>
           <ExecutiveKpiGrid
             kpis={executiveKpis}
@@ -1472,7 +1558,20 @@ export default function App() {
       )}
 
       {/* ── Tab 2: Operations Action Center ── */}
-      {activeNavTab === 'action_center' && (
+      {!isAuthorityUser && ['action_center', 'road_segments', 'analytics', 'data_quality', 'audit'].includes(activeNavTab) && (
+        <section className="section-intro">
+          <h2 style={{ fontSize: '1.1rem', fontWeight: 800 }}>
+            {lang === 'fr' ? 'Accès opérationnel limité' : 'Operational access is limited'}
+          </h2>
+          <p style={{ fontSize: '0.78rem', color: 'var(--text-muted)', marginTop: '2px' }}>
+            {lang === 'fr'
+              ? 'Cette vue est réservée aux comptes autorisés. Les totaux publics restent sur l\'aperçu et la carte.'
+              : 'This view is reserved for authorized accounts. Public totals stay on the overview and the map.'}
+          </p>
+        </section>
+      )}
+
+      {isAuthorityUser && activeNavTab === 'action_center' && (
         <ActionCenterView
           queues={actionQueues}
           activeQueue={activeActionQueue}
@@ -1486,7 +1585,7 @@ export default function App() {
       )}
 
       {/* ── Tab 4: Road Segment Risk Matrix ── */}
-      {activeNavTab === 'road_segments' && (
+      {isAuthorityUser && activeNavTab === 'road_segments' && (
         <RoadSegmentRiskView
           corridorRisks={corridorRisks}
           lang={lang}
@@ -1495,7 +1594,7 @@ export default function App() {
       )}
 
       {/* ── Tab 5: Analytics & Trends ── */}
-      {activeNavTab === 'analytics' && (
+      {isAuthorityUser && activeNavTab === 'analytics' && (
         <AnalyticsTrendsView
           regionalBacklog={regionalBacklog}
           timeSeries={backlogTimeSeries}
@@ -1505,7 +1604,7 @@ export default function App() {
       )}
 
       {/* ── Tab 6: Data Quality & AI Model Monitoring ── */}
-      {activeNavTab === 'data_quality' && (
+      {isAuthorityUser && activeNavTab === 'data_quality' && (
         <DataQualityView
           metrics={dataQualityMetrics}
           isAuthorityUser={isAuthorityUser}
@@ -1517,15 +1616,18 @@ export default function App() {
       {/* ── Tab 7: Reports & Exports ── */}
       {activeNavTab === 'reports' && (
         <ReportsExportsView
-          filteredObservations={filteredObservations}
+          filteredObservations={isAuthorityUser ? filteredObservations : []}
           kpis={executiveKpis}
           filters={filters}
           lang={lang}
+          publicMode={!isAuthorityUser}
+          publicSummary={publicSummary}
+          publicCells={publicCells}
         />
       )}
 
       {/* ── Tab 8: Audit History ── */}
-      {activeNavTab === 'audit' && (
+      {isAuthorityUser && activeNavTab === 'audit' && (
         <AuditHistoryView
           events={auditEvents}
           lang={lang}
@@ -1541,9 +1643,13 @@ export default function App() {
         <div className="ministry-map-heading">
           <h2>{lang === 'fr' ? 'Intelligence géographique & SIG' : 'Geographic intelligence & GIS'}</h2>
           <p>
-            {lang === 'fr'
-              ? 'Agrégats serveur à 20 m. La couleur suit le score de priorité le plus élevé, la taille le nombre de signalements.'
-              : 'Server clusters at 20 m. Colour follows the highest priority score. Size is the number of reports.'}
+            {isAuthorityUser
+              ? (lang === 'fr'
+                ? 'Agrégats serveur à 20 m. La couleur suit le score de priorité le plus élevé, la taille le nombre de signalements.'
+                : 'Server clusters at 20 m. Colour follows the highest priority score. Size is the number of reports.')
+              : (lang === 'fr'
+                ? 'Mailles d\'environ 1 km. Le point affiché est le centre de la maille, pas la position mesurée.'
+                : 'Cells of roughly 1 km. The shown point is the cell center, not the measured position.')}
           </p>
         </div>
       )}
@@ -1576,7 +1682,7 @@ export default function App() {
           )}
 
           {/* Empty Valid Coordinates State */}
-          {!loading && validClusters.length === 0 && !error && (
+          {!loading && mapMarkers.length === 0 && !error && (
             <div className="map-overlay-banner map-empty-state" role="status">
               <MapPinOff size={15} />
               <span>

@@ -35,13 +35,15 @@ export function ExecutiveKpiGrid({
     );
   }
 
+  const unavailable = lang === 'fr' ? 'Non calculé' : 'Not calculated';
+  const completionRate = kpis.repairCompletionRate;
   const cards = [
     {
       id: 'active',
       title: lang === 'fr' ? 'Anomalies actives' : 'Active anomalies',
       value: kpis.activeAnomalies,
-      sub: `${kpis.deltaActive >= 0 ? '+' : ''}${kpis.deltaActive} ${lang === 'fr' ? 'vs période préc.' : 'vs prior period'}`,
-      deltaType: kpis.deltaActive > 0 ? 'negative' : 'positive',
+      sub: lang === 'fr' ? 'Non réparées dans le filtre' : 'Unrepaired in the current filter',
+      deltaType: 'neutral',
       icon: AlertTriangle,
       color: '#F59E0B',
       tooltip: lang === 'fr' ? 'Total des dégradations non encore réparées (non confirmées, confirmées, en cours).' : 'Total un-repaired road anomalies.',
@@ -52,8 +54,8 @@ export function ExecutiveKpiGrid({
       id: 'critical',
       title: lang === 'fr' ? 'Anomalies critiques' : 'Critical anomalies',
       value: kpis.criticalAnomalies,
-      sub: `${kpis.deltaCritical >= 0 ? '+' : ''}${kpis.deltaCritical} ${lang === 'fr' ? 'vs période préc.' : 'vs prior period'}`,
-      deltaType: kpis.deltaCritical > 0 ? 'negative' : 'positive',
+      sub: `${kpis.criticalDelta >= 0 ? '+' : ''}${kpis.criticalDelta ?? 0} ${lang === 'fr' ? 'vs période préc.' : 'vs prior period'}`,
+      deltaType: kpis.criticalDelta > 0 ? 'negative' : 'positive',
       icon: Flame,
       color: '#EF4444',
       tooltip: lang === 'fr' ? 'Priorité HIGH ou CRITICAL, ou score de priorité d’au moins 65.' : 'Priority HIGH or CRITICAL, or a priority score of at least 65.',
@@ -74,8 +76,8 @@ export function ExecutiveKpiGrid({
     {
       id: 'newReports',
       title: lang === 'fr' ? 'Nouveaux signalements' : 'New reports this period',
-      value: kpis.newReportsThisPeriod,
-      sub: `${kpis.deltaNew >= 0 ? '+' : ''}${kpis.deltaNew} ${lang === 'fr' ? 'vs période préc.' : 'vs prior period'}`,
+      value: kpis.newThisWeek,
+      sub: lang === 'fr' ? '7 derniers jours' : 'Last 7 days',
       deltaType: 'neutral',
       icon: TrendingUp,
       color: '#3B82F6',
@@ -122,7 +124,9 @@ export function ExecutiveKpiGrid({
       id: 'completed',
       title: lang === 'fr' ? 'Réparations achevées' : 'Repairs completed',
       value: kpis.repairsCompleted,
-      sub: `${kpis.completionRate}% ${lang === 'fr' ? "taux d'achèvement" : 'completion rate'}`,
+      sub: completionRate == null
+        ? unavailable
+        : `${completionRate}% ${lang === 'fr' ? "taux d'achèvement" : 'completion rate'}`,
       deltaType: 'positive',
       icon: CheckCircle2,
       color: '#10B981',
@@ -132,7 +136,7 @@ export function ExecutiveKpiGrid({
     {
       id: 'avgResponse',
       title: lang === 'fr' ? 'Délai moyen résolution' : 'Avg. resolution time',
-      value: `${kpis.avgResponseDays}j`,
+      value: kpis.avgResolutionDays == null ? unavailable : `${kpis.avgResolutionDays}j`,
       sub: lang === 'fr' ? 'De la détection au chantier' : 'Detection to repair',
       deltaType: 'neutral',
       icon: Clock,

@@ -31,19 +31,63 @@ export function Topbar({
   lang = 'fr',
 }) {
   const titles = {
-    overview: { fr: 'Vue d’ensemble', en: 'Executive Overview' },
-    action_center: { fr: 'Centre d’opérations', en: 'Operations Action Center' },
-    gis_map: { fr: 'Carte SIG & Dégradations', en: 'Geographic Intelligence & GIS' },
-    road_segments: { fr: 'Risque par tronçon', en: 'Road Segment Risk Matrix' },
-    analytics: { fr: 'Analytique & tendances', en: 'Analytics & Trends' },
-    data_quality: { fr: 'Qualité & modèle IA', en: 'Data Quality & AI Telemetry' },
-    reports: { fr: 'Rapports & exports', en: 'Official Reports & Exports' },
-    audit: { fr: 'Journal d’audit', en: 'Governance & Audit Trail' },
+    overview: {
+      fr: 'Vue d’ensemble',
+      en: 'Executive Overview',
+      contextFr: 'Priorité, files de travail et recommandation technique',
+      contextEn: 'Priority, work queues, and technical recommendation',
+    },
+    action_center: {
+      fr: 'Centre d’opérations',
+      en: 'Operations Action Center',
+      contextFr: 'Validation, affectation et clôture des signalements',
+      contextEn: 'Validate, assign, and close observations',
+    },
+    gis_map: {
+      fr: 'Carte SIG & Dégradations',
+      en: 'Geographic Intelligence & GIS',
+      contextFr: 'Agrégats routiers et preuves photo',
+      contextEn: 'Road clusters and photo evidence',
+    },
+    road_segments: {
+      fr: 'Risque par tronçon',
+      en: 'Road Segment Risk Matrix',
+      contextFr: 'Corridors classés à partir des signalements chargés',
+      contextEn: 'Corridors ranked from loaded observations',
+    },
+    analytics: {
+      fr: 'Analytique & tendances',
+      en: 'Analytics & Trends',
+      contextFr: 'Répartition réelle des signalements chargés',
+      contextEn: 'Distribution of the loaded observations',
+    },
+    data_quality: {
+      fr: 'Qualité & modèle IA',
+      en: 'Data Quality & AI Telemetry',
+      contextFr: 'Couverture, GPS et limites du modèle',
+      contextEn: 'Coverage, GPS, and model limits',
+    },
+    reports: {
+      fr: 'Rapports & exports',
+      en: 'Official Reports & Exports',
+      contextFr: 'Exports du filtre courant',
+      contextEn: 'Exports of the current filter',
+    },
+    audit: {
+      fr: 'Journal d’audit',
+      en: 'Governance & Audit Trail',
+      contextFr: 'Historique des actions autorité',
+      contextEn: 'History of authority actions',
+    },
   };
 
-  const currentTitle = titles[activeNavTab]
-    ? (lang === 'fr' ? titles[activeNavTab].fr : titles[activeNavTab].en)
+  const current = titles[activeNavTab];
+  const currentTitle = current
+    ? (lang === 'fr' ? current.fr : current.en)
     : 'TariqMap';
+  const currentContext = current
+    ? (lang === 'fr' ? current.contextFr : current.contextEn)
+    : '';
 
   const breadcrumbs = [
     { label: 'TariqMap', onClick: () => {} },
@@ -66,6 +110,7 @@ export function Topbar({
         <div className="tm-topbar-context">
           <Breadcrumbs items={breadcrumbs} />
           <h2 className="tm-topbar-page-title">{currentTitle}</h2>
+          {currentContext && <p className="tm-topbar-kicker">{currentContext}</p>}
         </div>
       </div>
 

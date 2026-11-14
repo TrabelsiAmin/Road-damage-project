@@ -168,7 +168,7 @@ export function AnalyticsTrendsView({
           <Clock size={18} color="#6366F1" />
           <div className="strip-info">
             <span className="strip-label">{lang === 'fr' ? 'Délai moyen de résolution' : 'Avg Resolution Time'}</span>
-            <strong className="strip-val">{kpis.avgResponseDays} {lang === 'fr' ? 'jours' : 'days'}</strong>
+            <strong className="strip-val">{kpis.avgResolutionDays == null ? (lang === 'fr' ? 'Non calculé' : 'Not calculated') : `${kpis.avgResolutionDays} ${lang === 'fr' ? 'jours' : 'days'}`}</strong>
           </div>
         </div>
 
@@ -176,7 +176,7 @@ export function AnalyticsTrendsView({
           <CheckCircle2 size={18} color="#10B981" />
           <div className="strip-info">
             <span className="strip-label">{lang === 'fr' ? 'Taux de conformité des réparations' : 'Repair Completion Rate'}</span>
-            <strong className="strip-val">{kpis.completionRate}%</strong>
+            <strong className="strip-val">{kpis.repairCompletionRate == null ? (lang === 'fr' ? 'Non calculé' : 'Not calculated') : `${kpis.repairCompletionRate}%`}</strong>
           </div>
         </div>
 

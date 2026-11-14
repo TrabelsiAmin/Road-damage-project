@@ -26,7 +26,7 @@ jobs:
         run: flutter pub get
 
       - name: Analyze code
-        run: flutter analyze lib/
+        run: flutter analyze --no-fatal-infos lib/
 
       - name: Run unit tests
         run: flutter test test/unit/

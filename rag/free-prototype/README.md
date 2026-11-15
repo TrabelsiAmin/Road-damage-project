@@ -26,11 +26,4 @@ python3 scripts/export_faiss.py \
 
 Les résultats mesurés ici sont dans `RESULTS.md`. La lecture du notebook et l’absence des vrais fichiers sont dans `REAL_INDEX.md`.
 
-```bash
-python3 scripts/compare_real_index.py \
-  --index /chemin/index.faiss \
-  --chunks /chemin/chunks.pkl \
-  --work-dir export/real
-```
-
-Ce dossier `export/real` est ignoré par Git. La commande ne réécrit pas l’index Colab.
+Les commandes Colab et le dossier de dépôt sont dans `RECOVERY.md`. Le contrôle s’arrête si l’index n’a pas 479 vecteurs. La comparaison attend les trois fichiers dans `local-index/`, un dossier ignoré par Git.

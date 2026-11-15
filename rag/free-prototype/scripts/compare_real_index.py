@@ -108,16 +108,30 @@ def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--index", type=Path)
     parser.add_argument("--chunks", type=Path)
+    parser.add_argument("--config", type=Path)
     parser.add_argument("--work-dir", type=Path, default=ROOT / "export" / "real")
     parser.add_argument("--self-check", action="store_true")
     args = parser.parse_args()
     if args.self_check:
         print(json.dumps({"mode": "synthetic", **self_check()}))
         return
-    if args.index is None or args.chunks is None:
-        raise SystemExit("pass --index and --chunks, or --self-check")
-    if not args.index.is_file() or not args.chunks.is_file():
-        raise SystemExit("real index or chunks file is missing; nothing was written")
+    if args.index is None or args.chunks is None or args.config is None:
+        raise SystemExit("pass --index, --chunks, and --config, or --self-check")
+    probe = subprocess.run(
+        [
+            sys.executable,
+            str(ROOT / "scripts" / "inspect_index.py"),
+            "--index",
+            str(args.index),
+            "--chunks",
+            str(args.chunks),
+            "--config",
+            str(args.config),
+        ],
+        check=False,
+    )
+    if probe.returncode != 0:
+        raise SystemExit("historical 479-vector index rejected; nothing was written")
     args.work_dir.mkdir(parents=True, exist_ok=True)
     print(json.dumps({"mode": "real", **compare(args.index, args.chunks, args.work_dir)}))
 

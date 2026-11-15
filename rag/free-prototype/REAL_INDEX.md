@@ -44,6 +44,6 @@ Il lit les deux fichiers, reconstruit les vecteurs déjà stockés, et classe ch
 
 Une répétition sur un index temporaire de 48 vecteurs de dimension 1024 donne 0 identifiant différent, un écart de score maximal de 1,5e-7, et 48 recherches sur 48 qui retrouvent leur propre vecteur en premier. Ce n’est pas l’index TariqMap.
 
-## Ce qui manque pour le rapport des 479 vecteurs
+## Récupération
 
-Il faut une copie locale des deux fichiers de l’exécution à 479 vecteurs, celle dont l’index pèse 1,87 Mo. Dès qu’elle est placée hors de Git, la commande ci-dessus peut produire les dimensions, les normes, les effectifs par fichier, les écarts d’identifiants et les écarts de scores. L’intégration au tableau de bord attend toujours une validation séparée.
+Les commandes Colab, le dossier `local-index/` et le contrôle qui refuse l’index de 431 vecteurs sont dans `RECOVERY.md`. La comparaison sur les vrais vecteurs attend ces fichiers. L’intégration au tableau de bord attend toujours une validation séparée.

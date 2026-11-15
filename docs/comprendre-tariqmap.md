@@ -10,7 +10,7 @@ TariqMap sert à constater des dégradations de chaussée en Tunisie, à les gar
 
 Le téléphone est une application Flutter, dans le dossier `app/`. Il prend une photo ou une vidéo, fait tourner un modèle sur l’appareil, et enregistre l’observation d’abord dans le téléphone. Quand la personne lance la synchronisation, l’application écrit dans Supabase.
 
-Le tableau de bord est une application React, dans le dossier `dashboard/`. Il lit ce qui est déjà dans la base. Il a deux regards : le visiteur, sans compte, et le compte connecté.
+Le tableau de bord est une application React, dans le dossier `dashboard/`. Il lit ce qui est déjà dans la base. À côté de cette lecture, il affiche six rapports de presse tenus dans un fichier du dépôt. Ces rapports ne sont pas des lignes de la base. Il a deux regards : le visiteur, sans compte, et le compte connecté.
 
 L’assistant ne tourne pas dans le navigateur et ne tourne pas dans le téléphone. Il tourne dans un notebook Google Colab. Le tableau de bord ne l’appelle que si une adresse publique a été collée dans le champ prévu.
 
@@ -46,7 +46,10 @@ L’accueil montre, dans cet ordre :
 3. un anneau ;
 4. des barres par gouvernorat ;
 5. le bloc « Assistant intelligent » ;
-6. le tableau « Derniers incidents ».
+6. le bloc « Signalements publics » ;
+7. le tableau « Derniers incidents ».
+
+Sur un écran large, la carte, l’anneau avec les barres, et l’assistant sont côte à côte. « Signalements publics » occupe toute la largeur, sous cette rangée, au-dessus du tableau.
 
 Les quatre cartes sont :
 
@@ -69,7 +72,7 @@ Le tableau des derniers incidents a les colonnes Date, Route / Lieu, Classe, Sta
 
 Le catalogue visible compte **67** observations : **31** réelles et **36** de démonstration (`is_demo`).
 
-Parmi les lignes réelles non rejetées, **21** ont des coordonnées utilisables. La carte du visiteur les regroupe en **15** mailles d’environ 1 km. Une maille fait 0,01 degré. Le point dessiné est le centre de la maille, pas la position mesurée. La démonstration, les rejets, les coordonnées absentes et le point 0, 0 restent hors de cette grille.
+Parmi les lignes réelles non rejetées, **21** ont des coordonnées utilisables. La carte du visiteur les regroupe en **15** mailles d’environ 1 km. Une maille fait 0,01 degré. Le point dessiné est le centre de la maille, pas la position mesurée. La démonstration, les rejets, les coordonnées absentes et le point 0, 0 restent hors de cette grille. Les losanges des six rapports de presse sont un autre dessin. Ils ne sont pas des mailles, et ils ne sont pas comptés dans ces 21.
 
 **Quatre dossiers réels n’ont pas de coordonnées.** Ils ne peuvent pas être placés sur la carte. S’ils ne sont pas rejetés, ils restent dans le décompte du compte connecté.
 
@@ -86,6 +89,28 @@ Ce que montrent les quatre cartes, dans le code actuel :
 La carte du compte connecté, sur l’onglet Cartographie, utilise les agrégats du serveur à 20 m, pour les observations qui ont un point. La couleur suit la priorité, la taille suit le nombre de signalements. La légende HTTP 404 est celle du visiteur.
 
 Le bouton d’export du visiteur reste inactif tant que les fonctions publiques ne répondent pas. Un fichier vide ne doit pas être présenté comme un export réussi.
+
+## Les signalements publics
+
+Six rapports de presse sont ajoutés à part. Ils sont dans le fichier `dashboard/src/data/publicRoadReports.js`. Ils ne viennent pas de Supabase. Ils ne viennent pas d’une capture du téléphone. Ils n’ont pas de code D00, D10, D20 ou D40. Aucune photo n’a été ajoutée avec eux.
+
+Le bloc s’intitule « Signalements publics ». Le texte sous le titre dit : « Articles et communiqués ouverts sur le web. Ils restent séparés du catalogue TariqMap et ne changent pas les totaux. » Chaque ligne porte le lieu, une citation, la date de l’article, la mention « Rapport public, pas une capture TariqMap. », et le lien de la source. Quand un point existe, le bouton « Voir sur la carte » l’ouvre.
+
+Sur la carte de l’accueil et sur l’onglet Cartographie, ces rapports sont des losanges, à part des mailles et des agrégats. Aucune case des couches SIG ne les retire. La légende dit « Signalement public (position approximative) ». L’infobulle commence par « Rapport public ». Le point dessiné est un centroïde de lieu renvoyé par Nominatim le 15 novembre 2026. Ce n’est pas un GPS mesuré, et ce n’est pas le point du dégât.
+
+Quatre rapports sont sur la carte, seulement ainsi :
+
+- **Route d’Oued El Khayat**, à Jaafar, délégation de Raoued. La Presse écrit aussi Boujaafar, gouvernorat de l’Ariana. Le losange est le centroïde administratif de Jaafar. Sources : [Business News](https://businessnews.com.tn/2026/09/21/effondrement-de-la-route-doued-el-khayat-le-ministere-de-lequipement-sexplique/1419358/), [La Presse de Tunisie](https://www.lapresse.tn/2026/09/21/voirie-endommagee-a-lariana-quand-la-pluie-met-a-nu-la-fragilite-des-routes/).
+- **Rues de Sfax** citées le 21 juin 2026 : Lattaquié, Palestine et Ahmed El Ferati, arrondissement d’El Bostane ; Mohamed Masmoudi, Médina ; Assouan, embranchement de la rocade n°5 ; Nizar Kabbani ; Abdelmajid Snoussi ; la voie vers l’Institut Abou Al-Hassan El Lakhmi, Hay Habib ; les abords de la piscine municipale et du commissariat régional à l’éducation. Seule la rue Palestine, à El Bostane, a un centroïde. Les autres rues de cet article restent citées et ne sont pas placées. Source : [Tunisie Numérique](https://www.tunisienumerique.com/sfax-poursuite-des-travaux-de-reparation-des-routes-sur-plusieurs-axes/).
+- **Moularès**, gouvernorat de Gafsa, la principale voie de la ville. La source ne nomme pas la rue : le losange est le centroïde de la ville. Source : [La Presse de Tunisie](https://www.lapresse.tn/2025/10/19/moulares-la-voix-des-citoyens-face-a-une-infrastructure-defectueuse/).
+- **Quartier Kabaria**, au sud de Tunis. Le losange est le centroïde du quartier, pas le point du trou. Source : [Kapitalis](https://kapitalis.com/tunisie/2020/09/11/pluies-a-tunis-une-voiture-tombe-dans-un-trou-cause-par-laffaissement-dune-route-a-kabaria/).
+
+Deux rapports restent dans la liste, parce que la source ne donne pas de coordonnées. Le code les laisse hors de la carte :
+
+- **Périmètre municipal de Sfax**, axes principaux et secondaires, dépêche du 27 août 2026. La source ne donne ni rue ni coordonnées. Le centre de Sfax n’est pas utilisé comme point. Source : [Directinfo (avec TAP)](https://directinfo.webmanagercenter.com/2026/08/27/sfax-la-municipalite-lance-des-travaux-pour-reparer-les-nids-de-poule-et-fissures/).
+- **Autoroute A1**, PK 69 – PK 84, axe Sousse – Tunis. La source donne des points kilométriques, pas des coordonnées. Source : [Tunisie Numérique, droit de réponse de Tunisie Autoroutes](https://www.tunisienumerique.com/droit-de-reponse-de-tunisie-autoroutes/).
+
+Ces six rapports restent hors des **21** signalements, des **15** mailles, des **31** lignes réelles et des **67** du catalogue. La carte « Total des incidents » ne les additionne pas au compte TariqMap. Le visiteur voit 21. Le compte connecté voit les lignes réelles non rejetées de la vue, avec le plancher de 21 tant que la vue n’est pas filtrée. L’écran n’affiche pas 21 plus 6.
 
 ## Ce que l’écran ne fabrique pas
 
@@ -267,6 +292,6 @@ La vignette publique, si elle a été produite, est la seule image prévue pour 
 
 1. Le téléphone crée l’observation. La photo est confirmée, le modèle `road_damage` pose un code parmi D00, D10, D20 et D40, la ligne est écrite dans SQLite, puis **Sync** l’envoie à Supabase avec le lieu, les détections et, selon les réglages, la photo et une vignette floutée. L’identifiant d’appareil ne part pas.
 
-2. Le tableau de bord lit Supabase. Le visiteur voit le total public de substitution, 21 signalements en 15 mailles, et pas les dossiers. Le compte connecté voit au moins ce compte public tant que la vue n’est pas filtrée, et il voit les lignes. Les deux fonctions officielles `public_damage_summary` et `public_map_cells` répondent encore 404 : le total officiel est absent. Le coût reste Indisponible, le délai moyen reste Non calculé quand il n’a pas été mesuré, et 128 ne revient pas.
+2. Le tableau de bord lit Supabase. Le visiteur voit le total public de substitution, 21 signalements en 15 mailles, et pas les dossiers. Les six rapports de presse restent à côté de ce compte : ils ne sont pas dans ce 21, et ils ne sont pas des dossiers. Le compte connecté voit au moins ce compte public tant que la vue n’est pas filtrée, et il voit les lignes. Les deux fonctions officielles `public_damage_summary` et `public_map_cells` répondent encore 404 : le total officiel est absent. Le coût reste Indisponible, le délai moyen reste Non calculé quand il n’a pas été mesuré, et 128 ne revient pas.
 
 3. L’assistant explique la pathologie à partir des six manuels, via Qwen2.5-7B-Instruct en 4 bits, BGE-M3 et l’index FAISS de 431 vecteurs. **Observation retenue** et **Demander une recommandation** appellent la même API que la question libre. Ils n’envoient ni la photo, ni les coordonnées exactes, ni l’identifiant d’appareil. L’assistant ne lit pas la photo qui vient d’être prise. Si on lui demande le prix d’une tonne d’enrobé, il doit refuser, parce que ce prix n’est pas dans les manuels.

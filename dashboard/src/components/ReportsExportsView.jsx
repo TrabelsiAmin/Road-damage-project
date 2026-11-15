@@ -20,8 +20,32 @@ export function ReportsExportsView({
   publicMode = false,
   publicSummary = [],
   publicCells = [],
+  publicAvailable = false,
 }) {
   if (publicMode) {
+    if (!publicAvailable) {
+      return (
+        <div className="reports-exports-container">
+          <div className="section-intro">
+            <div className="intro-title-row">
+              <FileSpreadsheet size={20} color="var(--color-primary)" />
+              <div>
+                <h2 style={{ fontSize: '1.1rem', fontWeight: 800 }}>
+                  {lang === 'fr' ? 'Export public' : 'Public export'}
+                </h2>
+                <p style={{ fontSize: '0.78rem', color: 'var(--text-muted)', marginTop: '2px' }}>
+                  {lang === 'fr' ? 'Indisponible' : 'Unavailable'}
+                </p>
+              </div>
+            </div>
+          </div>
+          <button type="button" className="btn btn-secondary btn-export-action" disabled>
+            <Download size={14} />
+            <span>{lang === 'fr' ? 'Télécharger CSV' : 'Download CSV'}</span>
+          </button>
+        </div>
+      );
+    }
     const downloadPublic = () => {
       const csv = generatePublicAggregateCsv(publicSummary, publicCells);
       downloadFile(

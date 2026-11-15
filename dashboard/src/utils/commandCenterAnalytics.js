@@ -13,6 +13,38 @@ import { computeRoadSegmentsRisk } from './roadSegmentRisk';
 const ACTIVE_STATUSES = new Set(['unconfirmed', 'confirmed', 'in_progress']);
 
 /**
+ * The checkbox stores includeDemo. The filter itself only understands demoFilter.
+ * Absent or false means demonstration rows stay out.
+ */
+export function demoFilterForSelection(includeDemo) {
+  return includeDemo === true ? 'all' : 'exclude_demo';
+}
+
+/**
+ * Authority map clusters keep the server counts, then drop demonstration
+ * rows unless the operator asked to see them. A cluster with no real count
+ * and no remaining real member is omitted. It is not shown as zero incidents.
+ */
+export function clustersForDemoSelection(clusters, includeDemo) {
+  if (!Array.isArray(clusters)) return [];
+  if (includeDemo === true) return clusters;
+  const visible = [];
+  for (const cluster of clusters) {
+    const members = (cluster?.members || []).filter((member) => member && member.is_demo !== true);
+    const realKnown = cluster?.realCount !== undefined && cluster?.realCount !== null && cluster?.realCount !== '';
+    const realCount = realKnown ? Number(cluster.realCount) : null;
+    const hasReal = realKnown && Number.isFinite(realCount) && realCount > 0;
+    if (!hasReal && members.length === 0) continue;
+    visible.push({
+      ...cluster,
+      members,
+      count: hasReal ? realCount : members.length,
+    });
+  }
+  return visible;
+}
+
+/**
  * Filter evaluation across all dashboard dimensions.
  */
 export function filterObservations(observations, filters = {}) {

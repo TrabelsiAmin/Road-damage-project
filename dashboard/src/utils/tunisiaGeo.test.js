@@ -3,6 +3,7 @@ import {
   resolveTunisiaAdmin,
   ALL_GOVERNORATES,
   getMunicipalitiesForGovernorate,
+  approximateRoadNote,
 } from './tunisiaGeo';
 
 describe('tunisiaGeo reverse lookup', () => {
@@ -11,6 +12,8 @@ describe('tunisiaGeo reverse lookup', () => {
     const res = resolveTunisiaAdmin(36.8000, 10.1800);
     expect(res.governorate).toBe('Tunis');
     expect(res.municipality).toContain('Tunis');
+    expect(res.roadApproximate).toBe(true);
+    expect(approximateRoadNote('fr')).toContain('approximatif');
   });
 
   it('correctly identifies La Marsa in northern Tunis', () => {
@@ -38,6 +41,7 @@ describe('tunisiaGeo reverse lookup', () => {
     const res = resolveTunisiaAdmin(0, 0);
     expect(res.governorate).toBe('Non déterminé');
     expect(res.roadSegment).toBe('Voie non répertoriée');
+    expect(res.roadApproximate).toBe(false);
   });
 
   it('lists municipalities for selected governorate', () => {

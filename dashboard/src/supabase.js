@@ -509,6 +509,15 @@ export function subscribeToCommandCenterUpdates(onUpdate) {
  * National counts for the public dashboard. No row ids and no coordinates.
  * A missing function is an error. Callers must not fall back to table reads.
  */
+export async function fetchOrganizations() {
+  const { data, error } = await supabase
+    .from('organizations')
+    .select('id, name, type_code')
+    .order('name');
+  if (error) throw error;
+  return data || [];
+}
+
 export async function fetchPublicDamageSummary() {
   const { data, error } = await supabase.rpc('public_damage_summary');
   if (error) {

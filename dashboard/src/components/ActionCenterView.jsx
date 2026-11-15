@@ -21,8 +21,7 @@ import {
 } from 'lucide-react';
 import { DAMAGE_CLASSES, STATUS_LABELS, repairCostText } from '../constants';
 import { displayClassCode, observationClassCode, statClassCode } from '../utils/classCodes';
-import { resolveTunisiaAdmin } from '../utils/tunisiaGeo';
-import { ORGANIZATIONS_LIST } from './GlobalFilterBar';
+import { approximateRoadNote, resolveTunisiaAdmin } from '../utils/tunisiaGeo';
 import { exportToCsv } from '../utils/exportFormats';
 
 const QUEUE_TABS = [
@@ -45,6 +44,7 @@ export function ActionCenterView({
   onUpdateStatus,
   onBulkUpdate,
   lang = 'fr',
+  organizations = [],
 }) {
   const [selectedIds, setSelectedIds] = useState(new Set());
   const [bulkAction, setBulkAction] = useState('');
@@ -214,7 +214,9 @@ export function ActionCenterView({
                 onChange={(e) => setBulkTargetValue(e.target.value)}
               >
                 <option value="">{lang === 'fr' ? 'Choisir service...' : 'Choose service...'}</option>
-                {ORGANIZATIONS_LIST.map((org) => (
+                {organizations.length === 0 ? (
+                  <option value="" disabled>{lang === 'fr' ? 'Indisponible' : 'Unavailable'}</option>
+                ) : organizations.map((org) => (
                   <option key={org.id} value={org.id}>{org.name}</option>
                 ))}
               </select>
@@ -280,9 +282,15 @@ export function ActionCenterView({
                 };
                 const prio = item.priority_label || (item.priority_score > 65 ? 'HIGH' : item.priority_score > 35 ? 'MEDIUM' : 'LOW');
                 const prioColor = prio === 'HIGH' ? '#EF4444' : prio === 'MEDIUM' ? '#F59E0B' : '#3B82F6';
-                const muni = item.municipality || '—';
-                const gov = item.governorate || '—';
-                const road = item.roadSegment || 'Voirie locale';
+                const geo = Number.isFinite(Number(item.latitude)) && Number.isFinite(Number(item.longitude))
+                  ? resolveTunisiaAdmin(item.latitude, item.longitude)
+                  : null;
+                const muni = geo?.municipality || item.municipality || '—';
+                const gov = geo?.governorate || item.governorate || '—';
+                const road = geo?.roadApproximate
+                  ? geo.roadSegment
+                  : (item.roadSegment || (lang === 'fr' ? 'Voie non répertoriée' : 'Road not recorded'));
+                const knownOrg = organizations.find((org) => org.id === item.organization_id);
                 const reportCount = item.reportsCount || 1;
                 const dateStr = item.created_at ? new Date(item.created_at).toLocaleDateString() : '—';
                 const statusLabel = STATUS_LABELS[item.status]?.fr || item.status || 'Non confirmé';
@@ -316,7 +324,9 @@ export function ActionCenterView({
                     </td>
                     <td>
                       <div className="loc-cell">
-                        <span className="loc-corridor">{road}</span>
+                        <span className="loc-corridor" title={geo?.roadApproximate ? approximateRoadNote(lang) : undefined}>
+                          {road}{geo?.roadApproximate ? (lang === 'fr' ? ' (approximatif)' : ' (approximate)') : ''}
+                        </span>
                         <span className="loc-admin">{muni}, {gov}</span>
                       </div>
                     </td>
@@ -333,7 +343,9 @@ export function ActionCenterView({
                     </td>
                     <td>
                       <span className="assigned-text">
-                        {item.assigned_to_name || (item.organization_id ? 'Direction Voirie' : 'Non assigné')}
+                        {item.assigned_to_name || knownOrg?.name || (item.organization_id
+                          ? (lang === 'fr' ? 'Organisation non résolue' : 'Unresolved organization')
+                          : (lang === 'fr' ? 'Non assigné' : 'Unassigned'))}
                       </span>
                     </td>
                     <td>

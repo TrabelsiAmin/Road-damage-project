@@ -40,6 +40,11 @@ export function RoadSegmentRiskView({
                 ? 'Agrégation spatiale à partir des codes de classe stockés, de la récurrence des passages, de l\'ancienneté des dossiers et de la position GPS.'
                 : 'Spatial aggregation from stored class codes, report counts, backlog age, and GPS position.'}
             </p>
+            <p style={{ fontSize: '0.78rem', color: 'var(--text-muted)', marginTop: '6px' }}>
+              {lang === 'fr'
+                ? 'Les noms de corridors sont approximatifs : ils viennent du point de référence le plus proche, pas d’un relevé de la route.'
+                : 'Corridor names are approximate: they come from the nearest reference point, not a road survey.'}
+            </p>
           </div>
         </div>
       </div>

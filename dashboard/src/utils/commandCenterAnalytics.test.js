@@ -5,6 +5,8 @@ import {
   partitionActionCenterQueues,
   buildDataQualityMetrics,
   buildRegionalBacklog,
+  demoFilterForSelection,
+  clustersForDemoSelection,
 } from './commandCenterAnalytics';
 
 describe('commandCenterAnalytics', () => {
@@ -62,6 +64,46 @@ describe('commandCenterAnalytics', () => {
       detections: [{ class_code: 'D10', confidence: 0.40 }],
     },
   ];
+
+  it('excludes demonstration observations unless the selection asks for them', () => {
+    const rows = [
+      ...mockObservations,
+      {
+        id: 'obs-demo',
+        latitude: 36.81,
+        longitude: 10.19,
+        anomaly_type: 'D40',
+        priority_score: 50,
+        priority_label: 'MEDIUM',
+        status: 'unconfirmed',
+        is_demo: true,
+        created_at: new Date().toISOString(),
+      },
+    ];
+    expect(demoFilterForSelection(false)).toBe('exclude_demo');
+    expect(demoFilterForSelection(undefined)).toBe('exclude_demo');
+    expect(demoFilterForSelection(true)).toBe('all');
+
+    const hidden = filterObservations(rows, { demoFilter: demoFilterForSelection(false) });
+    expect(hidden.map((row) => row.id)).not.toContain('obs-demo');
+
+    const shown = filterObservations(rows, { demoFilter: demoFilterForSelection(true) });
+    expect(shown.map((row) => row.id)).toContain('obs-demo');
+  });
+
+  it('drops demonstration-only clusters and keeps real ones', () => {
+    const clusters = [
+      { id: 'demo-only', realCount: 0, demoCount: 2, count: 2, members: [{ id: 'd1', is_demo: true }] },
+      { id: 'real', realCount: 1, demoCount: 1, count: 2, members: [{ id: 'r1', is_demo: false }, { id: 'd2', is_demo: true }] },
+    ];
+    const hidden = clustersForDemoSelection(clusters, false);
+    expect(hidden.map((cluster) => cluster.id)).toEqual(['real']);
+    expect(hidden[0].members.map((member) => member.id)).toEqual(['r1']);
+    expect(hidden[0].count).toBe(1);
+
+    const shown = clustersForDemoSelection(clusters, true);
+    expect(shown).toHaveLength(2);
+  });
 
   it('filters observations by class, priority, and status correctly', () => {
     const d40Only = filterObservations(mockObservations, { anomalyClass: 'D40' });

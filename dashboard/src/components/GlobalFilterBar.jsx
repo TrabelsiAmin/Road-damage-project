@@ -3,13 +3,6 @@ import { Filter, RotateCcw, Calendar, MapPin, Tag, Shield, Building2 } from 'luc
 import { ALL_GOVERNORATES, getMunicipalitiesForGovernorate } from '../utils/tunisiaGeo';
 import { STATUS_LABELS } from '../constants';
 
-export const ORGANIZATIONS_LIST = [
-  { id: 'c4b8b609-b684-4861-bbd4-53965fc12d5b', name: 'Direction Voirie Municipale' },
-  { id: '3c2e1f5a-4b9d-4e8c-a1d2-e3f4a5b6c7d8', name: 'Ministère de l\'Équipement (DGPC)' },
-  { id: '7d8e9f0a-1b2c-3d4e-5f6a-7b8c9d0e1f2a', name: 'Société Tunisie Autoroutes' },
-  { id: '9a8b7c6d-5e4f-3a2b-1c0d-e9f8a7b6c5d4', name: 'District Grand Tunis Voirie' },
-];
-
 export function GlobalFilterBar({
   filters,
   onChange,
@@ -17,6 +10,8 @@ export function GlobalFilterBar({
   lang = 'fr',
   totalCount = 0,
   filteredCount = 0,
+  organizations = [],
+  organizationsUnavailable = false,
 }) {
   const municipalities = getMunicipalitiesForGovernorate(filters.governorate);
 
@@ -199,18 +194,22 @@ export function GlobalFilterBar({
             <Building2 size={12} />
             <span>{lang === 'fr' ? 'Service / Direction' : 'Organization'}</span>
           </label>
-          <select
-            className="select-input select-filter"
-            value={filters.organization}
-            onChange={(e) => handleFieldChange('organization', e.target.value)}
-          >
-            <option value="all">{lang === 'fr' ? 'Tous les services' : 'All organizations'}</option>
-            {ORGANIZATIONS_LIST.map((org) => (
-              <option key={org.id} value={org.id}>
-                {org.name}
-              </option>
-            ))}
-          </select>
+          {organizationsUnavailable ? (
+            <p className="filter-note">{lang === 'fr' ? 'Indisponible' : 'Unavailable'}</p>
+          ) : (
+            <select
+              className="select-input select-filter"
+              value={filters.organization}
+              onChange={(e) => handleFieldChange('organization', e.target.value)}
+            >
+              <option value="all">{lang === 'fr' ? 'Tous les services' : 'All organizations'}</option>
+              {organizations.map((org) => (
+                <option key={org.id} value={org.id}>
+                  {org.name}
+                </option>
+              ))}
+            </select>
+          )}
         </div>
 
         {/* Demo Toggle */}

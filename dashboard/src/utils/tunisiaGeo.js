@@ -81,6 +81,7 @@ export function resolveTunisiaAdmin(lat, lng) {
       governorate: 'Non déterminé',
       municipality: 'Non déterminé',
       roadSegment: 'Voie non répertoriée',
+      roadApproximate: false,
       distanceMeters: null,
     };
   }
@@ -145,8 +146,15 @@ export function resolveTunisiaAdmin(lat, lng) {
     governorate: bestGov,
     municipality,
     roadSegment,
+    roadApproximate: true,
     distanceMeters: Math.round(minCorridorDist),
   };
+}
+
+export function approximateRoadNote(lang = 'fr') {
+  return lang === 'fr'
+    ? 'Nom de voie approximatif, déduit du point de référence le plus proche. Ce n’est pas un relevé de la route.'
+    : 'Approximate road name from the nearest reference point. This is not a surveyed road.';
 }
 
 /**

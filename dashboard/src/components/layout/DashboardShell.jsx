@@ -15,6 +15,7 @@ export function DashboardShell({
   hasDemoData = false,
   onOpenMetrics,
   onExportCsv,
+  exportDisabled = false,
   currentUser,
   isAuthorityUser,
   onOpenLogin,
@@ -60,6 +61,7 @@ export function DashboardShell({
           hasDemoData={hasDemoData}
           onOpenMetrics={onOpenMetrics}
           onExportCsv={onExportCsv}
+          exportDisabled={exportDisabled}
           currentUser={currentUser}
           isAuthorityUser={isAuthorityUser}
           onOpenLogin={onOpenLogin}

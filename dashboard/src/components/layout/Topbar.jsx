@@ -25,6 +25,7 @@ export function Topbar({
   hasDemoData = false,
   onOpenMetrics,
   onExportCsv,
+  exportDisabled = false,
   currentUser,
   isAuthorityUser,
   onOpenLogin,
@@ -208,7 +209,10 @@ export function Topbar({
             type="button"
             className="btn btn-secondary tm-btn-export hide-on-mobile"
             onClick={onExportCsv}
-            title={lang === 'fr' ? 'Exporter en CSV' : 'Export to CSV'}
+            disabled={exportDisabled}
+            title={exportDisabled
+              ? (lang === 'fr' ? 'Indisponible' : 'Unavailable')
+              : (lang === 'fr' ? 'Exporter en CSV' : 'Export to CSV')}
           >
             <FileSpreadsheet size={14} />
             <span className="hide-on-tablet">CSV</span>

@@ -28,6 +28,7 @@ export function buildExportRows(observations) {
       governorate: geo.governorate,
       municipality: geo.municipality,
       roadSegment: geo.roadSegment,
+      roadApproximate: geo.roadApproximate === true,
       latitude: Number(obs.latitude).toFixed(6),
       longitude: Number(obs.longitude).toFixed(6),
       accuracyMeters: obs.accuracy_meters ? Number(obs.accuracy_meters).toFixed(1) : 'N/A',
@@ -55,6 +56,7 @@ export function generateCsvString(observations) {
     'Gouvernorat',
     'Commune / Municipalité',
     'Axe / Tronçon',
+    'Qualification de la voie',
     'Latitude',
     'Longitude',
     'Précision GPS (m)',
@@ -86,6 +88,7 @@ export function generateCsvString(observations) {
         escapeCsv(r.governorate),
         escapeCsv(r.municipality),
         escapeCsv(r.roadSegment),
+        escapeCsv(r.roadApproximate ? 'approximatif' : 'non déterminé'),
         escapeCsv(r.latitude),
         escapeCsv(r.longitude),
         escapeCsv(r.accuracyMeters),
@@ -126,6 +129,7 @@ export function generateGeoJson(observations) {
         governorate: r.governorate,
         municipality: r.municipality,
         road_segment: r.roadSegment,
+        road_approximate: r.roadApproximate === true,
         accuracy_meters: r.accuracyMeters === 'N/A' ? null : Number(r.accuracyMeters),
         estimated_cost_tnd: r.estimatedCostTnd == null ? 'unavailable' : r.estimatedCostTnd,
         assigned_to: r.assignedTo,
@@ -176,14 +180,14 @@ export function exportToExcelTsv(observations, filename = 'tariqmap-export.tsv')
   const rows = buildExportRows(observations);
   const headers = [
     'ID', 'Date', 'Code', 'Type', 'Priorité', 'Score', 'Statut',
-    'Gouvernorat', 'Commune', 'Axe', 'Latitude', 'Longitude',
+    'Gouvernorat', 'Commune', 'Axe', 'Qualification de la voie', 'Latitude', 'Longitude',
     'Précision (m)', 'Coût (TND)', 'Assigné', 'Date limite', 'Démo'
   ];
   const tsvLines = [headers.join('\t')];
   rows.forEach((r) => {
     tsvLines.push([
       r.id, r.date, r.classCode, r.typeLabel, r.priorityLabel, r.priorityScore,
-      r.status, r.governorate, r.municipality, r.roadSegment, r.latitude,
+      r.status, r.governorate, r.municipality, r.roadSegment, r.roadApproximate ? 'approximatif' : 'non déterminé', r.latitude,
       r.longitude, r.accuracyMeters, r.estimatedCostTnd == null ? 'unavailable' : r.estimatedCostTnd, r.assignedTo, r.dueDate, r.isDemo
     ].join('\t'));
   });

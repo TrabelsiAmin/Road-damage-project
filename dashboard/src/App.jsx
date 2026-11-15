@@ -27,6 +27,7 @@ import {
   subscribeToCommandCenterUpdates,
   fetchPublicDamageSummary,
   fetchPublicMapCells,
+  fetchOrganizations,
   supabase,
 } from './supabase';
 import { mergeObservationPages, OBSERVATION_PAGE_SIZE } from './utils/records';
@@ -43,6 +44,8 @@ import { AuditHistoryView } from './components/AuditHistoryView';
 import { CaseDetailModal } from './components/CaseDetailModal';
 import {
   filterObservations,
+  demoFilterForSelection,
+  clustersForDemoSelection,
   buildExecutiveKpis,
   partitionActionCenterQueues,
   buildDataQualityMetrics,
@@ -50,12 +53,15 @@ import {
   buildNewVsRepairedTimeSeries,
 } from './utils/commandCenterAnalytics';
 import { computeAllCorridorRisks } from './utils/roadSegmentRisk';
-import { REFERENCE_CORRIDORS } from './utils/tunisiaGeo';
+import { approximateRoadNote, REFERENCE_CORRIDORS } from './utils/tunisiaGeo';
 import { haversineDistanceMeters } from './utils/clustering';
 import { MinistryOverview } from './components/MinistryOverview';
 import { TechnicalRecommendation } from './components/TechnicalRecommendation';
 import { displayClassCode } from './utils/classCodes';
 import { filterValidClusters } from './utils/mapValidation';
+import { mapLoadCopy, mapLoadState } from './utils/mapLoadState';
+import { canDownloadPublicExport, publicSituationText } from './utils/publicStats';
+import { usableOrganizations } from './utils/organizations';
 import { THEME_STORAGE_KEY } from './utils/theme';
 import {
   buildMinistryOverview,
@@ -359,6 +365,10 @@ export default function App() {
   const [authReady, setAuthReady] = useState(false);
   const [publicSummary, setPublicSummary] = useState([]);
   const [publicCells, setPublicCells] = useState([]);
+  const [publicStatsStatus, setPublicStatsStatus] = useState('idle');
+  const [organizations, setOrganizations] = useState([]);
+  const [organizationsUnavailable, setOrganizationsUnavailable] = useState(false);
+  const [organizationsLoaded, setOrganizationsLoaded] = useState(false);
   const fetchGenRef = useRef(0);
   const [showLoginModal, setShowLoginModal] = useState(false);
   const [authEmail, setAuthEmail] = useState('');
@@ -533,6 +543,7 @@ export default function App() {
         setSelectedCluster(null);
         setPublicSummary(summary || []);
         setPublicCells(cells || []);
+        setPublicStatsStatus('ready');
         setLastUpdated(new Date());
         return;
       }
@@ -545,6 +556,7 @@ export default function App() {
       if (gen !== fetchGenRef.current) return;
       setPublicSummary([]);
       setPublicCells([]);
+      setPublicStatsStatus('idle');
       setObservations(obsPage?.rows || []);
       setListTruncated(Boolean(obsPage?.truncated));
       setServerClusters(clusterData || []);
@@ -566,6 +578,7 @@ export default function App() {
         setServerClusters([]);
         setPublicSummary([]);
         setPublicCells([]);
+        setPublicStatsStatus('unavailable');
       }
       setError(err.message || 'Error fetching data from Supabase');
     } finally {
@@ -580,6 +593,42 @@ export default function App() {
   useEffect(() => {
     loadData();
   }, [loadData, dataVersion]);
+
+  useEffect(() => {
+    if (!isAuthorityUser) {
+      setOrganizations([]);
+      setOrganizationsUnavailable(false);
+      setOrganizationsLoaded(false);
+      return undefined;
+    }
+    let active = true;
+    fetchOrganizations()
+      .then((rows) => {
+        if (!active) return;
+        setOrganizations(usableOrganizations(rows));
+        setOrganizationsUnavailable(false);
+        setOrganizationsLoaded(true);
+      })
+      .catch(() => {
+        if (!active) return;
+        setOrganizations([]);
+        setOrganizationsUnavailable(true);
+        setOrganizationsLoaded(true);
+      });
+    return () => {
+      active = false;
+    };
+  }, [isAuthorityUser]);
+
+  useEffect(() => {
+    if (!organizationsLoaded || filters.organization === 'all') return;
+    const known = organizations.some((org) => org.id === filters.organization);
+    if (organizationsUnavailable || !known) {
+      setFilters((prev) => (
+        prev.organization === 'all' ? prev : { ...prev, organization: 'all' }
+      ));
+    }
+  }, [organizationsLoaded, organizations, organizationsUnavailable, filters.organization]);
 
   const loadOlderObservations = useCallback(async () => {
     if (!isAuthorityUser) return;
@@ -737,7 +786,8 @@ export default function App() {
 
   // ── 3. Filtered Clusters for Display ───────────────────────────────────────
   const filteredClusters = useMemo(() => {
-    return clusters.filter((c) => {
+    const demoScoped = clustersForDemoSelection(clusters, filters.includeDemo === true);
+    return demoScoped.filter((c) => {
       if (classFilter !== 'all') {
         const memberClass = c.members.some((member) => observationClass(member) === classFilter);
         if (c.dominantClass !== classFilter && !memberClass) return false;
@@ -761,7 +811,7 @@ export default function App() {
       }
       return true;
     });
-  }, [clusters, classFilter, priorityFilter, statusFilter, period]);
+  }, [clusters, classFilter, priorityFilter, statusFilter, period, filters.includeDemo]);
 
   // Valid geolocated clusters for Leaflet map markers and bounds calculation
   const validClusters = useMemo(() => {
@@ -785,17 +835,23 @@ export default function App() {
   }, [isAuthorityUser, validClusters, publicCells]);
 
   const ministry = useMemo(() => {
-    const scoped = observations.filter((obs) => matchesObservationFilters(obs, {
+    const demoScoped = filterObservations(observations, {
+      demoFilter: demoFilterForSelection(filters.includeDemo),
+    });
+    const scoped = demoScoped.filter((obs) => matchesObservationFilters(obs, {
       classFilter,
       priorityFilter,
       statusFilter,
     }));
     return buildMinistryOverview(scoped, { period });
-  }, [observations, classFilter, priorityFilter, statusFilter, period]);
+  }, [observations, classFilter, priorityFilter, statusFilter, period, filters.includeDemo]);
 
   // ── Multi-dimensional Filtered Observations & Command Center Analytics ──
   const filteredObservations = useMemo(() => {
-    const base = filterObservations(observations, filters);
+    const base = filterObservations(observations, {
+      ...filters,
+      demoFilter: demoFilterForSelection(filters.includeDemo),
+    });
     if (!searchQuery.trim()) return base;
     const q = searchQuery.trim().toLowerCase();
     return base.filter((obs) => {
@@ -1155,7 +1211,7 @@ export default function App() {
           iconAnchor: [21, 9],
         });
         const corrMarker = L.marker([corr.lat, corr.lng], { icon: corrIcon });
-        corrMarker.bindPopup(`<strong>${corr.name}</strong><br/>Axe prioritaire de transport`);
+        corrMarker.bindPopup(`<strong>${corr.name}</strong><br/>${approximateRoadNote(langRef.current)}`);
         corrMarker.addTo(markersGroup);
       });
     }
@@ -1364,6 +1420,7 @@ export default function App() {
   // ── 7. CSV Export (Strictly omitting device_id) ────────────────────────────
   function handleExportCsv() {
     if (!isAuthorityUser) {
+      if (!canDownloadPublicExport(publicStatsStatus)) return;
       const csv = generatePublicAggregateCsv(publicSummary, publicCells);
       downloadFile(
         `\uFEFF${csv}`,
@@ -1470,6 +1527,7 @@ export default function App() {
       hasDemoData={hasDemoData}
       onOpenMetrics={() => setShowMetricsPanel(true)}
       onExportCsv={handleExportCsv}
+      exportDisabled={!isAuthorityUser && !canDownloadPublicExport(publicStatsStatus)}
       currentUser={currentUser}
       isAuthorityUser={isAuthorityUser}
       onOpenLogin={() => setShowLoginModal(true)}
@@ -1497,6 +1555,8 @@ export default function App() {
         lang={lang}
         totalCount={observations.length}
         filteredCount={filteredObservations.length}
+        organizations={organizations}
+        organizationsUnavailable={organizationsUnavailable}
       />
       )}
 
@@ -1510,13 +1570,9 @@ export default function App() {
               ? 'Totaux nationaux et mailles d\'environ 1 km. Les dossiers individuels restent réservés aux comptes autorisés.'
               : 'National totals and roughly 1 km cells. Individual cases stay with authorized accounts.'}
           </p>
-          {!loading && !error && (
+          {!loading && (
             <p style={{ marginTop: '8px' }}>
-              {(publicSummary || []).length === 0
-                ? (lang === 'fr' ? 'Aucun total public pour le moment.' : 'No public totals yet.')
-                : (publicSummary || []).map((row) => (
-                    `${row.anomaly_type || '—'} · ${row.priority_band || '—'} · ${Number(row.open_count) || 0} ${lang === 'fr' ? 'ouverts' : 'open'} · ${Number(row.repaired_count) || 0} ${lang === 'fr' ? 'réparés' : 'repaired'}`
-                  )).join(' · ')}
+              {publicSituationText({ status: publicStatsStatus, summary: publicSummary, lang })}
             </p>
           )}
         </section>
@@ -1581,6 +1637,7 @@ export default function App() {
           onUpdateStatus={handleUpdateStatus}
           onBulkUpdate={handleBulkUpdate}
           lang={lang}
+          organizations={organizations}
         />
       )}
 
@@ -1623,6 +1680,7 @@ export default function App() {
           publicMode={!isAuthorityUser}
           publicSummary={publicSummary}
           publicCells={publicCells}
+          publicAvailable={canDownloadPublicExport(publicStatsStatus)}
         />
       )}
 
@@ -1663,10 +1721,10 @@ export default function App() {
           <div ref={mapRef} className="leaflet-map-host" />
 
           {/* Map Loading State */}
-          {loading && observations.length === 0 && (
+          {mapLoadState({ loading, error, markerCount: mapMarkers.length }) === 'loading' && (
             <div className="map-overlay-banner map-loading" role="status">
               <div className="spinner-small" />
-              <span>{lang === 'fr' ? 'Chargement de la carte…' : 'Loading map…'}</span>
+              <span>{mapLoadCopy('loading', lang)}</span>
             </div>
           )}
 
@@ -1682,14 +1740,10 @@ export default function App() {
           )}
 
           {/* Empty Valid Coordinates State */}
-          {!loading && mapMarkers.length === 0 && !error && (
+          {mapLoadState({ loading, error, markerCount: mapMarkers.length }) === 'empty' && (
             <div className="map-overlay-banner map-empty-state" role="status">
               <MapPinOff size={15} />
-              <span>
-                {lang === 'fr'
-                  ? 'Aucune anomalie géolocalisée dans les filtres sélectionnés.'
-                  : 'No geolocated anomalies match the selected filters.'}
-              </span>
+              <span>{mapLoadCopy('empty', lang)}</span>
             </div>
           )}
 
@@ -1714,13 +1768,9 @@ export default function App() {
             </div>
           )}
 
-          {error && (
+          {mapLoadState({ loading, error, markerCount: mapMarkers.length }) === 'error' && (
             <div className="map-overlay-banner map-error-state" role="alert">
-              <span>
-                {lang === 'fr'
-                  ? 'Les anomalies ne peuvent pas être chargées.'
-                  : 'Anomalies could not be loaded.'}
-              </span>
+              <span>{mapLoadCopy('error', lang)}</span>
               <button type="button" className="btn btn-secondary btn-sm" onClick={loadData}>
                 {lang === 'fr' ? 'Réessayer' : 'Retry'}
               </button>
@@ -1775,7 +1825,7 @@ export default function App() {
                 checked={mapLayers.roadSegments}
                 onChange={(e) => setMapLayers((l) => ({ ...l, roadSegments: e.target.checked }))}
               />
-              <span>{lang === 'fr' ? 'Corridors nationaux' : 'National corridors'}</span>
+              <span>{lang === 'fr' ? 'Corridors nationaux (approximatifs)' : 'National corridors (approximate)'}</span>
             </label>
             <label className="layer-checkbox">
               <input
@@ -2522,6 +2572,7 @@ export default function App() {
           onAssignCase={handleAssignCase}
           onOpenLightbox={(img) => setLightboxImage(img)}
           lang={lang}
+          organizations={organizations}
         />
       )}
 

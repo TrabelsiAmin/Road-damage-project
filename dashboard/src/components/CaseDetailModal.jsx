@@ -20,7 +20,7 @@ import {
 import { DAMAGE_CLASSES, STATUS_LABELS } from '../constants';
 import { displayClassCode, observationClassCode, statClassCode } from '../utils/classCodes';
 import { getSignedMediaUrl, getPublicMediaUrl } from '../supabase';
-import { ORGANIZATIONS_LIST } from './GlobalFilterBar';
+import { approximateRoadNote, resolveTunisiaAdmin } from '../utils/tunisiaGeo';
 
 export function CaseDetailModal({
   observation,
@@ -30,6 +30,7 @@ export function CaseDetailModal({
   onAssignCase,
   onOpenLightbox,
   lang = 'fr',
+  organizations = [],
 }) {
   const [activeTab, setActiveTab] = useState('overview'); // 'overview' | 'evidence' | 'workflow' | 'audit'
   const [imageUrl, setImageUrl] = useState(null);
@@ -114,7 +115,18 @@ export function CaseDetailModal({
                 {lang === 'fr' ? 'Dossier d\'intervention voirie' : 'Road Maintenance Case'} #{String(observation.id).substring(0, 8)}
               </h3>
               <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>
-                {observation.roadSegment || 'Voirie non répertoriée'} • {observation.municipality || '—'}, {observation.governorate || '—'}
+                {(() => {
+                  const geo = Number.isFinite(Number(observation.latitude)) && Number.isFinite(Number(observation.longitude))
+                    ? resolveTunisiaAdmin(observation.latitude, observation.longitude)
+                    : null;
+                  const road = geo?.roadApproximate
+                    ? `${geo.roadSegment} (${lang === 'fr' ? 'approximatif' : 'approximate'})`
+                    : (observation.roadSegment || (lang === 'fr' ? 'Voie non répertoriée' : 'Road not recorded'));
+                  const place = geo
+                    ? `${geo.municipality || '—'}, ${geo.governorate || '—'}`
+                    : `${observation.municipality || '—'}, ${observation.governorate || '—'}`;
+                  return `${road} • ${place}${geo?.roadApproximate ? ` — ${approximateRoadNote(lang)}` : ''}`;
+                })()}
               </span>
             </div>
           </div>
@@ -254,7 +266,9 @@ export function CaseDetailModal({
                   onChange={(e) => setAssignedOrg(e.target.value)}
                 >
                   <option value="">{lang === 'fr' ? 'Non assigné' : 'Unassigned'}</option>
-                  {ORGANIZATIONS_LIST.map((org) => (
+                  {organizations.length === 0 ? (
+                    <option value="" disabled>{lang === 'fr' ? 'Indisponible' : 'Unavailable'}</option>
+                  ) : organizations.map((org) => (
                     <option key={org.id} value={org.id}>{org.name}</option>
                   ))}
                 </select>

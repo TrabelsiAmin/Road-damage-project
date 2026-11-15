@@ -13,6 +13,7 @@ import pickle
 import sys
 import threading
 import time
+import urllib.error
 import urllib.request
 from pathlib import Path
 
@@ -392,6 +393,12 @@ def create_app(retrieve, generate_answer, vector_count):
         question: str = Field(min_length=1, max_length=2000)
         k: int = Field(default=5, ge=1, le=8)
 
+    # `from __future__ import annotations` laisse le nom QuestionRequest
+    # en texte. FastAPI le cherche dans le module, pas dans cette fonction.
+    # Sans cette affectation, le JSON {question, k} est ignoré et l'API
+    # répond 422 : paramètre d'URL `request` manquant.
+    globals()["QuestionRequest"] = QuestionRequest
+
     @app.get("/health")
     def health():
         report = environment_report()
@@ -425,10 +432,34 @@ def port_open(port=API_PORT):
         return sock.connect_ex((API_HOST, port)) == 0
 
 
+def ask_body_accepts_question(spec):
+    post = (spec.get("paths") or {}).get("/ask", {}).get("post") or {}
+    schema = (
+        ((post.get("requestBody") or {}).get("content") or {})
+        .get("application/json", {})
+        .get("schema")
+        or {}
+    )
+    if str(schema.get("$ref") or "").endswith("/QuestionRequest"):
+        return True
+    return "question" in (schema.get("properties") or {})
+
+
 def start_api(app):
     if port_open():
-        print("Une API répond déjà sur", API_HOST, API_PORT)
-        return
+        try:
+            spec = http_json("GET", "/openapi.json", timeout=5)
+            reusable = ask_body_accepts_question(spec)
+        except Exception:
+            reusable = False
+        if reusable:
+            print("Une API répond déjà sur", API_HOST, API_PORT)
+            return
+        raise RuntimeError(
+            "Le port 8000 sert encore l'ancienne API : elle attend un paramètre "
+            "d'URL nommé request et refuse le JSON {question, k}. "
+            "Redémarrez l'environnement d'exécution, puis relancez cette cellule."
+        )
     import uvicorn
 
     thread = threading.Thread(
@@ -452,8 +483,14 @@ def http_json(method, path, payload=None, timeout=180):
         method=method,
         headers={"Content-Type": "application/json", "Accept": "application/json"},
     )
-    with urllib.request.urlopen(request, timeout=timeout) as response:
-        return json.loads(response.read().decode("utf-8"))
+    try:
+        with urllib.request.urlopen(request, timeout=timeout) as response:
+            return json.loads(response.read().decode("utf-8"))
+    except urllib.error.HTTPError as error:
+        detail = error.read().decode("utf-8", errors="replace")
+        raise RuntimeError(
+            f"HTTP {error.code} sur {method} {path} : {detail}"
+        ) from error
 
 
 def print_demo_result(item, payload):

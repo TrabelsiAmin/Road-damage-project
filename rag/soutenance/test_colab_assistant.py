@@ -14,8 +14,12 @@ from colab_assistant import (
     EMBEDDING_MODEL,
     EXPECTED_DOCS,
     LLM_MODEL,
+    ask_body_accepts_question,
+    build_prompt,
     chunk_text,
     clean_api_answer,
+    create_app,
+    http_json,
     index_is_reusable,
     main,
     missing_documents,
@@ -98,6 +102,97 @@ class AssistantPreparationTest(unittest.TestCase):
         self.assertNotIn("pyngrok", script)
         self.assertNotIn("ngrok.connect", script)
         self.assertNotIn("NGROK_AUTH_TOKEN", script)
+
+    def test_ask_accepts_question_body_and_keeps_document_only_answers(self):
+        seen = {}
+
+        def retrieve(query, k=5):
+            seen["query"] = query
+            seen["k"] = k
+            return [{
+                "text": "Les fissures longitudinales suivent l'axe de la chaussée.",
+                "source": "manuel.txt",
+                "score": 0.91,
+            }]
+
+        def generate(question, context):
+            seen["context"] = context
+            if "prix" in question:
+                return "L'information n'a pas été trouvée dans les manuels."
+            return "Les dégradations comprennent les fissures."
+
+        prompt = build_prompt("question", "contexte")
+        self.assertIn("uniquement à partir du contexte fourni", prompt)
+        self.assertIn("n'a pas été trouvée", prompt)
+
+        from fastapi.testclient import TestClient
+
+        app = create_app(retrieve, generate, 431)
+        client = TestClient(app)
+        for item in DEMO_QUESTIONS:
+            response = client.post("/ask", json={"question": item["question"], "k": 5})
+            self.assertEqual(response.status_code, 200, response.text)
+            body = response.json()
+            self.assertTrue(body["answer"])
+            self.assertEqual(body["sources"][0]["source"], "manuel.txt")
+            self.assertIn("fissures longitudinales", body["sources"][0]["text"])
+            if item["id"] == "absent":
+                self.assertTrue(signals_missing_information(body["answer"]))
+            else:
+                self.assertFalse(signals_missing_information(body["answer"]))
+        self.assertEqual(seen["k"], 5)
+        self.assertIn("manuel.txt", seen["context"])
+
+        rejected = client.post("/ask", json={"query": "ornière", "k": 5})
+        self.assertEqual(rejected.status_code, 422)
+        self.assertIn("question", rejected.text)
+        self.assertIn("body", rejected.text)
+        self.assertNotIn('"loc":["query","request"]', rejected.text.replace(" ", ""))
+
+        spec = client.get("/openapi.json").json()
+        self.assertTrue(ask_body_accepts_question(spec))
+        self.assertFalse(ask_body_accepts_question({"paths": {"/ask": {"post": {}}}}))
+
+    def test_http_error_includes_the_response_body(self):
+        from http.server import BaseHTTPRequestHandler, HTTPServer
+        import threading
+
+        class Handler(BaseHTTPRequestHandler):
+            def do_POST(self):
+                length = int(self.headers.get("Content-Length", "0"))
+                self.rfile.read(length)
+                payload = (
+                    b'{"detail":[{"type":"missing","loc":["body","question"],'
+                    b'"msg":"Field required"}]}'
+                )
+                self.send_response(422)
+                self.send_header("Content-Type", "application/json")
+                self.send_header("Content-Length", str(len(payload)))
+                self.end_headers()
+                self.wfile.write(payload)
+
+            def log_message(self, fmt, *args):
+                return
+
+        server = HTTPServer(("127.0.0.1", 0), Handler)
+        thread = threading.Thread(target=server.serve_forever, daemon=True)
+        thread.start()
+        import colab_assistant as module
+
+        previous = (module.API_HOST, module.API_PORT)
+        module.API_HOST = "127.0.0.1"
+        module.API_PORT = server.server_address[1]
+        try:
+            with self.assertRaises(RuntimeError) as caught:
+                http_json("POST", "/ask", {"question": "fissure", "k": 5}, timeout=5)
+        finally:
+            module.API_HOST, module.API_PORT = previous
+            server.shutdown()
+            thread.join(timeout=5)
+        message = str(caught.exception)
+        self.assertIn("HTTP 422", message)
+        self.assertIn("question", message)
+        self.assertIn("Field required", message)
 
 
 if __name__ == "__main__":

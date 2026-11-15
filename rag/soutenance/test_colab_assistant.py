@@ -1,5 +1,6 @@
+import contextlib
+import io
 import json
-import pickle
 import tempfile
 import unittest
 from pathlib import Path
@@ -16,6 +17,7 @@ from colab_assistant import (
     chunk_text,
     clean_api_answer,
     index_is_reusable,
+    main,
     missing_documents,
     prepare,
     signals_missing_information,
@@ -73,6 +75,15 @@ class AssistantPreparationTest(unittest.TestCase):
         self.assertEqual(payload["sources"][0]["source"], "a.txt")
         self.assertTrue(signals_missing_information(payload["answer"]))
         self.assertFalse(signals_missing_information("Le prix est de 400 dinars."))
+
+    def test_jupyter_kernel_argument_does_not_stop_the_parser(self):
+        output = io.StringIO()
+        with tempfile.TemporaryDirectory() as folder:
+            with self.assertRaises(SystemExit) as caught:
+                with contextlib.redirect_stdout(output):
+                    main(["--check", "--root", folder, "-f", "kernel-132a3d9b.json"])
+        self.assertEqual(caught.exception.code, 2)
+        self.assertIn('"gpu"', output.getvalue())
 
     def test_notebook_contains_the_same_preparation_script(self):
         notebook = Path(__file__).with_name("assistant_colab.ipynb")

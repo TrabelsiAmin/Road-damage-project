@@ -551,15 +551,25 @@ def prepare(root, check_only=False, embedding_model=None, llm_pair=None):
     return 0
 
 
+def running_in_notebook():
+    try:
+        from IPython import get_ipython
+    except Exception:
+        return False
+    return get_ipython() is not None
+
+
 def main(argv=None):
     parser = argparse.ArgumentParser()
     parser.add_argument("--check", action="store_true")
     parser.add_argument("--root", type=Path, default=None)
-    args = parser.parse_args(argv)
+    # Colab launches the cell with "-f <kernel.json>". Ignore that argument.
+    args, _unknown = parser.parse_known_args(argv)
     root = args.root or default_root()
     code = prepare(root, check_only=args.check)
-    if code:
+    if code and not running_in_notebook():
         raise SystemExit(code)
+    return code
 
 
 if __name__ == "__main__":

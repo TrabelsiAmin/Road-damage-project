@@ -165,6 +165,7 @@ export function OverviewBoard({
   onOpenReports,
   onOpenIncidents,
   onOpenObservation,
+  onRetainObservation,
   assistant = null,
 }) {
   const copy = COPY[lang] || COPY.fr;
@@ -282,14 +283,22 @@ export function OverviewBoard({
               </thead>
               <tbody>
                 {view.rows.map((row) => (
-                  <tr key={row.id || `${row.dateLabel}-${row.classCode}`}>
+                  <tr
+                    key={row.id || `${row.dateLabel}-${row.classCode}`}
+                    className={onRetainObservation ? 'ov-row-selectable' : undefined}
+                    onClick={() => onRetainObservation && row.id && onRetainObservation(row.id)}
+                  >
                     <td>{row.dateLabel || '—'}</td>
                     <td>
                       <button
                         type="button"
                         className="ov-place"
                         title={copy.roadNote}
-                        onClick={() => onOpenObservation && row.id && onOpenObservation(row.id)}
+                        onClick={(event) => {
+                          event.stopPropagation();
+                          if (onRetainObservation && row.id) onRetainObservation(row.id);
+                          else if (onOpenObservation && row.id) onOpenObservation(row.id);
+                        }}
                       >
                         <strong>{row.road || '—'}</strong>
                         <span>{row.place || '—'}</span>

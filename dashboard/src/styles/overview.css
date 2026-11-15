@@ -492,6 +492,10 @@
   vertical-align: middle;
 }
 
+.ov-row-selectable {
+  cursor: pointer;
+}
+
 .ov-place {
   display: flex;
   flex-direction: column;

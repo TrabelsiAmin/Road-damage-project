@@ -41,6 +41,7 @@ export function ActionCenterView({
   onSelectQueue,
   isAuthorityUser,
   onOpenDetail,
+  onRetain,
   onUpdateStatus,
   onBulkUpdate,
   lang = 'fr',
@@ -296,9 +297,13 @@ export function ActionCenterView({
                 const statusLabel = STATUS_LABELS[item.status]?.fr || item.status || 'Non confirmé';
 
                 return (
-                  <tr key={item.id} className={isSelected ? 'row-selected' : ''}>
+                  <tr
+                    key={item.id}
+                    className={isSelected ? 'row-selected' : ''}
+                    onClick={() => onRetain && onRetain(item)}
+                  >
                     {isAuthorityUser && (
-                      <td style={{ textAlign: 'center' }}>
+                      <td style={{ textAlign: 'center' }} onClick={(event) => event.stopPropagation()}>
                         <input
                           type="checkbox"
                           checked={isSelected}
@@ -351,7 +356,7 @@ export function ActionCenterView({
                     <td>
                       <span className="mono cost-text">{repairCostText(lang)}</span>
                     </td>
-                    <td style={{ textAlign: 'right' }}>
+                    <td style={{ textAlign: 'right' }} onClick={(event) => event.stopPropagation()}>
                       <div className="table-actions-cell">
                         <button
                           type="button"

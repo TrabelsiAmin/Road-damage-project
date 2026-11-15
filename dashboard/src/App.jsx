@@ -73,9 +73,9 @@ import {
 import { calculatePriorityScore, PRIORITY_CONFIG } from './utils/priorityScoring';
 import {
   buildMapRagPopupHtml,
-  buildTechnicalQuestion,
   observationForRecommendation,
 } from './utils/ragClient';
+import { retainedObservationFrom } from './utils/retainedObservation';
 import {
   MapPin,
   AlertTriangle,
@@ -457,20 +457,18 @@ export default function App() {
   const [tileError, setTileError] = useState(false);
   const [ragSelection, setRagSelection] = useState(null);
   const [ragRequest, setRagRequest] = useState(null);
-  const askObservationRef = useRef(() => {});
+  const retainObservationRef = useRef(() => {});
   const langRef = useRef(lang);
   langRef.current = lang;
-  askObservationRef.current = (observation) => {
-    const safe = observationForRecommendation(observation);
-    setRagSelection(safe);
-    setRagRequest({
-      id: `${Date.now()}-${Math.random().toString(36).slice(2)}`,
-      question: buildTechnicalQuestion(safe, langRef.current),
-    });
+  retainObservationRef.current = (source) => {
+    const view = retainedObservationFrom(source, langRef.current);
+    if (!view) return;
+    setRagSelection(view);
+    setRagRequest(null);
     window.requestAnimationFrame(() => {
       document.getElementById('recommandation-technique')?.scrollIntoView({
         behavior: 'smooth',
-        block: 'start',
+        block: 'nearest',
       });
     });
   };
@@ -1230,13 +1228,20 @@ export default function App() {
       if (cluster.publicCell) {
         const isFr = langRef.current !== 'en';
         const safeClass = String(cluster.dominantClass || '—').replace(/[^A-Za-z0-9-]/g, '');
+        const keepLabel = isFr ? 'Retenir cette observation' : 'Keep this observation';
         marker.bindPopup(
           `<strong>${Number(cluster.count) || 0}</strong> ${isFr ? 'signalements' : 'reports'}<br/>${safeClass || '—'}<br/>${
             isFr
               ? 'Centre d\'une maille d\'environ 1 km. Ce n\'est pas la position mesurée.'
               : 'Center of a roughly 1 km cell. This is not the measured position.'
-          }`
+          }<br/><button type="button" data-rag-ask="true">${keepLabel}</button>`
         );
+        marker.on('popupopen', () => {
+          retainObservationRef.current(cluster);
+        });
+        marker.on('click', () => {
+          retainObservationRef.current(cluster);
+        });
         marker.addTo(markersGroup);
         return;
       }
@@ -1259,12 +1264,13 @@ export default function App() {
         root.querySelector('[data-rag-ask]')?.addEventListener('click', (event) => {
           event.preventDefault();
           event.stopPropagation();
-          askObservationRef.current(safe);
+          retainObservationRef.current(cluster);
         });
       });
 
       marker.on('click', () => {
         setSelectedCluster(cluster);
+        retainObservationRef.current(cluster);
       });
 
       marker.addTo(markersGroup);
@@ -1681,11 +1687,15 @@ export default function App() {
           onOpenReports={() => setActiveNavTab('reports')}
           onOpenIncidents={() => setActiveNavTab('action_center')}
           onOpenObservation={isAuthorityUser ? openObservation : undefined}
+          onRetainObservation={(id) => {
+            const observation = observations.find((item) => item.id === id);
+            if (observation) retainObservationRef.current(observation);
+          }}
           assistant={(
             <TechnicalRecommendation
               lang={lang}
-              selection={isAuthorityUser ? ragSelection : null}
-              request={isAuthorityUser ? ragRequest : null}
+              selection={ragSelection}
+              request={ragRequest}
             />
           )}
         />
@@ -1694,8 +1704,8 @@ export default function App() {
       {activeNavTab === 'assistant' && (
         <TechnicalRecommendation
           lang={lang}
-          selection={isAuthorityUser ? ragSelection : null}
-          request={isAuthorityUser ? ragRequest : null}
+          selection={ragSelection}
+          request={ragRequest}
         />
       )}
 
@@ -1719,7 +1729,11 @@ export default function App() {
           activeQueue={activeActionQueue}
           onSelectQueue={setActiveActionQueue}
           isAuthorityUser={isAuthorityUser}
-          onOpenDetail={(item) => setSelectedCaseDetail(item)}
+          onOpenDetail={(item) => {
+            retainObservationRef.current(item);
+            setSelectedCaseDetail(item);
+          }}
+          onRetain={(item) => retainObservationRef.current(item)}
           onUpdateStatus={handleUpdateStatus}
           onBulkUpdate={handleBulkUpdate}
           lang={lang}
@@ -2266,7 +2280,7 @@ export default function App() {
                             <button
                               type="button"
                               className="btn btn-secondary rag-inline-btn"
-                              onClick={() => askObservationRef.current(obs)}
+                              onClick={() => retainObservationRef.current(obs)}
                             >
                               <BookOpen size={12} />
                               <span>Recommandation technique</span>
@@ -2361,25 +2375,33 @@ export default function App() {
                   )}
                 </div>
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '6px', maxHeight: '340px', overflowY: 'auto' }}>
-                  {filteredClusters.map((c, i) => (
+                  {(isAuthorityUser ? filteredClusters : mapMarkers).map((c, i) => (
                     <div
                       key={c.id}
                       className="cluster-list-row"
-                      onClick={() => setSelectedCluster(c)}
+                      data-priority-row="true"
+                      onClick={() => {
+                        if (!c.publicCell) setSelectedCluster(c);
+                        retainObservationRef.current(c);
+                      }}
                     >
                       <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
                         <span className="mono" style={{ fontSize: '0.75rem', color: 'var(--text-dim)' }}>#{i + 1}</span>
                         <span style={{ fontWeight: 700, fontSize: '0.8rem', color: DAMAGE_CLASSES[c.dominantClass]?.color || '#64748b' }}>
-                          {c.dominantClass || '—'}
+                          {DAMAGE_CLASSES[c.dominantClass] ? c.dominantClass : '—'}
                         </span>
                         <span style={{ fontSize: '0.74rem', color: 'var(--text-muted)' }}>
-                          {c.count} {c.count > 1 ? 'passages' : 'passage'}
+                          {c.publicCell
+                            ? `${c.count} ${c.count > 1 ? 'signalements' : 'signalement'}`
+                            : `${c.count} ${c.count > 1 ? 'passages' : 'passage'}`}
                         </span>
                       </div>
                       <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-                        <strong className="mono" style={{ fontSize: '0.8rem', color: PRIORITY_PIN_COLORS[c.priorityLabel] }}>
-                          {formatScore(c.maxPriorityScore)}
-                        </strong>
+                        {!c.publicCell && (
+                          <strong className="mono" style={{ fontSize: '0.8rem', color: PRIORITY_PIN_COLORS[c.priorityLabel] }}>
+                            {formatScore(c.maxPriorityScore)}
+                          </strong>
+                        )}
                         <ChevronRight size={14} color="var(--text-dim)" />
                       </div>
                     </div>

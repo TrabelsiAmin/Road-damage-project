@@ -7,6 +7,7 @@ import {
   RAG_K_MIN,
   askRag,
   buildTechnicalQuestion,
+  checkRagHealth,
   isRagConfigured,
   sourceFileName,
 } from '../utils/ragClient';
@@ -24,6 +25,9 @@ const COPY = {
     passages: 'Passages',
     passagesHelp: 'Nombre d\'extraits de manuels transmis au modèle.',
     submit: 'Interroger les manuels',
+    checking: 'Vérification de l\'assistant…',
+    ready: 'L\'assistant est prêt.',
+    down: 'L\'assistant ne répond pas. La session Colab est arrêtée, ou le GPU n\'est pas disponible. Aucune réponse ne sera affichée.',
     loading: 'Recherche dans les manuels et rédaction de la réponse… Cela peut prendre une minute.',
     empty: 'Aucune réponse à afficher. Les manuels ne sont interrogés qu\'à votre demande.',
     sent: 'Question envoyée',
@@ -48,6 +52,9 @@ const COPY = {
     passages: 'Passages',
     passagesHelp: 'Number of manual excerpts sent to the model.',
     submit: 'Search the manuals',
+    checking: 'Checking the assistant…',
+    ready: 'The assistant is ready.',
+    down: 'The assistant is not responding. The Colab session is stopped, or the GPU is unavailable. No answer will be shown.',
     loading: 'Searching the manuals and drafting an answer… This can take a minute.',
     empty: 'No answer yet. The manuals are queried only when you ask.',
     sent: 'Question sent',
@@ -82,12 +89,34 @@ export function TechnicalRecommendation({ lang = 'fr', selection = null, request
   const [asked, setAsked] = useState('');
   const [result, setResult] = useState(null);
   const [error, setError] = useState(null);
+  const [backend, setBackend] = useState(configured ? 'checking' : 'down');
   const runId = useRef(0);
   const abortRef = useRef(null);
   const kRef = useRef(k);
   kRef.current = k;
 
+  useEffect(() => {
+    if (!configured) {
+      setBackend('down');
+      return undefined;
+    }
+    let cancelled = false;
+    setBackend('checking');
+    checkRagHealth({ configured: true }).then((status) => {
+      if (!cancelled) setBackend(status.ok ? 'up' : 'down');
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [configured]);
+
   async function run(question, passages) {
+    if (!configured || backend !== 'up') {
+      setError({ code: 'unavailable', message: copy.down });
+      setPhase('error');
+      setAsked(String(question || '').trim());
+      return;
+    }
     abortRef.current?.abort();
     const controller = new AbortController();
     abortRef.current = controller;
@@ -140,6 +169,11 @@ export function TechnicalRecommendation({ lang = 'fr', selection = null, request
       {!configured && (
         <p className="rag-unavailable" role="status">{copy.unavailable}</p>
       )}
+      {configured && (
+        <p className={backend === 'down' ? 'rag-error' : 'rag-loading'} role="status">
+          {backend === 'checking' ? copy.checking : backend === 'up' ? copy.ready : copy.down}
+        </p>
+      )}
 
       <div className="rag-selected">
         <p className="rag-kicker">{copy.selected}</p>
@@ -147,7 +181,7 @@ export function TechnicalRecommendation({ lang = 'fr', selection = null, request
         <button
           type="button"
           className="btn btn-primary"
-          disabled={!configured || !selection || phase === 'loading'}
+          disabled={!configured || backend !== 'up' || !selection || phase === 'loading'}
           onClick={() => selection && run(buildTechnicalQuestion(selection, lang), k)}
         >
           {copy.askSelection}
@@ -160,7 +194,7 @@ export function TechnicalRecommendation({ lang = 'fr', selection = null, request
           <textarea
             id="rag-question"
             value={draft}
-            disabled={!configured || phase === 'loading'}
+            disabled={!configured || backend !== 'up' || phase === 'loading'}
             placeholder={copy.placeholder}
             onChange={(event) => setDraft(event.target.value)}
           />
@@ -171,7 +205,7 @@ export function TechnicalRecommendation({ lang = 'fr', selection = null, request
             <select
               id="rag-k"
               value={k}
-              disabled={!configured || phase === 'loading'}
+              disabled={!configured || backend !== 'up' || phase === 'loading'}
               onChange={(event) => setK(Number(event.target.value))}
             >
               {Array.from({ length: RAG_K_MAX - RAG_K_MIN + 1 }, (_, index) => RAG_K_MIN + index).map((value) => (
@@ -179,7 +213,7 @@ export function TechnicalRecommendation({ lang = 'fr', selection = null, request
               ))}
             </select>
           </label>
-          <button type="submit" className="btn btn-secondary" disabled={!configured || phase === 'loading'}>
+          <button type="submit" className="btn btn-secondary" disabled={!configured || backend !== 'up' || phase === 'loading'}>
             {copy.submit}
           </button>
           <p className="rag-help">{copy.passagesHelp}</p>

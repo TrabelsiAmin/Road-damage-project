@@ -2,7 +2,10 @@ import { DAMAGE_CLASSES, STATUS_LABELS } from '../constants';
 import { observationClass, observationPriority } from './ministryAnalytics';
 
 export const RAG_ASK_PATH = '/rag/ask';
-export const RAG_TIMEOUT_MS = 90000;
+export const RAG_HEALTH_PATH = '/rag/health';
+export const RAG_ROOT_PATH = '/rag/';
+export const RAG_TIMEOUT_MS = 120000;
+export const RAG_HEALTH_TIMEOUT_MS = 8000;
 export const RAG_K_MIN = 1;
 export const RAG_K_MAX = 8;
 export const RAG_K_DEFAULT = 5;
@@ -198,6 +201,53 @@ export function parseRagResponse(payload) {
   };
 }
 
+async function probe(path, fetchImpl, timeoutMs) {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), timeoutMs);
+  try {
+    const response = await fetchImpl(path, {
+      method: 'GET',
+      headers: {
+        Accept: 'application/json',
+        'ngrok-skip-browser-warning': 'true',
+      },
+      signal: controller.signal,
+    });
+    if (!response?.ok) return { ok: false, status: Number(response?.status) || 0 };
+    const payload = await response.json();
+    if (payload && payload.status === 'ok') return { ok: true, payload };
+    return { ok: false, status: Number(response.status) || 0, code: 'not_ready' };
+  } catch (err) {
+    if (err?.name === 'AbortError') return { ok: false, code: 'timeout' };
+    return { ok: false, code: 'network' };
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
+export async function checkRagHealth({
+  fetchImpl = globalThis.fetch,
+  configured = isRagConfigured(),
+  timeoutMs = RAG_HEALTH_TIMEOUT_MS,
+} = {}) {
+  if (!configured) {
+    return errorResult(
+      'not_configured',
+      'L\'assistant documentaire est indisponible : VITE_RAG_API_URL n\'est pas renseignée. Le notebook Colab n\'est pas lancé depuis ce tableau de bord.',
+    );
+  }
+  const health = await probe(RAG_HEALTH_PATH, fetchImpl, timeoutMs);
+  if (health.ok) return { ok: true, payload: health.payload };
+  if (health.status === 404) {
+    const root = await probe(RAG_ROOT_PATH, fetchImpl, timeoutMs);
+    if (root.ok) return { ok: true, payload: root.payload };
+  }
+  return errorResult(
+    'unavailable',
+    'L\'assistant ne répond pas. La session Colab est arrêtée, ou le GPU n\'est pas disponible. Aucune réponse ne sera affichée.',
+  );
+}
+
 export async function askRag({
   question,
   k = RAG_K_DEFAULT,
@@ -253,7 +303,7 @@ export async function askRag({
       return errorResult(
         'http_error',
         unreachable
-          ? `L'API documentaire est injoignable (HTTP ${status}). Le notebook Colab est peut-être arrêté, ou l'adresse ngrok a changé.`
+          ? `L'assistant ne répond pas (HTTP ${status}). La session Colab est arrêtée, ou le GPU n'est pas disponible.`
           : `L'API documentaire a renvoyé une erreur HTTP ${status}.`,
         { status },
       );
@@ -271,12 +321,12 @@ export async function askRag({
       if (signal?.aborted) return errorResult('aborted', 'Question annulée.');
       return errorResult(
         'timeout',
-        'Le service n\'a pas répondu à temps. Le notebook Colab est peut-être arrêté, ou l\'adresse ngrok a changé.',
+        'Le service n\'a pas répondu à temps. Le modèle est peut-être encore en chargement, ou la session Colab est arrêtée.',
       );
     }
     return errorResult(
       'network',
-      'Impossible de joindre l\'API. Vérifiez que la session Colab tourne encore : l\'adresse publique change à chaque redémarrage.',
+      'Impossible de joindre l\'assistant. La session Colab est arrêtée, ou l\'adresse de l\'API n\'est plus valable.',
     );
   } finally {
     clearTimeout(timer);

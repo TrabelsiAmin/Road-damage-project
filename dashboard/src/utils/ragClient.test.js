@@ -1,7 +1,9 @@
 import { describe, it, expect } from 'vitest';
 import {
   RAG_ASK_PATH,
+  RAG_HEALTH_PATH,
   askRag,
+  checkRagHealth,
   buildMapRagPopupHtml,
   buildTechnicalQuestion,
   clampK,
@@ -285,7 +287,7 @@ describe('RAG response parsing and errors', () => {
     });
     expect(down.error.code).toBe('http_error');
     expect(down.error.status).toBe(502);
-    expect(down.error.message).toMatch(/périmée|ngrok/i);
+    expect(down.error.message).toMatch(/ne répond pas|Colab|GPU/i);
 
     const cancelled = new AbortController();
     cancelled.abort();
@@ -310,6 +312,55 @@ describe('RAG response parsing and errors', () => {
     expect(clampK(3.2)).toBe(3);
     expect(clampK(8)).toBe(8);
     expect(clampK(40)).toBe(8);
+  });
+});
+
+describe('RAG health', () => {
+  it('stays unavailable without a configured address and does not call the network', async () => {
+    let called = false;
+    const result = await checkRagHealth({
+      configured: false,
+      fetchImpl: () => {
+        called = true;
+      },
+    });
+    expect(called).toBe(false);
+    expect(result.ok).toBe(false);
+    expect(result.error.code).toBe('not_configured');
+  });
+
+  it('accepts /health and falls back to the notebook root', async () => {
+    const calls = [];
+    const health = await checkRagHealth({
+      configured: true,
+      fetchImpl: async (url) => {
+        calls.push(url);
+        return { ok: true, status: 200, json: async () => ({ status: 'ok', vectors: 12 }) };
+      },
+    });
+    expect(health.ok).toBe(true);
+    expect(calls).toEqual([RAG_HEALTH_PATH]);
+
+    const fallbackCalls = [];
+    const fallback = await checkRagHealth({
+      configured: true,
+      fetchImpl: async (url) => {
+        fallbackCalls.push(url);
+        if (url === RAG_HEALTH_PATH) return { ok: false, status: 404, json: async () => ({}) };
+        return { ok: true, status: 200, json: async () => ({ status: 'ok' }) };
+      },
+    });
+    expect(fallback.ok).toBe(true);
+    expect(fallbackCalls).toEqual([RAG_HEALTH_PATH, '/rag/']);
+  });
+
+  it('does not report the assistant ready when the probe fails', async () => {
+    const down = await checkRagHealth({
+      configured: true,
+      fetchImpl: async () => ({ ok: false, status: 503, json: async () => ({}) }),
+    });
+    expect(down.ok).toBe(false);
+    expect(down.error.code).toBe('unavailable');
   });
 });
 

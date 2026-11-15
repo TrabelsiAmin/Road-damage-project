@@ -2109,6 +2109,49 @@ h1, h2, h3, h4 {
   text-decoration: underline;
 }
 
+.rag-transcript {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  min-width: 0;
+}
+
+.rag-msg {
+  border-radius: var(--radius-sm);
+  padding: 10px 12px;
+  min-width: 0;
+}
+
+.rag-msg .rag-kicker,
+.rag-msg .rag-answer,
+.rag-msg .rag-error,
+.rag-msg .rag-top-source {
+  margin: 0;
+}
+
+.rag-msg .rag-answer,
+.rag-msg .rag-top-source {
+  margin-top: 6px;
+}
+
+.rag-msg-user {
+  background: #eff6ff;
+  border: 1px solid #bfdbfe;
+  color: #172033;
+}
+
+.rag-msg-assistant {
+  background: #fff;
+  border: 1px solid #dbe7f5;
+  color: #172033;
+}
+
+.rag-msg .rag-error {
+  background: transparent;
+  border: 0;
+  padding: 0;
+}
+
 .rag-form {
   display: flex;
   flex-direction: column;

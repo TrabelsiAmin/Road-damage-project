@@ -116,6 +116,13 @@ html[data-theme="dark"] .btn-primary:hover {
   color: #FFFFFF;
 }
 
+html[data-theme="dark"] .rag-msg-user,
+html[data-theme="dark"] .rag-msg-assistant {
+  background: #1C1917;
+  border-color: #44403C;
+  color: #F5F0E8;
+}
+
 html[data-theme="dark"] .rag-demo-pick {
   color: #93C5FD;
 }

@@ -8,14 +8,12 @@ import { DAMAGE_CLASSES } from '../constants';
 import {
   askRag,
   buildTechnicalQuestion,
-  findColabDemonstration,
   normalizeRagBase,
   observationForRecommendation,
+  RAG_DOWN_MESSAGE,
 } from './ragClient';
 import { formatIncidentDate } from './overviewPresentation';
 import { resolveTunisiaAdmin } from './tunisiaGeo';
-
-export const LOCAL_RAG_BASE = 'http://127.0.0.1:8000';
 
 function finitePoint(latitude, longitude) {
   const lat = Number(latitude);
@@ -99,64 +97,57 @@ export function retainedObservationFrom(source, lang = 'fr') {
 }
 
 /**
- * Live call against the saved Colab address, then this machine.
- * A recorded Colab answer is used only when the question is one of the five.
- * Anything else stays unanswered. No repair procedure is written here.
+ * One live call to the saved Colab address.
+ * No localhost fallback and no recorded answer.
  */
 export async function recommendationForRetained({
   observation,
   lang = 'fr',
   question,
   storedBase = '',
-  localBase = LOCAL_RAG_BASE,
-  k,
+  k = 5,
   fetchImpl,
   signal,
 } = {}) {
   const asked = String(question || '').trim() || buildTechnicalQuestion(observation, lang);
-  const bases = [];
   const stored = normalizeRagBase(storedBase);
-  const local = normalizeRagBase(localBase);
-  if (stored) bases.push(stored);
-  if (local && local !== stored) bases.push(local);
-
-  for (const base of bases) {
-    if (signal?.aborted) {
-      return { ok: false, live: false, recorded: false, question: asked, error: { code: 'aborted' } };
-    }
-    const response = await askRag({ question: asked, k, base, fetchImpl, signal });
-    if (response.error?.code === 'aborted') {
-      return { ok: false, live: false, recorded: false, question: asked, error: response.error };
-    }
-    if (response.ok) {
-      return {
-        ok: true,
-        live: true,
-        recorded: false,
-        question: asked,
-        answer: response.answer,
-        sources: response.sources,
-      };
-    }
-  }
-
-  const recorded = findColabDemonstration(asked);
-  if (recorded) {
+  if (!stored) {
     return {
-      ok: true,
+      ok: false,
       live: false,
-      recorded: true,
+      recorded: false,
       question: asked,
-      answer: recorded.answer,
-      sources: [{ source: recorded.source, score: recorded.score, text: '', excerpt: '' }],
+      error: { code: 'not_configured', message: RAG_DOWN_MESSAGE },
     };
   }
-
+  if (signal?.aborted) {
+    return { ok: false, live: false, recorded: false, question: asked, error: { code: 'aborted' } };
+  }
+  const response = await askRag({
+    question: asked,
+    k,
+    base: stored,
+    fetchImpl,
+    signal,
+    checkHealth: false,
+  });
+  if (response.ok) {
+    return {
+      ok: true,
+      live: true,
+      recorded: false,
+      question: asked,
+      answer: response.answer,
+      sources: response.sources,
+    };
+  }
   return {
     ok: false,
     live: false,
     recorded: false,
     question: asked,
-    error: { code: 'colab_required' },
+    error: response.error?.message
+      ? response.error
+      : { code: 'unavailable', message: RAG_DOWN_MESSAGE },
   };
 }

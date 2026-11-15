@@ -10,68 +10,14 @@ export const RAG_K_MIN = 1;
 export const RAG_K_MAX = 8;
 export const RAG_K_DEFAULT = 5;
 
-/** Optional API base saved in the browser. Not a public tunnel. */
+/** Address saved in the browser. The chat posts here and nowhere else. */
 export const RAG_URL_STORAGE_KEY = 'tariqmap_rag_url';
 
-/**
- * Shown when this dashboard cannot reach the RAG API.
- * The model answers in the Colab notebook on that machine. This computer
- * cannot call 127.0.0.1:8000 there. This note is not a live response.
- */
-export const RAG_CONNECT_NOTE = {
-  fr: 'Le modèle répond dans le notebook Colab, sur la machine Colab. Ce tableau de bord est sur un autre ordinateur et ne peut pas appeler 127.0.0.1:8000 là-bas.',
-  en: 'The model answers in the Colab notebook, on the Colab machine. This dashboard is on another computer and cannot call 127.0.0.1:8000 there.',
-};
+/** Shown when the live API cannot be reached. Not a substitute answer. */
+export const RAG_DOWN_MESSAGE = "l'API ne répond pas";
 
-export function shouldShowColabDemonstration({ backend } = {}) {
-  return backend === 'down';
-}
-
-/** Recorded Colab run. Shown only while this dashboard cannot reach the API. */
-export const COLAB_DEMONSTRATION = [
-  {
-    question: 'Quels sont les principaux types de dégradations des chaussées ?',
-    answer: 'Les principaux types de dégradations des chaussées se classent en deux grandes familles : les dégradations structurelles et les dégradations superficielles. Les dégradations structurelles apparaissent au sein de la structure de chaussée ou de son support et remettent en cause le patrimoine. Les dégradations superficielles naissent dans la couche de surface de la chaussée et affectent d\'abord ses qualités superficielles.',
-    source: 'Cours_Pathologies_et_entretien_des_routes_et_ouvrages_dart_4geniecivil (2).txt',
-    score: 0.7111,
-    refusal: false,
-  },
-  {
-    question: 'Comment identifier une dégradation de la chaussée à partir de son aspect visuel ?',
-    answer: 'Une dégradation de la chaussée peut être identifiée à partir de son aspect visuel en distinguant plusieurs niveaux de sévérité : Faible (premiers indices intermittents, difficile à percevoir à vitesse moyenne, confort de roulement non altéré) ; Moyen (dégradation continue, symptômes plus visibles, confort légèrement altéré) ; Majeur (aspect humide et luisant sur la majorité de la surface, texture du revêtement invisible, bruit similaire à celui sur un revêtement mouillé).',
-    source: 'MTQ_Manuel_identification_degradations_chaussees_flexibles_PROJET (2).txt',
-    score: 0.6881,
-    refusal: false,
-  },
-  {
-    question: 'Quels principes de réparation s\'appliquent à une fissure de chaussée ?',
-    answer: 'Les principes de réparation d\'une fissure de chaussée dépendent du type de chaussée et de la cause de la fissure. Pour les chaussées souples, la réparation peut impliquer le couverture générale d\'une nouvelle couche de revêtement pour résorber les fissures existantes et prévenir de nouvelles. Pour les chaussées en matériaux traités, la réparation peut nécessiter le traitement des couches affectées et la réparation des joints de raccordement. Dans certains cas, comme la présence de tranchées sous-jacentes, des travaux spécifiques peuvent être nécessaires pour corriger la cause sous-jacente avant de procéder à la réparation.',
-    source: 'Cours_Pathologies_et_entretien_des_routes_et_ouvrages_dart_4geniecivil (2).txt',
-    score: 0.6133,
-    refusal: false,
-  },
-  {
-    question: 'Quelles sont les principales causes des fissures de chaussée ?',
-    answer: 'Les principales causes des fissures de chaussée incluent le défaut de portance du sol support dans les chaussées souples ; des défauts de la structure dans les chaussées bitumineuses, comme la rupture par fatigue ; un défaut de collage de la couche de roulement sur la couche d\'enrobé sous-jacente ; la fatigue du revêtement due à des flexions alternées et des efforts de tension causés par les variations de température ; l\'eau ; le trafic lourd et répété ; la mauvaise qualité des matériaux et un compactage insuffisant ; le climat ; le drainage défectueux ; des fissures transversales liées aux assises traitées aux liants hydrauliques.',
-    source: 'Cours_Pathologies_et_entretien_des_routes_et_ouvrages_dart_4geniecivil (2).txt',
-    score: 0.7412,
-    refusal: false,
-  },
-  {
-    question: 'Quel est le prix d\'une tonne d\'enrobé bitumineux en dinars tunisiens ?',
-    answer: 'L\'information sur le prix d\'une tonne d\'enrobé bitumineux en dinars tunisiens n\'a pas été trouvée dans le contexte fourni.',
-    source: 'Benjelloun_Cours_Routes_EPA_Agadir_Chapitres_1-2 (2).txt',
-    score: 0.5284,
-    refusal: true,
-  },
-];
-
-export function findColabDemonstration(question) {
-  const key = String(question || '').replace(/\s+/g, ' ').trim().toLocaleLowerCase('fr');
-  if (!key) return null;
-  return COLAB_DEMONSTRATION.find((item) => (
-    item.question.replace(/\s+/g, ' ').trim().toLocaleLowerCase('fr') === key
-  )) || null;
+export function ragHttpErrorMessage(status) {
+  return `Erreur HTTP ${Number(status) || 0}`;
 }
 
 export function normalizeRagBase(value) {
@@ -357,7 +303,7 @@ export async function checkRagHealth({
 } = {}) {
   const root = normalizeRagBase(base);
   if (!root) {
-    return errorResult('not_configured', RAG_CONNECT_NOTE.fr);
+    return errorResult('not_configured', RAG_DOWN_MESSAGE);
   }
   const health = await probe(ragHealthUrl(root), fetchImpl, timeoutMs);
   if (health.ok) return { ok: true, payload: health.payload };
@@ -365,10 +311,13 @@ export async function checkRagHealth({
     const rootProbe = await probe(`${root}/`, fetchImpl, timeoutMs);
     if (rootProbe.ok) return { ok: true, payload: rootProbe.payload };
   }
-  if (health.code === 'timeout') {
-    return errorResult('timeout', RAG_CONNECT_NOTE.fr);
+  if (health.status) {
+    return errorResult('http_error', ragHttpErrorMessage(health.status), { status: health.status });
   }
-  return errorResult('unavailable', RAG_CONNECT_NOTE.fr);
+  if (health.code === 'timeout') {
+    return errorResult('timeout', RAG_DOWN_MESSAGE);
+  }
+  return errorResult('unavailable', RAG_DOWN_MESSAGE);
 }
 
 export async function askRag({
@@ -378,11 +327,11 @@ export async function askRag({
   base = '',
   timeoutMs = RAG_TIMEOUT_MS,
   signal,
-  checkHealth = true,
+  checkHealth = false,
 } = {}) {
   const root = normalizeRagBase(base);
   if (!root) {
-    return errorResult('not_configured', RAG_CONNECT_NOTE.fr);
+    return errorResult('not_configured', RAG_DOWN_MESSAGE);
   }
 
   const trimmed = String(question ?? '').trim();
@@ -430,14 +379,8 @@ export async function askRag({
 
     if (!response?.ok) {
       const status = Number(response?.status) || 0;
-      const unreachable = status === 404 || status === 0 || status >= 500;
-      return errorResult(
-        'http_error',
-        unreachable
-          ? `L'assistant ne répond pas (HTTP ${status}). ${RAG_CONNECT_NOTE.fr}`
-          : `L'API documentaire a renvoyé une erreur HTTP ${status}.`,
-        { status },
-      );
+      if (!status) return errorResult('http_error', RAG_DOWN_MESSAGE, { status: 0 });
+      return errorResult('http_error', ragHttpErrorMessage(status), { status });
     }
 
     let payload;
@@ -450,9 +393,9 @@ export async function askRag({
   } catch (err) {
     if (err?.name === 'AbortError') {
       if (signal?.aborted) return errorResult('aborted', 'Question annulée.');
-      return errorResult('timeout', RAG_CONNECT_NOTE.fr);
+      return errorResult('timeout', RAG_DOWN_MESSAGE);
     }
-    return errorResult('network', RAG_CONNECT_NOTE.fr);
+    return errorResult('network', RAG_DOWN_MESSAGE);
   } finally {
     clearTimeout(timer);
     signal?.removeEventListener('abort', onExternalAbort);

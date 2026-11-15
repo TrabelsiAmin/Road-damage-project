@@ -1,7 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import { COLAB_DEMONSTRATION } from './ragClient.js';
+import { RAG_DOWN_MESSAGE } from './ragClient.js';
 import {
-  LOCAL_RAG_BASE,
   recommendationForRetained,
   retainedObservationFrom,
 } from './retainedObservation.js';
@@ -135,46 +134,43 @@ describe('recommendation for a retained observation', () => {
     expect(result.answer).toMatch(/manuel/);
     expect(result.sources[0].source).toBe('Cours_Pathologies.txt');
     expect(result.sources[0].score).toBeCloseTo(0.42);
-    expect(calls[0]).toBe('https://session.trycloudflare.com/health');
-    expect(calls.some((url) => url.startsWith(LOCAL_RAG_BASE))).toBe(false);
+    expect(calls[0]).toBe('https://session.trycloudflare.com/ask');
+    expect(calls.some((url) => url.includes('127.0.0.1'))).toBe(false);
   });
 
-  it('tries this machine after the saved address fails, then refuses to invent a repair', async () => {
+  it('does not fall back to localhost or invent a repair when the saved API is down', async () => {
     const calls = [];
     const result = await recommendationForRetained({
       observation,
-      storedBase: 'https://down.example',
+      storedBase: 'https://session.ngrok-free.app',
       fetchImpl: async (url) => {
         calls.push(String(url));
         throw new TypeError('Failed to fetch');
       },
     });
-    expect(calls.some((url) => url.startsWith('https://down.example'))).toBe(true);
-    expect(calls.some((url) => url.startsWith(LOCAL_RAG_BASE))).toBe(true);
+    expect(calls.every((url) => url.startsWith('https://session.ngrok-free.app'))).toBe(true);
+    expect(calls.some((url) => url.includes('127.0.0.1'))).toBe(false);
     expect(result.live).toBe(false);
     expect(result.recorded).toBe(false);
     expect(result.answer).toBeUndefined();
-    expect(result.error.code).toBe('colab_required');
+    expect(result.error.message).toBe(RAG_DOWN_MESSAGE);
     expect(result.question).toContain('code RDD2022 D40');
     expect(result.question).not.toContain('Sfax');
   });
 
-  it('returns a recorded Colab answer only for one of the five questions', async () => {
-    const item = COLAB_DEMONSTRATION[0];
-    const calls = [];
+  it('says the API is down and does not invent an answer when no address is saved', async () => {
+    let called = false;
     const result = await recommendationForRetained({
-      question: item.question,
+      question: 'Quels sont les principaux types de dégradations des chaussées ?',
       storedBase: '',
-      fetchImpl: async (url) => {
-        calls.push(String(url));
-        throw new TypeError('Failed to fetch');
+      fetchImpl: async () => {
+        called = true;
       },
     });
-    expect(calls[0]).toBe(`${LOCAL_RAG_BASE}/health`);
+    expect(called).toBe(false);
     expect(result.live).toBe(false);
-    expect(result.recorded).toBe(true);
-    expect(result.answer).toBe(item.answer);
-    expect(result.sources[0].source).toBe(item.source);
-    expect(result.sources[0].score).toBeCloseTo(item.score);
+    expect(result.recorded).toBe(false);
+    expect(result.answer).toBeUndefined();
+    expect(result.error.message).toBe(RAG_DOWN_MESSAGE);
   });
 });

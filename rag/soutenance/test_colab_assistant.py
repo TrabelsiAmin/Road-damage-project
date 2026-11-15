@@ -1,6 +1,7 @@
 import contextlib
 import io
 import json
+import os
 import tempfile
 import unittest
 from pathlib import Path
@@ -19,9 +20,7 @@ from colab_assistant import (
     build_prompt,
     chunk_text,
     clean_api_answer,
-    cloudflared_command,
     create_app,
-    extract_tunnel_url,
     format_dashboard_url,
     http_json,
     index_is_reusable,
@@ -104,12 +103,18 @@ class AssistantPreparationTest(unittest.TestCase):
             if cell.get("cell_type") == "code"
         ]
         self.assertIn(script, sources)
-        self.assertNotIn("pyngrok", script)
-        self.assertNotIn("ngrok.connect", script)
+        self.assertIn("from pyngrok import ngrok", script)
+        self.assertIn("ngrok.connect", script)
+        self.assertIn("NGROK_AUTHTOKEN", script)
+        self.assertIn("userdata", script)
+        self.assertNotIn("cloudflared", script)
+        self.assertNotIn("trycloudflare", script)
+        self.assertNotIn("localtunnel", script)
         self.assertNotIn("NGROK_AUTH_TOKEN", script)
+        self.assertNotRegex(script, r"set_auth_token\(\s*[\"']")
         self.assertIn("URL_DASHBOARD=", script)
+        self.assertIn('globals()["QuestionRequest"] = QuestionRequest', script)
         self.assertLess(script.index("start_api(app)"), script.index("open_public_tunnel()"))
-        self.assertIn("cloudflared tunnel --url http://127.0.0.1:8000", " ".join(cloudflared_command("cloudflared")))
 
     def test_ask_accepts_question_body_and_keeps_document_only_answers(self):
         seen = {}
@@ -247,22 +252,47 @@ class AssistantPreparationTest(unittest.TestCase):
         self.assertEqual(posted.status_code, 200, posted.text)
         self.assertEqual(posted.headers.get("access-control-allow-origin"), "http://127.0.0.1:4317")
 
-    def test_public_url_line_comes_from_the_tunnel_output(self):
+    def test_public_url_line_is_the_ngrok_address(self):
         self.assertEqual(
-            format_dashboard_url("https://abc.trycloudflare.com"),
-            "URL_DASHBOARD=https://abc.trycloudflare.com",
+            format_dashboard_url("https://abc.ngrok-free.app"),
+            "URL_DASHBOARD=https://abc.ngrok-free.app",
         )
-        self.assertEqual(
-            extract_tunnel_url("INF |  https://happy-road.trycloudflare.com  |"),
-            "https://happy-road.trycloudflare.com",
-        )
-        self.assertEqual(
-            extract_tunnel_url("your url is: https://pink-cat.loca.lt"),
-            "https://pink-cat.loca.lt",
-        )
-        self.assertIsNone(extract_tunnel_url("http://127.0.0.1:8000"))
-        command = cloudflared_command("/tmp/cloudflared")
-        self.assertEqual(command[1:4], ["tunnel", "--url", "http://127.0.0.1:8000"])
+
+    def test_missing_ngrok_token_prints_the_secret_step(self):
+        import colab_assistant as module
+
+        previous = os.environ.get("NGROK_AUTHTOKEN")
+        os.environ.pop("NGROK_AUTHTOKEN", None)
+        module.__dict__.pop("_TUNNEL", None)
+        output = io.StringIO()
+        try:
+            with contextlib.redirect_stdout(output):
+                url = module.open_public_tunnel()
+        finally:
+            module.__dict__.pop("_TUNNEL", None)
+            if previous is None:
+                os.environ.pop("NGROK_AUTHTOKEN", None)
+            else:
+                os.environ["NGROK_AUTHTOKEN"] = previous
+        self.assertIsNone(url)
+        text = output.getvalue()
+        self.assertIn("NGROK_AUTHTOKEN", text)
+        self.assertIn("secrets du notebook", text)
+        self.assertNotIn("cloudflared", text)
+        self.assertNotRegex(text, r"https://")
+
+    def test_ngrok_token_comes_from_the_environment(self):
+        import colab_assistant as module
+
+        previous = os.environ.get("NGROK_AUTHTOKEN")
+        os.environ["NGROK_AUTHTOKEN"] = "test-token-not-a-real-secret"
+        try:
+            self.assertEqual(module.read_ngrok_token(), "test-token-not-a-real-secret")
+        finally:
+            if previous is None:
+                os.environ.pop("NGROK_AUTHTOKEN", None)
+            else:
+                os.environ["NGROK_AUTHTOKEN"] = previous
 
 
 if __name__ == "__main__":

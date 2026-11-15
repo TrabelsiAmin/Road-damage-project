@@ -1,7 +1,7 @@
+import fs from 'fs';
 import { describe, it, expect } from 'vitest';
 import {
-  COLAB_DEMONSTRATION,
-  RAG_CONNECT_NOTE,
+  RAG_DOWN_MESSAGE,
   RAG_URL_STORAGE_KEY,
   askRag,
   checkRagHealth,
@@ -9,7 +9,6 @@ import {
   buildTechnicalQuestion,
   clampK,
   excerpt,
-  findColabDemonstration,
   isRagConfigured,
   normalizeRagBase,
   observationForRecommendation,
@@ -17,8 +16,8 @@ import {
   questionHasForbiddenContent,
   ragAskUrl,
   ragHealthUrl,
+  ragHttpErrorMessage,
   readStoredRagBase,
-  shouldShowColabDemonstration,
   writeStoredRagBase,
 } from './ragClient.js';
 import { ragDevProxy, ragProxyTarget } from '../../vite.ragProxy.js';
@@ -222,15 +221,14 @@ describe('RAG response parsing and errors', () => {
     expect(called).toBe(false);
     expect(result.ok).toBe(false);
     expect(result.error.code).toBe('not_configured');
-    expect(result.error.message).toBe(RAG_CONNECT_NOTE.fr);
-    expect(result.error.message).toMatch(/127\.0\.0\.1:8000/);
-    expect(result.error.message).toMatch(/autre ordinateur/);
+    expect(result.error.message).toBe(RAG_DOWN_MESSAGE);
+    expect(result.error.message).not.toMatch(/127\.0\.0\.1/);
     expect(result.answer).toBeUndefined();
     expect(isRagConfigured({ VITE_RAG_API_URL: '' })).toBe(false);
     expect(isRagConfigured({ VITE_RAG_API_URL: 'https://session.ngrok-free.app' })).toBe(true);
   });
 
-  it('checks /health then posts question and k to {base}/ask', async () => {
+  it('posts question and k to {base}/ask without a recorded answer', async () => {
     const calls = [];
     const result = await askRag({
       question: '  Causes usuelles d\'un nid-de-poule ?  ',
@@ -265,22 +263,27 @@ describe('RAG response parsing and errors', () => {
     expect(calls[0].init.body).not.toMatch(/latitude|longitude|device_id|photo/i);
   });
 
-  it('does not post /ask when /health fails and does not invent an answer', async () => {
+  it('posts /ask and returns the HTTP error without inventing an answer', async () => {
     const calls = [];
+    const question = 'Quel est le prix d\'une tonne d\'enrobé bitumineux ?';
     const result = await askRag({
-      question: COLAB_DEMONSTRATION[0].question,
+      question,
       base: BASE,
-      fetchImpl: async (url) => {
-        calls.push(url);
+      fetchImpl: async (url, init) => {
+        calls.push({ url: String(url), method: init?.method, body: init?.body });
         return { ok: false, status: 503, json: async () => ({}) };
       },
     });
-    expect(calls).toEqual([ragHealthUrl(BASE)]);
+    expect(calls).toHaveLength(1);
+    expect(calls[0].url).toBe(`${BASE}/ask`);
+    expect(calls[0].method).toBe('POST');
+    expect(JSON.parse(calls[0].body)).toEqual({ question, k: 5 });
     expect(result.ok).toBe(false);
-    expect(result.error.code).toBe('unavailable');
-    expect(result.error.message).toMatch(/127\.0\.0\.1:8000/);
+    expect(result.error.code).toBe('http_error');
+    expect(result.error.status).toBe(503);
+    expect(result.error.message).toBe(ragHttpErrorMessage(503));
     expect(result.answer).toBeUndefined();
-    expect(JSON.stringify(result)).not.toContain(COLAB_DEMONSTRATION[0].answer.slice(0, 40));
+    expect(JSON.stringify(result)).not.toMatch(/scellement|réparation|fissure longitudinale/i);
   });
 
   it('blocks a question that itself carries a link or coordinates', async () => {
@@ -318,7 +321,7 @@ describe('RAG response parsing and errors', () => {
       })),
     });
     expect(timeout.error.code).toBe('timeout');
-    expect(timeout.error.message).toMatch(/127\.0\.0\.1:8000/);
+    expect(timeout.error.message).toBe(RAG_DOWN_MESSAGE);
 
     const network = await askRag({
       question: 'Quelles sont les causes usuelles d\'une fissure ?',
@@ -328,7 +331,7 @@ describe('RAG response parsing and errors', () => {
       }),
     });
     expect(network.error.code).toBe('network');
-    expect(network.error.message).toMatch(/127\.0\.0\.1:8000/);
+    expect(network.error.message).toBe(RAG_DOWN_MESSAGE);
 
     const down = await askRag({
       question: 'Quelles sont les causes usuelles d\'une fissure ?',
@@ -337,7 +340,7 @@ describe('RAG response parsing and errors', () => {
     });
     expect(down.error.code).toBe('http_error');
     expect(down.error.status).toBe(502);
-    expect(down.error.message).toMatch(/ne répond pas|Colab|URL_DASHBOARD/i);
+    expect(down.error.message).toBe('Erreur HTTP 502');
 
     const cancelled = new AbortController();
     cancelled.abort();
@@ -376,7 +379,8 @@ describe('RAG health', () => {
     expect(called).toBe(false);
     expect(result.ok).toBe(false);
     expect(result.error.code).toBe('not_configured');
-    expect(result.error.message).toMatch(/127\.0\.0\.1:8000/);
+    expect(result.error.message).toBe(RAG_DOWN_MESSAGE);
+    expect(result.error.message).not.toMatch(/127\.0\.0\.1/);
     expect(result.answer).toBeUndefined();
   });
 
@@ -411,59 +415,33 @@ describe('RAG health', () => {
       fetchImpl: async () => ({ ok: false, status: 503, json: async () => ({}) }),
     });
     expect(down.ok).toBe(false);
-    expect(down.error.code).toBe('unavailable');
-    expect(down.error.message).toBe(RAG_CONNECT_NOTE.fr);
-    expect(down.error.message).toMatch(/127\.0\.0\.1:8000/);
-    expect(down.error.message).not.toMatch(/Aucune réponse ne sera affichée/);
+    expect(down.error.code).toBe('http_error');
+    expect(down.error.message).toBe('Erreur HTTP 503');
+    expect(down.error.message).not.toMatch(/127\.0\.0\.1|démonstration|Colab/);
     expect(down.answer).toBeUndefined();
   });
 });
 
-describe('recorded Colab demonstration', () => {
-  it('keeps the five recorded answers, including the price refusal, off the live path', () => {
-    expect(COLAB_DEMONSTRATION).toHaveLength(5);
-    expect(COLAB_DEMONSTRATION.map((item) => item.score.toFixed(4))).toEqual([
-      '0.7111',
-      '0.6881',
-      '0.6133',
-      '0.7412',
-      '0.5284',
-    ]);
-    expect(COLAB_DEMONSTRATION[0].source).toContain('Cours_Pathologies_et_entretien');
-    expect(COLAB_DEMONSTRATION[1].source).toContain('MTQ_Manuel_identification');
-    expect(COLAB_DEMONSTRATION[4].question).toMatch(/prix d'une tonne/);
-    expect(COLAB_DEMONSTRATION[4].refusal).toBe(true);
-    expect(COLAB_DEMONSTRATION[4].answer).toBe(
-      'L\'information sur le prix d\'une tonne d\'enrobé bitumineux en dinars tunisiens n\'a pas été trouvée dans le contexte fourni.',
-    );
-    expect(COLAB_DEMONSTRATION[4].answer).not.toMatch(/\d/);
-    expect(COLAB_DEMONSTRATION.filter((item) => item.refusal)).toHaveLength(1);
-    expect(RAG_CONNECT_NOTE.fr).toMatch(/autre ordinateur/);
-    expect(RAG_CONNECT_NOTE.fr).toMatch(/127\.0\.0\.1:8000/);
-    expect(RAG_CONNECT_NOTE.en).toMatch(/another computer/);
-    expect(shouldShowColabDemonstration({ backend: 'down' })).toBe(true);
-    expect(shouldShowColabDemonstration({ backend: 'up' })).toBe(false);
-    expect(shouldShowColabDemonstration({ backend: 'checking' })).toBe(false);
-  });
-
-  it('recognizes an example question and does not invent one', () => {
-    const match = findColabDemonstration('  Quels sont les principaux types de dégradations des chaussées ?  ');
-    expect(match.score).toBeCloseTo(0.7111);
-    expect(match.source).toContain('Cours_Pathologies');
-    expect(match.answer).toMatch(/structurelles/);
-    expect(findColabDemonstration('Quel temps fait-il à Tunis ?')).toBeNull();
-    expect(findColabDemonstration('')).toBeNull();
+describe('live chat only', () => {
+  it('does not keep recorded answers or a localhost lecture in the client', () => {
+    const source = fs.readFileSync(new URL('./ragClient.js', import.meta.url), 'utf8');
+    expect(source).not.toContain('COLAB_DEMONSTRATION');
+    expect(source).not.toContain('démonstration Colab');
+    expect(source).not.toContain('Ce n\'est pas un appel en direct');
+    expect(source).not.toContain('127.0.0.1:8000');
+    expect(RAG_DOWN_MESSAGE).toBe('l\'API ne répond pas');
   });
 });
 
 describe('stored Colab address', () => {
   it('saves the public URL under tariqmap_rag_url and strips the printed prefix', () => {
-    const store = memoryStorage();
-    const saved = writeStoredRagBase('URL_DASHBOARD=https://abc.trycloudflare.com/ask', store);
-    expect(saved).toBe('https://abc.trycloudflare.com');
-    expect(store.getItem(RAG_URL_STORAGE_KEY)).toBe('https://abc.trycloudflare.com');
-    expect(readStoredRagBase(store)).toBe('https://abc.trycloudflare.com');
-    expect(normalizeRagBase('https://abc.trycloudflare.com/health')).toBe('https://abc.trycloudflare.com');
+    const store = memoryStorage({ [RAG_URL_STORAGE_KEY]: 'http://127.0.0.1:8000' });
+    const saved = writeStoredRagBase('URL_DASHBOARD=https://abc.ngrok-free.app/ask', store);
+    expect(saved).toBe('https://abc.ngrok-free.app');
+    expect(store.getItem(RAG_URL_STORAGE_KEY)).toBe('https://abc.ngrok-free.app');
+    expect(readStoredRagBase(store)).toBe('https://abc.ngrok-free.app');
+    expect(readStoredRagBase(store)).not.toBe('http://127.0.0.1:8000');
+    expect(normalizeRagBase('https://abc.ngrok-free.app/health')).toBe('https://abc.ngrok-free.app');
     expect(normalizeRagBase('pas une url')).toBe('');
     expect(writeStoredRagBase('', store)).toBe('');
     expect(store.getItem(RAG_URL_STORAGE_KEY)).toBeNull();

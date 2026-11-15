@@ -2,16 +2,11 @@ import React, { useEffect, useRef, useState } from 'react';
 import { BookOpen } from 'lucide-react';
 import { DAMAGE_CLASSES, STATUS_LABELS } from '../constants';
 import {
-  COLAB_DEMONSTRATION,
-  RAG_CONNECT_NOTE,
   RAG_K_DEFAULT,
-  RAG_K_MAX,
-  RAG_K_MIN,
   askRag,
   checkRagHealth,
-  isRagConfigured,
+  normalizeRagBase,
   readStoredRagBase,
-  shouldShowColabDemonstration,
   sourceFileName,
   writeStoredRagBase,
 } from '../utils/ragClient';
@@ -20,96 +15,63 @@ import { recommendationForRetained } from '../utils/retainedObservation';
 const COPY = {
   fr: {
     title: 'Recommandation technique',
-    intro: 'L\'assistant répond à partir des manuels de pathologie routière. Il ne lit pas les observations en direct et ne reçoit ni photo, ni coordonnée, ni identifiant d\'appareil.',
-    urlLabel: 'API sur cet ordinateur',
-    urlPlaceholder: 'http://127.0.0.1:8000',
+    intro: 'Posez une question. L\'assistant répond à partir des manuels indexés, à l\'adresse enregistrée.',
+    urlLabel: 'Adresse de l\'API Colab',
+    urlPlaceholder: 'https://….ngrok-free.app',
     saveUrl: 'Enregistrer',
-    needUrl: RAG_CONNECT_NOTE.fr,
     badUrl: 'Cette adresse n\'est pas une URL http(s).',
-    demoKicker: 'Démonstration Colab',
-    demoCaption: 'Réponses enregistrées dans le notebook Colab. Pas une requête en direct.',
-    demoQuestion: 'Question',
-    demoAnswer: 'Réponse',
-    refusal: 'Refus',
+    apiDown: 'l\'API ne répond pas',
+    httpError: 'Erreur HTTP',
     selected: 'Observation retenue',
     none: 'Choisissez une observation dans la file prioritaire ou dans l\'infobulle d\'un agrégat sur la carte.',
     askSelection: 'Demander une recommandation',
-    questionLabel: 'Question technique',
-    placeholder: 'Posez une question technique. L\'assistant répond à partir des manuels de pathologie routière, pas à partir des observations en direct.',
-    passages: 'Passages',
-    passagesHelp: 'Nombre d\'extraits de manuels transmis au modèle.',
+    questionLabel: 'Question',
+    placeholder: 'Écrivez une question.',
     submit: 'Envoyer',
-    examples: 'Exemples de questions',
-    examplesHelp: 'Un clic remplit la question. La réponse vient du modèle sur cet ordinateur.',
     checking: 'Vérification de l\'assistant…',
     ready: 'L\'assistant est prêt.',
-    loading: 'Recherche dans les manuels et rédaction de la réponse… Cela peut prendre une minute.',
-    empty: 'Aucune réponse à afficher. Les manuels ne sont interrogés qu\'à votre demande.',
-    sent: 'Question envoyée',
-    answer: 'Réponse',
-    sources: 'Sources',
-    noSources: 'Aucun passage n\'a été renvoyé avec cette réponse.',
-    topSource: 'Source principale',
+    loading: 'Recherche dans les manuels…',
+    empty: 'Le fil est vide. Chaque question est envoyée à l\'adresse enregistrée.',
+    you: 'Vous',
+    answer: 'Assistant',
+    topSource: 'Manuel',
     score: 'Score',
-    disclaimer: 'Réponse rédigée par un modèle à partir des manuels. Vérifiez les sources avant toute décision technique.',
+    disclaimer: 'Réponse rédigée à partir des manuels indexés.',
     unclassified: 'Non classé',
     unknownPlace: 'Lieu non renseigné',
     unknownDate: 'Date non renseignée',
     unknownStatus: 'Statut non renseigné',
-    notLive: 'Ce n\'est pas un appel en direct. Réponse enregistrée de la démonstration Colab.',
-    colabRequired: 'L\'adresse Colab est requise pour répondre à cette observation.',
   },
   en: {
     title: 'Technical recommendation',
-    intro: 'The assistant answers from road-pathology manuals. It does not read live observations and is not sent photos, coordinates, or device identifiers.',
-    urlLabel: 'API on this computer',
-    urlPlaceholder: 'http://127.0.0.1:8000',
+    intro: 'Ask a question. The assistant answers from the indexed manuals at the saved address.',
+    urlLabel: 'Colab API address',
+    urlPlaceholder: 'https://….ngrok-free.app',
     saveUrl: 'Save',
-    needUrl: RAG_CONNECT_NOTE.en,
     badUrl: 'This is not an http(s) URL.',
-    demoKicker: 'Colab demonstration',
-    demoCaption: 'Answers recorded in the Colab notebook. Not a live query.',
-    demoQuestion: 'Question',
-    demoAnswer: 'Answer',
-    refusal: 'Refusal',
+    apiDown: 'The API is not responding',
+    httpError: 'HTTP error',
     selected: 'Selected observation',
     none: 'Choose an observation in the priority list or in a map cluster popup.',
     askSelection: 'Ask for a recommendation',
-    questionLabel: 'Technical question',
-    placeholder: 'Ask a technical question. The assistant answers from road-pathology manuals, not from live observations.',
-    passages: 'Passages',
-    passagesHelp: 'Number of manual excerpts sent to the model.',
+    questionLabel: 'Question',
+    placeholder: 'Type a question.',
     submit: 'Send',
-    examples: 'Example questions',
-    examplesHelp: 'A click fills the question. The answer comes from the model on this computer.',
     checking: 'Checking the assistant…',
     ready: 'The assistant is ready.',
-    loading: 'Searching the manuals and drafting an answer… This can take a minute.',
-    empty: 'No answer yet. The manuals are queried only when you ask.',
-    sent: 'Question sent',
-    answer: 'Answer',
-    sources: 'Sources',
-    noSources: 'No passage was returned with this answer.',
-    topSource: 'Top source',
+    loading: 'Searching the manuals…',
+    empty: 'The thread is empty. Each question is sent to the saved address.',
+    you: 'You',
+    answer: 'Assistant',
+    topSource: 'Manual',
     score: 'Score',
-    disclaimer: 'The answer is generated from the manuals. Check the sources before a technical decision.',
+    disclaimer: 'Answer written from the indexed manuals.',
     unclassified: 'Unclassified',
     unknownPlace: 'Place not recorded',
     unknownDate: 'Date not recorded',
     unknownStatus: 'Status not recorded',
-    notLive: 'This is not a live call. Answer recorded from the Colab demonstration.',
-    colabRequired: 'The Colab address is required to answer this observation.',
   },
 };
-
-function sameOriginRagBase() {
-  if (!isRagConfigured()) return '';
-  try {
-    return `${window.location.origin}/rag`;
-  } catch {
-    return '';
-  }
-}
 
 function selectionLine(selection, lang, copy) {
   if (!selection) return null;
@@ -123,59 +85,40 @@ function selectionLine(selection, lang, copy) {
   return `${classText} · ${place} · ${date} · ${status}`;
 }
 
+function failureText(error, copy) {
+  if (error?.status) return `${copy.httpError} ${error.status}`;
+  return copy.apiDown;
+}
+
 export function TechnicalRecommendation({ lang = 'fr', selection = null, request = null }) {
   const copy = COPY[lang] || COPY.fr;
-  const [k, setK] = useState(RAG_K_DEFAULT);
   const [urlDraft, setUrlDraft] = useState(() => readStoredRagBase());
   const [base, setBase] = useState(() => readStoredRagBase());
   const [draft, setDraft] = useState('');
   const [phase, setPhase] = useState('idle');
-  const [asked, setAsked] = useState('');
-  const [result, setResult] = useState(null);
-  const [error, setError] = useState(null);
-  const [liveBase, setLiveBase] = useState('');
-  const [backend, setBackend] = useState(() => (
-    readStoredRagBase() || isRagConfigured() ? 'checking' : 'down'
-  ));
+  const [messages, setMessages] = useState([]);
+  const [urlError, setUrlError] = useState('');
+  const [backend, setBackend] = useState(() => (readStoredRagBase() ? 'checking' : 'idle'));
   const runId = useRef(0);
   const abortRef = useRef(null);
   const cardRun = useRef(0);
-  const cardAbort = useRef(null);
+  const baseRef = useRef(base);
   const [cardPhase, setCardPhase] = useState('idle');
   const [cardResult, setCardResult] = useState(null);
   const [cardNote, setCardNote] = useState('');
-  const kRef = useRef(k);
-  const baseRef = useRef('');
-  kRef.current = k;
-  baseRef.current = liveBase;
+  baseRef.current = base;
 
   useEffect(() => {
-    const candidates = [];
-    if (base) candidates.push(base);
-    const proxy = sameOriginRagBase();
-    if (proxy && proxy !== base) candidates.push(proxy);
-    if (candidates.length === 0) {
-      setLiveBase('');
-      setBackend('down');
+    if (!base) {
+      setBackend('idle');
       return undefined;
     }
     let cancelled = false;
     setBackend('checking');
-    (async () => {
-      for (const candidate of candidates) {
-        const status = await checkRagHealth({ base: candidate });
-        if (cancelled) return;
-        if (status.ok) {
-          setLiveBase(candidate);
-          setBackend('up');
-          return;
-        }
-      }
-      if (!cancelled) {
-        setLiveBase('');
-        setBackend('down');
-      }
-    })();
+    checkRagHealth({ base }).then((status) => {
+      if (cancelled) return;
+      setBackend(status.ok ? 'up' : 'down');
+    });
     return () => {
       cancelled = true;
     };
@@ -183,64 +126,75 @@ export function TechnicalRecommendation({ lang = 'fr', selection = null, request
 
   function saveUrl(event) {
     event?.preventDefault();
-    const next = writeStoredRagBase(urlDraft);
-    if (!next && String(urlDraft || '').trim()) {
-      setBase('');
-      setUrlDraft(String(urlDraft || '').trim());
-      setResult(null);
-      setError({ code: 'bad_url', message: copy.badUrl });
-      setPhase('error');
+    const trimmed = String(urlDraft || '').trim();
+    if (!trimmed) {
+      setUrlDraft(base);
+      setUrlError('');
       return;
     }
+    const next = normalizeRagBase(trimmed);
+    if (!next) {
+      setUrlError(copy.badUrl);
+      return;
+    }
+    writeStoredRagBase(next);
+    setUrlError('');
     setUrlDraft(next);
     setBase(next);
-    if (phase === 'error' && error?.code === 'bad_url') {
-      setError(null);
-      setPhase('idle');
-    }
   }
 
-  async function run(question, passages) {
+  function appendExchange(id, question, reply) {
+    setMessages((prev) => [
+      ...prev,
+      { id: `${id}-q`, role: 'user', text: question },
+      { id: `${id}-a`, role: 'assistant', ...reply },
+    ]);
+  }
+
+  async function run(question) {
     const trimmed = String(question || '').trim();
     const root = baseRef.current;
-    setAsked(trimmed);
-    if (!root) {
-      abortRef.current?.abort();
-      runId.current += 1;
-      setResult(null);
-      setError({ code: 'not_configured', message: copy.needUrl });
-      setPhase(trimmed ? 'error' : 'idle');
-      return;
-    }
+    if (!trimmed) return null;
     abortRef.current?.abort();
     const controller = new AbortController();
     abortRef.current = controller;
     const id = ++runId.current;
     setPhase('loading');
-    setError(null);
-    setResult(null);
+    setDraft('');
+    if (!root) {
+      appendExchange(id, trimmed, { error: copy.apiDown });
+      setPhase('error');
+      return { ok: false, error: { code: 'not_configured', message: copy.apiDown } };
+    }
     const response = await askRag({
       question: trimmed,
-      k: passages,
+      k: RAG_K_DEFAULT,
       base: root,
       signal: controller.signal,
+      checkHealth: false,
     });
-    if (id !== runId.current || response.error?.code === 'aborted') return;
+    if (id !== runId.current || response.error?.code === 'aborted') return response;
     if (response.ok) {
-      setResult(response);
+      const top = response.sources?.[0];
+      appendExchange(id, trimmed, {
+        text: response.answer,
+        source: top?.source || '',
+        score: top?.score,
+      });
       setPhase('ready');
       setBackend('up');
-      return;
+      return response;
     }
-    if (response.error?.code === 'unavailable' || response.error?.code === 'network' || response.error?.code === 'timeout') {
-      setLiveBase('');
+    appendExchange(id, trimmed, { error: failureText(response.error, copy) });
+    if (response.error?.code === 'network' || response.error?.code === 'timeout' || response.error?.code === 'unavailable') {
       setBackend('down');
     }
-    setError(response.error);
     setPhase('error');
+    return response;
   }
 
   useEffect(() => {
+    cardRun.current += 1;
     setCardPhase('idle');
     setCardResult(null);
     setCardNote('');
@@ -248,40 +202,49 @@ export function TechnicalRecommendation({ lang = 'fr', selection = null, request
 
   async function askRetained() {
     if (!selection) return;
-    cardAbort.current?.abort();
+    abortRef.current?.abort();
     const controller = new AbortController();
-    cardAbort.current = controller;
+    abortRef.current = controller;
     const id = ++cardRun.current;
+    const exchangeId = ++runId.current;
     setCardPhase('loading');
     setCardResult(null);
     setCardNote('');
+    setPhase('loading');
     const outcome = await recommendationForRetained({
       observation: selection,
       lang,
       storedBase: baseRef.current || readStoredRagBase(),
-      k: kRef.current,
+      k: RAG_K_DEFAULT,
       signal: controller.signal,
     });
     if (id !== cardRun.current || outcome.error?.code === 'aborted') return;
-    if (outcome.ok && outcome.live) {
+    if (outcome.ok && outcome.live && outcome.answer) {
+      const top = outcome.sources?.[0];
+      appendExchange(exchangeId, outcome.question, {
+        text: outcome.answer,
+        source: top?.source || '',
+        score: top?.score,
+      });
       setCardResult(outcome);
+      setCardNote('');
       setCardPhase('ready');
+      setPhase('ready');
+      setBackend('up');
       return;
     }
-    if (outcome.recorded) {
-      setCardResult(outcome);
-      setCardNote(copy.notLive);
-      setCardPhase('recorded');
-      return;
-    }
+    const sentence = failureText(outcome.error, copy);
+    appendExchange(exchangeId, outcome.question, { error: sentence });
     setCardResult(null);
-    setCardNote(copy.colabRequired);
+    setCardNote(sentence);
     setCardPhase('error');
+    setPhase('error');
+    setBackend('down');
   }
 
   useEffect(() => {
     if (!request?.question) return undefined;
-    run(request.question, kRef.current);
+    run(request.question);
     return () => abortRef.current?.abort();
     // Re-ask only when a new observation request arrives.
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -289,13 +252,11 @@ export function TechnicalRecommendation({ lang = 'fr', selection = null, request
 
   function onSubmit(event) {
     event.preventDefault();
-    run(draft, k);
+    run(draft);
   }
 
   const summary = selectionLine(selection, lang, copy);
-  const busy = phase === 'loading';
-  const topSource = result?.sources?.[0];
-  const showDemo = shouldShowColabDemonstration({ backend });
+  const busy = phase === 'loading' || cardPhase === 'loading';
 
   return (
     <section id="recommandation-technique" className="rag-panel" aria-labelledby="rag-title" data-assistant-panel="true">
@@ -306,34 +267,6 @@ export function TechnicalRecommendation({ lang = 'fr', selection = null, request
           <p>{copy.intro}</p>
         </div>
       </div>
-
-      {showDemo && (
-        <div className="rag-demo" data-colab-demonstration="recorded">
-          <p className="rag-demo-note" role="status">{copy.needUrl}</p>
-          <p className="rag-kicker">{copy.demoKicker}</p>
-          <p className="rag-demo-caption">{copy.demoCaption}</p>
-          <ol className="rag-demo-list">
-            {COLAB_DEMONSTRATION.map((item, index) => (
-              <li key={item.question} className={item.refusal ? 'rag-demo-item is-refusal' : 'rag-demo-item'}>
-                <p className="rag-demo-q">
-                  <span>{copy.demoQuestion} {index + 1}</span>
-                  {item.question}
-                </p>
-                {item.refusal && <p className="rag-demo-refusal">{copy.refusal}</p>}
-                <p className="rag-demo-a">
-                  <span>{copy.demoAnswer}</span>
-                  {item.answer}
-                </p>
-                <p className="rag-demo-source">
-                  <span>{copy.topSource}</span>
-                  <strong title={item.source}>{sourceFileName(item.source)}</strong>
-                  <em>{copy.score} {item.score.toFixed(4)}</em>
-                </p>
-              </li>
-            ))}
-          </ol>
-        </div>
-      )}
 
       <form className="rag-url" onSubmit={saveUrl}>
         <div className="rag-url-row">
@@ -355,6 +288,7 @@ export function TechnicalRecommendation({ lang = 'fr', selection = null, request
           <button type="submit" className="btn btn-secondary">{copy.saveUrl}</button>
         </div>
       </form>
+      {urlError && <p className="rag-error" role="alert">{urlError}</p>}
 
       {backend === 'checking' && (
         <p className="rag-loading" role="status">{copy.checking}</p>
@@ -362,25 +296,38 @@ export function TechnicalRecommendation({ lang = 'fr', selection = null, request
       {backend === 'up' && (
         <p className="rag-loading" role="status">{copy.ready}</p>
       )}
-      {backend === 'up' && (
-        <div className="rag-examples">
-          <p className="rag-kicker">{copy.examples}</p>
-          <p className="rag-demo-caption">{copy.examplesHelp}</p>
-          <ul className="rag-example-list">
-            {COLAB_DEMONSTRATION.map((item) => (
-              <li key={item.question}>
-                <button
-                  type="button"
-                  className="rag-example"
-                  onClick={() => setDraft(item.question)}
-                >
-                  {item.question}
-                </button>
-              </li>
-            ))}
-          </ul>
-        </div>
+      {backend === 'down' && base && (
+        <p className="rag-error" role="status">{copy.apiDown}</p>
       )}
+
+      <div className="rag-transcript" data-assistant-transcript="live" aria-live="polite">
+        {messages.length === 0 && phase !== 'loading' && (
+          <p className="rag-empty">{copy.empty}</p>
+        )}
+        {messages.map((message) => (
+          <article
+            key={message.id}
+            className={message.role === 'user' ? 'rag-msg rag-msg-user' : 'rag-msg rag-msg-assistant'}
+            data-role={message.role}
+          >
+            <p className="rag-kicker">{message.role === 'user' ? copy.you : copy.answer}</p>
+            {message.error ? (
+              <p className="rag-error" role="alert" data-assistant-error="true">{message.error}</p>
+            ) : (
+              <p className="rag-answer" data-assistant-answer="true">{message.text}</p>
+            )}
+            {message.source && (
+              <p className="rag-top-source" data-assistant-source="true">
+                <span>{copy.topSource}</span>
+                <strong title={message.source}>{sourceFileName(message.source)}</strong>
+                {Number.isFinite(Number(message.score)) && (
+                  <em>{copy.score} {Number(message.score).toFixed(4)}</em>
+                )}
+              </p>
+            )}
+          </article>
+        ))}
+      </div>
 
       <form className="rag-form" onSubmit={onSubmit}>
         <label htmlFor="rag-question">
@@ -390,71 +337,19 @@ export function TechnicalRecommendation({ lang = 'fr', selection = null, request
             value={draft}
             disabled={busy}
             placeholder={copy.placeholder}
+            data-assistant-question="true"
             onChange={(event) => setDraft(event.target.value)}
           />
         </label>
         <div className="rag-controls">
-          <label htmlFor="rag-k">
-            <span>{copy.passages}</span>
-            <select
-              id="rag-k"
-              value={k}
-              disabled={busy}
-              onChange={(event) => setK(Number(event.target.value))}
-            >
-              {Array.from({ length: RAG_K_MAX - RAG_K_MIN + 1 }, (_, index) => RAG_K_MIN + index).map((value) => (
-                <option key={value} value={value}>{value}</option>
-              ))}
-            </select>
-          </label>
-          <button type="submit" className="btn btn-primary" disabled={busy}>
+          <button type="submit" className="btn btn-primary" disabled={busy || !draft.trim()}>
             {copy.submit}
           </button>
-          <p className="rag-help">{copy.passagesHelp}</p>
         </div>
       </form>
-
-      {asked && phase !== 'idle' && (
-        <p className="rag-sent"><span>{copy.sent}</span> {asked}</p>
-      )}
       {phase === 'loading' && <p className="rag-loading" role="status">{copy.loading}</p>}
-      {phase === 'error' && error && !(showDemo && ['not_configured', 'unavailable', 'network', 'timeout'].includes(error.code)) && (
-        <p className="rag-error" role="alert">{error.message}</p>
-      )}
-      {phase === 'idle' && backend === 'up' && <p className="rag-empty">{copy.empty}</p>}
-
-      {phase === 'ready' && result && (
-        <article className="rag-result" data-assistant-answer="true">
-          <h3>{copy.answer}</h3>
-          <p className="rag-answer">{result.answer}</p>
-          {topSource && (
-            <p className="rag-top-source" data-assistant-source="true">
-              <span>{copy.topSource}</span>
-              <strong title={topSource.source}>{sourceFileName(topSource.source)}</strong>
-              <em>{copy.score} {Number(topSource.score).toFixed(4)}</em>
-            </p>
-          )}
-          <h3>{copy.sources} ({result.sources.length})</h3>
-          {result.sources.length === 0 ? (
-            <p className="rag-empty">{copy.noSources}</p>
-          ) : (
-            <ul className="rag-sources">
-              {result.sources.map((source, index) => (
-                <li key={`${source.source}-${index}`} className="rag-source">
-                  <div className="rag-source-top">
-                    <strong title={source.source}>{sourceFileName(source.source)}</strong>
-                    <span>{copy.score} {source.score.toFixed(4)}</span>
-                  </div>
-                  <div className="rag-score-bar" aria-hidden="true">
-                    <span style={{ width: `${Math.max(0, Math.min(source.score, 1)) * 100}%` }} />
-                  </div>
-                  <p className="rag-excerpt">{source.excerpt || source.text}</p>
-                </li>
-              ))}
-            </ul>
-          )}
-          <p className="rag-disclaimer">{copy.disclaimer}</p>
-        </article>
+      {messages.some((message) => message.role === 'assistant' && message.text) && (
+        <p className="rag-disclaimer">{copy.disclaimer}</p>
       )}
 
       <div className="rag-selected" data-retained-observation="true">
@@ -464,7 +359,7 @@ export function TechnicalRecommendation({ lang = 'fr', selection = null, request
           type="button"
           className="btn btn-secondary"
           data-retained-ask="true"
-          disabled={!selection || cardPhase === 'loading'}
+          disabled={!selection || busy}
           onClick={askRetained}
         >
           {copy.askSelection}
@@ -473,11 +368,10 @@ export function TechnicalRecommendation({ lang = 'fr', selection = null, request
           <p className="rag-loading" role="status">{copy.loading}</p>
         )}
         {cardNote && (
-          <p className="rag-connect" role="status" data-retained-note="true">{cardNote}</p>
+          <p className="rag-error" role="alert" data-retained-note="true">{cardNote}</p>
         )}
-        {cardResult && (
+        {cardResult?.answer && (
           <div data-retained-answer="true">
-            <h3>{copy.answer}</h3>
             <p className="rag-answer">{cardResult.answer}</p>
             {cardResult.sources?.[0] && (
               <p className="rag-top-source" data-retained-source="true">

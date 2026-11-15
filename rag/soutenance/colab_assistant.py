@@ -1,9 +1,10 @@
 """Assistant RAG de soutenance, exécuté dans le notebook Colab.
 
 Qwen2.5-7B-Instruct en 4 bits, BGE-M3, FAISS IndexFlatIP.
-L'API écoute seulement 127.0.0.1. Après le démarrage, un tunnel HTTPS
-(cloudflared, sinon localtunnel, sinon ngrok) est la seule porte publique.
-Le tableau de bord colle la ligne URL_DASHBOARD=https://…
+L'API écoute seulement 127.0.0.1. Après le démarrage, un tunnel ngrok
+HTTPS est la seule porte publique. Le tableau de bord colle la ligne
+URL_DASHBOARD=https://….ngrok-free.app
+Le jeton se lit dans NGROK_AUTHTOKEN (environnement ou secret Colab).
 Les embeddings ne sont recalculés que si aucun index valide n'est déjà là.
 """
 
@@ -11,9 +12,8 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
 import pickle
-import re
-import shutil
 import subprocess
 import sys
 import threading
@@ -276,6 +276,7 @@ def ensure_packages():
         "fastapi": "fastapi",
         "uvicorn": "uvicorn",
         "numpy": "numpy",
+        "pyngrok": "pyngrok",
     }
     missing = []
     for module, package in required.items():
@@ -539,152 +540,97 @@ def run_demo():
         print_demo_result(item, payload)
 
 
-_TUNNEL_URL_RE = re.compile(
-    r"https://[A-Za-z0-9][A-Za-z0-9.-]*\.(?:trycloudflare\.com|loca\.lt|ngrok-free\.app|ngrok\.app|ngrok\.io)"
-)
-
-
-def extract_tunnel_url(text):
-    found = _TUNNEL_URL_RE.search(text or "")
-    return found.group(0) if found else None
-
-
 def format_dashboard_url(url):
     return f"URL_DASHBOARD={url}"
 
 
-def cloudflared_command(binary):
-    # cloudflared tunnel --url http://127.0.0.1:8000
-    return [binary, "tunnel", "--url", f"http://{API_HOST}:{API_PORT}", "--no-autoupdate"]
-
-
-def ensure_cloudflared():
-    found = shutil.which("cloudflared")
-    if found:
-        return found
-    dest = Path("/tmp/cloudflared")
-    if dest.is_file() and dest.stat().st_mode & 0o111:
-        return str(dest)
-    import platform
-
-    machine = platform.machine().lower()
-    asset = "cloudflared-linux-arm64" if machine in ("aarch64", "arm64") else "cloudflared-linux-amd64"
-    download = f"https://github.com/cloudflare/cloudflared/releases/latest/download/{asset}"
-    print("Installation de cloudflared…")
+def read_ngrok_token():
+    """Jeton ngrok : variable NGROK_AUTHTOKEN, sinon secret Colab du même nom."""
+    token = os.environ.get("NGROK_AUTHTOKEN", "").strip()
+    if token:
+        return token
     try:
-        request = urllib.request.Request(download, headers={"User-Agent": "tariqmap-soutenance"})
-        with urllib.request.urlopen(request, timeout=90) as response:
-            dest.write_bytes(response.read())
-        dest.chmod(0o755)
-        return str(dest)
+        from google.colab import userdata
+    except Exception:
+        return ""
+    try:
+        return str(userdata.get("NGROK_AUTHTOKEN") or "").strip()
+    except Exception:
+        return ""
+
+
+def _https_origin(tunnel):
+    origin = getattr(tunnel, "public_url", str(tunnel)).strip().rstrip("/")
+    if origin.startswith("http://"):
+        origin = "https://" + origin[len("http://"):]
+    return origin
+
+
+def _connect_ngrok(ngrok):
+    # pyngrok 6 : bind_tls=True. pyngrok 7 ouvre déjà un tunnel HTTPS.
+    try:
+        return ngrok.connect(API_PORT, bind_tls=True)
+    except TypeError:
+        return ngrok.connect(str(API_PORT))
     except Exception as exc:
-        print("cloudflared ne s'installe pas :", exc)
-        return None
-
-
-def _stream_until_url(proc, timeout):
-    box = {"url": None, "text": ""}
-
-    def reader():
-        stream = proc.stdout
-        if stream is None:
-            return
-        for line in stream:
-            box["text"] += line
-            if box["url"] is None:
-                found = extract_tunnel_url(box["text"])
-                if found:
-                    box["url"] = found
-
-    thread = threading.Thread(target=reader, daemon=True)
-    thread.start()
-    deadline = time.time() + timeout
-    while time.time() < deadline:
-        if box["url"]:
-            return box["url"], box["text"]
-        if proc.poll() is not None:
-            thread.join(timeout=2)
-            return box["url"] or extract_tunnel_url(box["text"]), box["text"]
-        time.sleep(0.2)
-    return box["url"], box["text"]
-
-
-def _spawn_tunnel(command, timeout):
-    print("Tunnel :", " ".join(str(part) for part in command))
-    try:
-        proc = subprocess.Popen(
-            command,
-            stdout=subprocess.PIPE,
-            stderr=subprocess.STDOUT,
-            text=True,
-            bufsize=1,
-        )
-    except OSError as exc:
-        print("Impossible de lancer", command[0], ":", exc)
-        return None, None
-    url, log = _stream_until_url(proc, timeout)
-    if url:
-        return url, proc
-    tail = (log or "").strip()[-500:]
-    if tail:
-        print(tail)
-    if proc.poll() is None:
-        proc.terminate()
-    return None, None
-
-
-def start_cloudflared_tunnel():
-    binary = ensure_cloudflared()
-    if not binary:
-        return None, None
-    return _spawn_tunnel(cloudflared_command(binary), 45)
-
-
-def start_localtunnel():
-    npx = shutil.which("npx")
-    if not npx:
-        print("localtunnel : npx est absent.")
-        return None, None
-    return _spawn_tunnel([npx, "--yes", "localtunnel", "--port", str(API_PORT)], 70)
-
-
-def start_ngrok_tunnel():
-    binary = shutil.which("ngrok")
-    if not binary:
-        print("ngrok est absent.")
-        return None, None
-    return _spawn_tunnel(
-        [binary, "http", f"{API_HOST}:{API_PORT}", "--log", "stdout"],
-        30,
-    )
+        if "bind_tls" not in str(exc).lower():
+            raise
+        return ngrok.connect(str(API_PORT))
 
 
 def tunnel_state():
     state = globals().get("_TUNNEL")
     if not isinstance(state, dict):
-        state = {"process": None, "url": None}
+        state = {"url": None}
         globals()["_TUNNEL"] = state
     return state
 
 
 def open_public_tunnel():
-    """Ouvre un tunnel HTTPS vers l'API locale. L'API reste sur 127.0.0.1."""
+    """Ouvre un seul tunnel ngrok HTTPS vers l'API locale. L'API reste sur 127.0.0.1."""
     state = tunnel_state()
-    proc = state.get("process")
-    if state.get("url") and proc is not None and proc.poll() is None:
+    if state.get("url"):
         print(format_dashboard_url(state["url"]))
         return state["url"]
-    starters = (start_cloudflared_tunnel, start_localtunnel, start_ngrok_tunnel)
-    for starter in starters:
-        url, spawned = starter()
-        if url:
-            state["url"] = url
-            state["process"] = spawned
-            print(format_dashboard_url(url))
-            return url
-    print("Aucun tunnel HTTPS. L'API reste sur", f"http://{API_HOST}:{API_PORT}.")
-    print("Relancez la cellule : le tableau de bord a besoin de la ligne URL_DASHBOARD=https://…")
-    return None
+
+    token = read_ngrok_token()
+    if not token:
+        print(
+            "NGROK_AUTHTOKEN manquant. "
+            "Ajoutez le secret NGROK_AUTHTOKEN dans les secrets du notebook, "
+            "puis relancez la cellule."
+        )
+        return None
+
+    try:
+        from pyngrok import ngrok
+    except Exception:
+        subprocess.check_call([sys.executable, "-m", "pip", "install", "-q", "pyngrok"])
+        from pyngrok import ngrok
+
+    try:
+        ngrok.set_auth_token(token)
+        existing = []
+        for tunnel in list(ngrok.get_tunnels()):
+            origin = _https_origin(tunnel)
+            if origin.startswith("https://"):
+                existing.append(origin)
+        if existing:
+            state["url"] = existing[0]
+            print(format_dashboard_url(existing[0]))
+            return existing[0]
+        origin = _https_origin(_connect_ngrok(ngrok))
+    except Exception as exc:
+        detail = str(exc).replace(token, "…")
+        print("ngrok n'a pas démarré :", detail)
+        return None
+
+    if not origin.startswith("https://"):
+        print("ngrok n'a pas renvoyé d'adresse HTTPS.")
+        return None
+    state["url"] = origin
+    print(format_dashboard_url(origin))
+    return origin
 
 
 def prepare(root, check_only=False, embedding_model=None, llm_pair=None):

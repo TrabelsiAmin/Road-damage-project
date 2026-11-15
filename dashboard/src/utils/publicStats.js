@@ -38,6 +38,40 @@ export function publicRequestError(error, fallbackMessage) {
   return wrapped;
 }
 
+/**
+ * Sums the aggregate rows. The length of the summary is the number of
+ * groups, not the number of anomalies.
+ */
+export function publicDamageTotals(summary) {
+  if (!Array.isArray(summary)) return null;
+  let open = 0;
+  let repaired = 0;
+  let highOpen = 0;
+  for (const row of summary) {
+    const openCount = Number(row?.open_count);
+    const repairedCount = Number(row?.repaired_count);
+    const openValue = Number.isFinite(openCount) ? openCount : 0;
+    const repairedValue = Number.isFinite(repairedCount) ? repairedCount : 0;
+    open += openValue;
+    repaired += repairedValue;
+    const band = String(row?.priority_band || '').toLowerCase();
+    if (band === 'high' || band === 'critical') highOpen += openValue;
+  }
+  return { open, repaired, highOpen, total: open + repaired };
+}
+
+export function publicCatalogueText({ status, summary = [], lang = 'fr' } = {}) {
+  if (status !== 'ready') return publicSituationText({ status, summary, lang });
+  const totals = publicDamageTotals(summary);
+  if (!totals || !Array.isArray(summary) || summary.length === 0) {
+    return publicSituationText({ status, summary, lang });
+  }
+  const headline = lang === 'fr'
+    ? `${totals.total} anomalies au total, dont ${totals.open} encore ouvertes et ${totals.highOpen} prioritaires.`
+    : `${totals.total} anomalies in total, including ${totals.open} still open and ${totals.highOpen} high priority.`;
+  return `${headline} ${publicSituationText({ status, summary, lang })}`;
+}
+
 export function publicCountText(value, status, lang = 'fr') {
   if (status !== 'ready') return lang === 'fr' ? 'Indisponible' : 'Unavailable';
   const count = Number(value);

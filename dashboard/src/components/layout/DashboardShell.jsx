@@ -24,6 +24,9 @@ export function DashboardShell({
   onToggleLang,
   theme = 'light',
   onToggleTheme,
+  period = 'all',
+  onPeriodChange,
+  contentMode = 'stack',
   children,
 }) {
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
@@ -70,10 +73,12 @@ export function DashboardShell({
           lang={lang}
           theme={theme}
           onToggleTheme={onToggleTheme}
+          period={period}
+          onPeriodChange={onPeriodChange}
         />
 
         {/* Dynamic Content Region */}
-        <main className="tm-content-area" id="main-content">
+        <main className={`tm-content-area${contentMode === 'overview' ? ' is-overview' : ''}`} id="main-content">
           {children}
         </main>
       </div>

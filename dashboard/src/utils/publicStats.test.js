@@ -1,5 +1,11 @@
 import { describe, it, expect } from 'vitest';
-import { canDownloadPublicExport, publicCountText, publicSituationText } from './publicStats';
+import {
+  canDownloadPublicExport,
+  publicCatalogueText,
+  publicCountText,
+  publicDamageTotals,
+  publicSituationText,
+} from './publicStats';
 
 describe('public stats availability', () => {
   it('shows Indisponible when the public functions fail', () => {
@@ -23,5 +29,17 @@ describe('public stats availability', () => {
       summary: [{ anomaly_type: 'D40', priority_band: 'high', open_count: 2, repaired_count: 1 }],
     });
     expect(text).toBe('D40 · high · 2 ouverts · 1 réparés');
+  });
+
+  it('sums aggregate groups instead of counting the summary rows', () => {
+    const summary = [
+      { anomaly_type: 'D40', priority_band: 'high', open_count: 40, repaired_count: 5 },
+      { anomaly_type: 'D00', priority_band: 'low', open_count: 30, repaired_count: 2 },
+    ];
+    expect(publicDamageTotals(summary)).toEqual({ open: 70, repaired: 7, highOpen: 40, total: 77 });
+    expect(publicCatalogueText({ status: 'ready', summary, lang: 'fr' })).toContain('77 anomalies au total');
+    expect(publicCatalogueText({ status: 'ready', summary, lang: 'fr' })).not.toContain('2 anomalies');
+    expect(publicCatalogueText({ status: 'unavailable', summary, lang: 'fr' })).toBe('Indisponible');
+    expect(publicDamageTotals(null)).toBeNull();
   });
 });

@@ -1,0 +1,693 @@
+/* Ministry shell. Matches the light overview: navy rail, white cards, blue accents. */
+
+.tm-sidebar {
+  width: 248px;
+  min-width: 248px;
+  background: #0B1F4D;
+  color: #FFFFFF;
+  border-right: 0;
+}
+
+.tm-sidebar-header {
+  height: auto;
+  min-height: 72px;
+  padding: 16px 14px 12px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.tm-sidebar-crest {
+  width: 34px;
+  height: 34px;
+  border-radius: 10px;
+  background: transparent;
+  border: 1.5px solid rgba(255, 255, 255, 0.9);
+  color: #FFFFFF;
+}
+
+.tm-brand-name {
+  color: #FFFFFF;
+  font-size: 0.78rem;
+  font-weight: 700;
+  letter-spacing: -0.01em;
+  white-space: normal;
+  line-height: 1.25;
+}
+
+.tm-brand-dept {
+  color: rgba(255, 255, 255, 0.72);
+  font-size: 0.72rem;
+}
+
+.tm-sidebar-toggle-btn,
+.tm-sidebar-close-mobile {
+  background: transparent;
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  color: #FFFFFF;
+}
+
+.tm-sidebar-link {
+  color: rgba(255, 255, 255, 0.88);
+  border-radius: 10px;
+  font-size: 0.9rem;
+  font-weight: 500;
+}
+
+.tm-sidebar-link:hover {
+  background: rgba(255, 255, 255, 0.08);
+  color: #FFFFFF;
+}
+
+.tm-sidebar-link.active {
+  background: #2563EB;
+  color: #FFFFFF;
+  box-shadow: none;
+  font-weight: 600;
+}
+
+.tm-sidebar-link.active .tm-sidebar-item-icon {
+  color: #FFFFFF;
+}
+
+.tm-sidebar-section {
+  margin: 14px 12px 6px;
+  color: rgba(255, 255, 255, 0.45);
+  font-size: 0.68rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.tm-sidebar-footer {
+  background: transparent;
+  border-top: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.tm-sidebar-user-card,
+.tm-sidebar-control-btn {
+  background: rgba(255, 255, 255, 0.08);
+  border-color: rgba(255, 255, 255, 0.12);
+  color: #FFFFFF;
+}
+
+.tm-user-email,
+.tm-sidebar-control-btn {
+  color: rgba(255, 255, 255, 0.86);
+}
+
+.tm-topbar {
+  height: 58px;
+  background: #FFFFFF;
+}
+
+.tm-topbar-left {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.tm-topbar-tagline {
+  margin: 0;
+  color: #64748B;
+  font-size: 0.84rem;
+  font-weight: 500;
+  letter-spacing: -0.01em;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.tm-topbar[data-view="overview"] .tm-topbar-center,
+.tm-topbar[data-view="overview"] .tm-btn-metrics,
+.tm-topbar[data-view="overview"] .tm-btn-export,
+.tm-topbar[data-view="overview"] .tm-timestamp-text {
+  display: none;
+}
+
+.tm-period-select {
+  height: 34px;
+  border-radius: 999px;
+  border: 1px solid #DBE7F5;
+  background: #FFFFFF;
+  color: #2563EB;
+  font-weight: 600;
+  font-size: 0.8rem;
+  padding: 0 28px 0 12px;
+}
+
+.tm-content-area.is-overview {
+  display: grid;
+  grid-template-columns: minmax(0, 1.15fr) minmax(260px, 0.95fr) minmax(240px, 0.78fr);
+  grid-template-areas:
+    "kpis kpis kpis"
+    "map charts assist"
+    "table table table";
+  gap: 14px;
+  align-items: stretch;
+  padding: 16px 18px 24px;
+  background: #F4F7FB;
+}
+
+.is-overview .ov-kpis { grid-area: kpis; }
+.is-overview .ov-charts { grid-area: charts; }
+.is-overview .ov-assist { grid-area: assist; }
+.is-overview .ov-table-card { grid-area: table; }
+.is-overview #ministry-map { grid-area: map; min-width: 0; }
+
+.ov-kpi-grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 14px;
+}
+
+.ov-card,
+.ov-kpi {
+  background: #FFFFFF;
+  border: 1px solid #E2E8F0;
+  border-radius: 16px;
+  box-shadow: 0 1px 2px rgba(15, 23, 42, 0.04);
+}
+
+.ov-kpi {
+  padding: 14px 16px 16px;
+  min-width: 0;
+}
+
+.ov-kpi-icon {
+  width: 34px;
+  height: 34px;
+  border-radius: 10px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  margin-bottom: 10px;
+}
+
+.ov-kpi-icon-alert {
+  background: #FEE2E2;
+  color: #DC2626;
+}
+
+.ov-kpi-icon-blue {
+  background: #DBEAFE;
+  color: #2563EB;
+}
+
+.ov-kpi-label,
+.ov-card-help,
+.ov-kpi-sub,
+.ov-public-note,
+.ov-empty,
+.ov-assist-head p,
+.ov-more span,
+.ov-table-empty p {
+  color: #64748B;
+  font-size: 0.75rem;
+  line-height: 1.35;
+}
+
+.ov-kpi-label {
+  font-weight: 600;
+}
+
+.ov-kpi-value {
+  margin: 4px 0 0;
+  color: #0F172A;
+  font-size: 1.7rem;
+  font-weight: 700;
+  letter-spacing: -0.03em;
+  line-height: 1.1;
+}
+
+.ov-kpi-value-date {
+  font-size: 1.15rem;
+  font-weight: 700;
+}
+
+.ov-kpi-delta {
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+  margin-top: 6px;
+  font-size: 0.75rem;
+  font-weight: 700;
+}
+
+.ov-kpi-delta span,
+.ov-kpi-sub,
+.ov-public-note {
+  font-weight: 500;
+}
+
+.ov-kpi-delta.is-up { color: #16A34A; }
+.ov-kpi-delta.is-down { color: #DC2626; }
+.ov-kpi-delta span { color: #64748B; }
+
+.ov-kpi-sub,
+.ov-public-note {
+  margin-top: 6px;
+}
+
+.ov-public-note {
+  margin: 10px 2px 0;
+}
+
+.ov-charts {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  min-width: 0;
+  height: 100%;
+}
+
+.ov-charts .ov-card:last-child {
+  flex: 1;
+}
+
+.ov-card {
+  padding: 14px 16px 16px;
+  min-width: 0;
+}
+
+.ov-card h2,
+.ov-table-head h2,
+.ov-assist-head h2,
+.ov-map-card-title h2 {
+  margin: 0;
+  color: #0F172A;
+  font-family: Inter, sans-serif;
+  font-size: 0.95rem;
+  font-weight: 700;
+  letter-spacing: -0.01em;
+}
+
+.ov-card-help {
+  margin: 4px 0 10px;
+}
+
+.ov-donut-wrap {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  margin-top: 12px;
+}
+
+.ov-donut {
+  width: 148px;
+  height: 148px;
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+  flex-shrink: 0;
+}
+
+.ov-donut-hole {
+  width: 92px;
+  height: 92px;
+  border-radius: 50%;
+  background: #FFFFFF;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+}
+
+.ov-donut-hole strong {
+  color: #0F172A;
+  font-size: 1.35rem;
+  line-height: 1;
+}
+
+.ov-donut-hole span {
+  color: #64748B;
+  font-size: 0.68rem;
+}
+
+.ov-legend {
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  min-width: 0;
+  font-size: 0.78rem;
+}
+
+.ov-legend li {
+  display: grid;
+  grid-template-columns: 10px minmax(0, 1fr) auto;
+  gap: 8px;
+  align-items: center;
+}
+
+.ov-legend i {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+}
+
+.ov-bars {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.ov-bar-row {
+  display: grid;
+  grid-template-columns: minmax(72px, 96px) minmax(0, 1fr) 28px;
+  gap: 8px;
+  align-items: center;
+  font-size: 0.78rem;
+  color: #334155;
+}
+
+.ov-bar-label {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.ov-bar-track {
+  height: 8px;
+  border-radius: 99px;
+  background: #E8EEF7;
+  overflow: hidden;
+}
+
+.ov-bar-fill {
+  display: block;
+  height: 100%;
+  border-radius: 99px;
+  background: #2563EB;
+  min-width: 2px;
+}
+
+.ov-assist {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  min-height: 0;
+  max-height: 640px;
+  overflow: auto;
+}
+
+.ov-assist-head {
+  display: flex;
+  gap: 10px;
+  align-items: flex-start;
+}
+
+.ov-assist-head .ov-kpi-icon {
+  margin-bottom: 0;
+  flex-shrink: 0;
+}
+
+.ov-assist-head p {
+  margin: 2px 0 0;
+}
+
+.ov-assist .rag-panel {
+  margin: 0;
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  box-shadow: none;
+  background: transparent;
+}
+
+.ov-assist .rag-heading h2 {
+  font-family: Inter, sans-serif;
+  font-size: 0.82rem;
+}
+
+.ov-assist .rag-form textarea {
+  min-height: 72px;
+}
+
+.ov-more,
+.ov-text-btn,
+.ov-place {
+  border: 0;
+  background: transparent;
+  text-align: left;
+  cursor: pointer;
+  color: inherit;
+  font: inherit;
+}
+
+.ov-more {
+  margin-top: auto;
+  padding-top: 8px;
+  border-top: 1px solid #E2E8F0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.ov-more strong,
+.ov-text-btn {
+  color: #2563EB;
+  font-size: 0.82rem;
+  font-weight: 700;
+}
+
+.ov-table-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 8px;
+}
+
+.ov-table-scroll {
+  overflow-x: auto;
+}
+
+.ov-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.8rem;
+}
+
+.ov-table th {
+  text-align: left;
+  font-size: 0.72rem;
+  font-weight: 600;
+  color: #64748B;
+  background: transparent;
+  border-bottom: 1px solid #E2E8F0;
+  padding: 8px 8px 8px 0;
+}
+
+.ov-table td {
+  padding: 10px 8px 10px 0;
+  border-bottom: 1px solid #EEF2F7;
+  color: #0F172A;
+  vertical-align: middle;
+}
+
+.ov-place {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.ov-place span,
+.ov-table-empty p {
+  color: #64748B;
+  font-size: 0.72rem;
+}
+
+.ov-code {
+  font-weight: 700;
+  letter-spacing: 0.02em;
+}
+
+.ov-status {
+  display: inline-flex;
+  align-items: center;
+  padding: 2px 8px;
+  border-radius: 999px;
+  font-size: 0.72rem;
+  font-weight: 700;
+  background: #F1F5F9;
+  color: #334155;
+}
+
+.ov-status-confirmed,
+.ov-status-in_progress {
+  background: #DBEAFE;
+  color: #1D4ED8;
+}
+
+.ov-status-repaired {
+  background: #DCFCE7;
+  color: #15803D;
+}
+
+.ov-status-unconfirmed {
+  background: #FEF3C7;
+  color: #B45309;
+}
+
+.ov-status-rejected {
+  background: #FEE2E2;
+  color: #B91C1C;
+}
+
+.ov-table-empty {
+  padding: 18px 4px 8px;
+}
+
+.ov-table-empty strong {
+  color: #0F172A;
+}
+
+.main-layout.overview-embed {
+  display: flex;
+  flex-direction: column;
+  height: auto;
+  min-height: 520px;
+  border-radius: 16px;
+  overflow: hidden;
+  background: #FFFFFF;
+  border: 1px solid #E2E8F0;
+}
+
+.overview-embed .ov-map-card-title {
+  padding: 12px 14px 0;
+}
+
+.overview-embed .map-wrapper {
+  flex: 1;
+  min-height: 440px;
+}
+
+.overview-embed .sidebar,
+.overview-embed .map-layer-controls,
+.overview-embed .map-filter-overlay,
+.overview-embed .sidebar-expand-btn {
+  display: none !important;
+}
+
+.overview-embed .map-legend {
+  max-width: 230px;
+  border-radius: 12px;
+}
+
+@media (max-width: 1100px) {
+  .tm-content-area.is-overview {
+    grid-template-columns: 1fr;
+    grid-template-areas:
+      "kpis"
+      "map"
+      "charts"
+      "assist"
+      "table";
+  }
+
+  .ov-kpi-grid {
+    grid-template-columns: 1fr 1fr;
+  }
+
+  .ov-assist {
+    max-height: none;
+  }
+
+  .main-layout.overview-embed,
+  .overview-embed .map-wrapper {
+    min-height: 360px;
+  }
+}
+
+@media (max-width: 800px) {
+  .tm-topbar {
+    flex-wrap: wrap;
+    height: auto;
+    row-gap: 8px;
+    padding-top: 8px;
+    padding-bottom: 8px;
+  }
+
+  .tm-topbar-left,
+  .tm-topbar-right {
+    flex: 1 1 auto;
+  }
+
+  .tm-topbar-tagline {
+    white-space: normal;
+  }
+}
+
+@media (max-width: 640px) {
+  .ov-kpi-grid,
+  .ov-donut-wrap {
+    grid-template-columns: 1fr;
+    display: grid;
+  }
+}
+
+html[data-theme="dark"] .tm-sidebar,
+html[data-theme="dark"] .tm-sidebar-footer {
+  background: #0B1F4D;
+  color: #FFFFFF;
+  border-color: rgba(255, 255, 255, 0.08);
+}
+
+html[data-theme="dark"] .tm-topbar,
+html[data-theme="dark"] .tm-content-area.is-overview {
+  background: #1C1917;
+  color: #F5F0E8;
+}
+
+html[data-theme="dark"] .tm-topbar-tagline,
+html[data-theme="dark"] .ov-kpi-label,
+html[data-theme="dark"] .ov-kpi-sub,
+html[data-theme="dark"] .ov-card-help,
+html[data-theme="dark"] .ov-public-note,
+html[data-theme="dark"] .ov-empty,
+html[data-theme="dark"] .ov-assist-head p,
+html[data-theme="dark"] .ov-more span,
+html[data-theme="dark"] .ov-place span,
+html[data-theme="dark"] .ov-table-empty p,
+html[data-theme="dark"] .ov-donut-hole span,
+html[data-theme="dark"] .ov-kpi-delta span {
+  color: #A8A29E;
+}
+
+html[data-theme="dark"] .ov-card,
+html[data-theme="dark"] .ov-kpi,
+html[data-theme="dark"] .main-layout.overview-embed,
+html[data-theme="dark"] .ov-donut-hole,
+html[data-theme="dark"] .tm-period-select {
+  background: #292524;
+  border-color: #44403C;
+  color: #F5F0E8;
+}
+
+html[data-theme="dark"] .ov-kpi-value,
+html[data-theme="dark"] .ov-card h2,
+html[data-theme="dark"] .ov-table-head h2,
+html[data-theme="dark"] .ov-assist-head h2,
+html[data-theme="dark"] .ov-map-card-title h2,
+html[data-theme="dark"] .ov-donut-hole strong,
+html[data-theme="dark"] .ov-table td,
+html[data-theme="dark"] .ov-bar-row,
+html[data-theme="dark"] .ov-table-empty strong {
+  color: #F5F0E8;
+}
+
+html[data-theme="dark"] .ov-table th,
+html[data-theme="dark"] .ov-table td,
+html[data-theme="dark"] .ov-more {
+  border-color: #44403C;
+}
+
+html[data-theme="dark"] .ov-bar-track {
+  background: #44403C;
+}
+
+html[data-theme="dark"] .ov-assist .rag-panel,
+html[data-theme="dark"] .ov-assist .rag-heading,
+html[data-theme="dark"] .ov-assist .rag-selected {
+  background: transparent;
+  color: #F5F0E8;
+}

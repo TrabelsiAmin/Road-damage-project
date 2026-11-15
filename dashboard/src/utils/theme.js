@@ -29,7 +29,8 @@ export function resolveNextTheme(current) {
 }
 
 /**
- * Apply the theme to the document and remember it.
+ * Paint a theme on the document. Storage is left untouched so a system
+ * preference is not turned into a saved choice just by opening the page.
  * @param {'dark'|'light'|string} theme
  * @returns {'dark'|'light'}
  */
@@ -43,14 +44,27 @@ export function applyTheme(theme) {
     if (document.body) {
       document.body.setAttribute('data-theme', next);
       document.body.classList.toggle('dark-mode', next === 'dark');
+      document.body.style.colorScheme = next;
     }
   }
+  return next;
+}
+
+/**
+ * Remember an explicit light or dark choice.
+ * @param {'dark'|'light'|string} theme
+ * @param {Storage|null|undefined} [storage]
+ * @returns {'dark'|'light'}
+ */
+export function persistTheme(theme, storage) {
+  const next = theme === 'dark' ? 'dark' : 'light';
+  const target = storage === undefined
+    ? (typeof localStorage !== 'undefined' ? localStorage : null)
+    : storage;
   try {
-    if (typeof localStorage !== 'undefined') {
-      localStorage.setItem(THEME_STORAGE_KEY, next);
-    }
-  } catch {
-    // The visual theme still applies when storage is unavailable.
+    target?.setItem?.(THEME_STORAGE_KEY, next);
+  } catch (err) {
+    console.warn('Failed to store theme:', err);
   }
   return next;
 }

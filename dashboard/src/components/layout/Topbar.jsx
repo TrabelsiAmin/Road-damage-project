@@ -13,7 +13,14 @@ import {
   Sun,
   X,
 } from 'lucide-react';
-import { Breadcrumbs } from './Breadcrumbs';
+const PERIODS = [
+  { id: 'today', fr: "Aujourd'hui", en: 'Today' },
+  { id: '7d', fr: '7 jours', en: '7 days' },
+  { id: '30d', fr: '30 jours', en: '30 days' },
+  { id: '90d', fr: '90 jours', en: '90 days' },
+  { id: 'year', fr: 'Cette année', en: 'This year' },
+  { id: 'all', fr: 'Historique complet', en: 'All time' },
+];
 
 export function Topbar({
   activeNavTab,
@@ -34,74 +41,11 @@ export function Topbar({
   lang = 'fr',
   theme = 'light',
   onToggleTheme,
+  period = 'all',
+  onPeriodChange,
 }) {
-  const titles = {
-    overview: {
-      fr: 'Vue d’ensemble',
-      en: 'Executive Overview',
-      contextFr: 'Priorité, files de travail et recommandation technique',
-      contextEn: 'Priority, work queues, and technical recommendation',
-    },
-    action_center: {
-      fr: 'Centre d’opérations',
-      en: 'Operations Action Center',
-      contextFr: 'Validation, affectation et clôture des signalements',
-      contextEn: 'Validate, assign, and close observations',
-    },
-    gis_map: {
-      fr: 'Carte SIG & Dégradations',
-      en: 'Geographic Intelligence & GIS',
-      contextFr: 'Agrégats routiers et preuves photo',
-      contextEn: 'Road clusters and photo evidence',
-    },
-    road_segments: {
-      fr: 'Risque par tronçon',
-      en: 'Road Segment Risk Matrix',
-      contextFr: 'Corridors classés à partir des signalements chargés',
-      contextEn: 'Corridors ranked from loaded observations',
-    },
-    analytics: {
-      fr: 'Analytique & tendances',
-      en: 'Analytics & Trends',
-      contextFr: 'Répartition réelle des signalements chargés',
-      contextEn: 'Distribution of the loaded observations',
-    },
-    data_quality: {
-      fr: 'Qualité & modèle IA',
-      en: 'Data Quality & AI Telemetry',
-      contextFr: 'Couverture, GPS et limites du modèle',
-      contextEn: 'Coverage, GPS, and model limits',
-    },
-    reports: {
-      fr: 'Rapports & exports',
-      en: 'Official Reports & Exports',
-      contextFr: 'Exports du filtre courant',
-      contextEn: 'Exports of the current filter',
-    },
-    audit: {
-      fr: 'Journal d’audit',
-      en: 'Governance & Audit Trail',
-      contextFr: 'Historique des actions autorité',
-      contextEn: 'History of authority actions',
-    },
-  };
-
-  const current = titles[activeNavTab];
-  const currentTitle = current
-    ? (lang === 'fr' ? current.fr : current.en)
-    : 'TariqMap';
-  const currentContext = current
-    ? (lang === 'fr' ? current.contextFr : current.contextEn)
-    : '';
-
-  const breadcrumbs = [
-    { label: 'TariqMap', onClick: () => {} },
-    { label: currentTitle },
-  ];
-
   return (
-    <header className="tm-topbar">
-      {/* Left side: Hamburger button + Breadcrumbs / Page Title */}
+    <header className="tm-topbar" data-view={activeNavTab || 'overview'}>
       <div className="tm-topbar-left">
         <button
           type="button"
@@ -112,11 +56,11 @@ export function Topbar({
           <Menu size={18} />
         </button>
 
-        <div className="tm-topbar-context">
-          <Breadcrumbs items={breadcrumbs} />
-          <h2 className="tm-topbar-page-title">{currentTitle}</h2>
-          {currentContext && <p className="tm-topbar-kicker">{currentContext}</p>}
-        </div>
+        <p className="tm-topbar-tagline">
+          {lang === 'fr'
+            ? 'Des données fiables pour des décisions éclairées'
+            : 'Reliable data for informed decisions'}
+        </p>
       </div>
 
       {/* Center: Search Box */}
@@ -149,14 +93,34 @@ export function Topbar({
 
       {/* Right side: Actions & Status */}
       <div className="tm-topbar-right">
+        <label className="tm-period">
+          <span className="hide-on-mobile">
+            {lang === 'fr' ? 'Période' : 'Period'}
+          </span>
+          <select
+            className="tm-period-select"
+            value={period || 'all'}
+            aria-label={lang === 'fr' ? 'Période' : 'Period'}
+            onChange={(event) => onPeriodChange && onPeriodChange(event.target.value)}
+          >
+            {PERIODS.map((item) => (
+              <option key={item.id} value={item.id}>
+                {lang === 'fr' ? item.fr : item.en}
+              </option>
+            ))}
+          </select>
+        </label>
         <button
           type="button"
           className="btn btn-secondary tm-btn-theme"
           onClick={onToggleTheme}
           aria-pressed={theme === 'dark'}
+          aria-label={theme === 'dark'
+            ? (lang === 'fr' ? 'Mode clair' : 'Light mode')
+            : (lang === 'fr' ? 'Mode sombre' : 'Dark mode')}
           title={theme === 'dark'
-            ? (lang === 'fr' ? 'Passer en mode clair' : 'Switch to light mode')
-            : (lang === 'fr' ? 'Passer en mode sombre' : 'Switch to dark mode')}
+            ? (lang === 'fr' ? 'Mode clair' : 'Light mode')
+            : (lang === 'fr' ? 'Mode sombre' : 'Dark mode')}
         >
           {theme === 'dark' ? <Sun size={14} /> : <Moon size={14} />}
           <span className="hide-on-tablet">

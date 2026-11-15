@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { getInitialTheme, resolveNextTheme } from './theme';
+import { getInitialTheme, persistTheme, resolveNextTheme } from './theme';
 
 function storageWith(value) {
   return {
@@ -36,5 +36,26 @@ describe('Theme State Utilities', () => {
     expect(resolveNextTheme('light')).toBe('dark');
     expect(resolveNextTheme('dark')).toBe('light');
     expect(resolveNextTheme('other')).toBe('dark');
+  });
+
+  it('persists an explicit choice and survives a storage failure', () => {
+    const store = {};
+    const storage = {
+      setItem(key, value) {
+        store[key] = value;
+      },
+      getItem(key) {
+        return Object.prototype.hasOwnProperty.call(store, key) ? store[key] : null;
+      },
+    };
+
+    expect(persistTheme('dark', storage)).toBe('dark');
+    expect(getInitialTheme(storage, false)).toBe('dark');
+    expect(persistTheme('light', {
+      setItem() {
+        throw new Error('quota');
+      },
+    })).toBe('light');
+    expect(persistTheme('dark', null)).toBe('dark');
   });
 });

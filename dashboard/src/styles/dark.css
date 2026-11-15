@@ -24,7 +24,25 @@ html[data-theme="dark"] {
   --tm-text: #F5F0E8;
   --tm-text-muted: #A8A29E;
   --tm-primary: #60A5FA;
+  --tm-secondary: #38BDF8;
+  --tm-teal: #4ADE80;
+  --tm-critical: #F87171;
+  --tm-high: #F87171;
+  --tm-medium: #FBBF24;
+  --tm-low: #60A5FA;
+  --tm-success: #4ADE80;
   --tm-canvas: #1C1917;
+  --tm-shadow-card: 0 1px 2px rgba(0, 0, 0, 0.35);
+  --color-secondary: #38BDF8;
+  --color-warning: #FBBF24;
+  --color-critical: #F87171;
+  --color-success: #4ADE80;
+  --color-d40: #F87171;
+  --color-d20: #FBBF24;
+  --color-d00: #60A5FA;
+  --color-d10: #38BDF8;
+  --shadow-card: 0 1px 2px rgba(0, 0, 0, 0.35);
+  --shadow-glow: 0 0 0 3px rgba(96, 165, 250, 0.28);
 }
 
 html[data-theme="dark"],
@@ -35,6 +53,7 @@ html[data-theme="dark"] .tm-main-viewport,
 html[data-theme="dark"] .tm-content-area {
   background: #1C1917;
   color: #F5F0E8;
+  color-scheme: dark;
 }
 
 html[data-theme="dark"] .tm-topbar,
@@ -157,16 +176,19 @@ html[data-theme="dark"] .leaflet-map-host .leaflet-container {
   background: #1C1917 !important;
 }
 
-html[data-theme="dark"] .leaflet-tile-pane {
-  filter: invert(1) hue-rotate(180deg) brightness(0.85) contrast(0.92);
-}
-
 html[data-theme="dark"] .leaflet-popup-content-wrapper,
 html[data-theme="dark"] .leaflet-popup-tip,
-html[data-theme="dark"] .leaflet-bar a {
+html[data-theme="dark"] .leaflet-bar a,
+html[data-theme="dark"] .leaflet-control-attribution {
   background: #292524;
   color: #F5F0E8;
   border-color: #44403C;
+}
+
+html[data-theme="dark"] .leaflet-bar a:hover,
+html[data-theme="dark"] .leaflet-bar a:focus {
+  background: #3F3A36;
+  color: #F5F0E8;
 }
 
 html[data-theme="dark"] .rag-panel,
@@ -212,6 +234,8 @@ html[data-theme="dark"] .ministry-period select,
 html[data-theme="dark"] .date-pill.active {
   border-color: #57534E;
   box-shadow: none;
+  background: transparent;
+  color: #F5F0E8;
 }
 
 html[data-theme="dark"] .date-pill.active {

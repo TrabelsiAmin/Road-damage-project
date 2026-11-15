@@ -34,7 +34,7 @@ import { mergeObservationPages, OBSERVATION_PAGE_SIZE } from './utils/records';
 import { downloadFile, generatePublicAggregateCsv } from './utils/exportFormats';
 import { GlobalFilterBar } from './components/GlobalFilterBar';
 import { DashboardShell } from './components/layout/DashboardShell';
-import { ExecutiveKpiGrid } from './components/ExecutiveKpiGrid';
+import { OverviewBoard } from './components/OverviewBoard';
 import { ActionCenterView } from './components/ActionCenterView';
 import { RoadSegmentRiskView } from './components/RoadSegmentRiskView';
 import { AnalyticsTrendsView } from './components/AnalyticsTrendsView';
@@ -56,15 +56,14 @@ import {
 import { computeAllCorridorRisks } from './utils/roadSegmentRisk';
 import { approximateRoadNote, REFERENCE_CORRIDORS } from './utils/tunisiaGeo';
 import { haversineDistanceMeters } from './utils/clustering';
-import { MinistryOverview } from './components/MinistryOverview';
 import { TechnicalRecommendation } from './components/TechnicalRecommendation';
 import { displayClassCode } from './utils/classCodes';
 import { filterValidClusters } from './utils/mapValidation';
 import { mapLoadCopy, mapLoadState } from './utils/mapLoadState';
 import { authorityCountStatus, overviewCounters, visitorCountStatus } from './utils/overviewCounters';
-import { canDownloadPublicExport, publicSituationText } from './utils/publicStats';
+import { canDownloadPublicExport, publicCatalogueText, publicDamageTotals } from './utils/publicStats';
 import { usableOrganizations } from './utils/organizations';
-import { applyTheme, getInitialTheme, resolveNextTheme } from './utils/theme';
+import { applyTheme, getInitialTheme, persistTheme, resolveNextTheme } from './utils/theme';
 import {
   buildMinistryOverview,
   observationClass,
@@ -339,6 +338,7 @@ function ReportImageThumbnail({ obs, clusterMedia, isAuthority, onOpenLightbox }
 
 export default function App() {
   const [observations, setObservations] = useState([]);
+  const [catalogueTotal, setCatalogueTotal] = useState(null);
   const [listTruncated, setListTruncated] = useState(false);
   const [loadingOlder, setLoadingOlder] = useState(false);
   const [serverClusters, setServerClusters] = useState([]);
@@ -347,7 +347,9 @@ export default function App() {
   const [lang, setLang] = useState('fr');
   const [theme, setTheme] = useState(() => getInitialTheme(
     typeof localStorage !== 'undefined' ? localStorage : null,
-    typeof window !== 'undefined' && window.matchMedia('(prefers-color-scheme: dark)').matches,
+    typeof window !== 'undefined'
+      && typeof window.matchMedia === 'function'
+      && window.matchMedia('(prefers-color-scheme: dark)').matches,
   ));
   const [dataVersion, setDataVersion] = useState(0);
 
@@ -531,6 +533,7 @@ export default function App() {
         ]);
         if (gen !== fetchGenRef.current) return;
         setObservations([]);
+        setCatalogueTotal(null);
         setListTruncated(false);
         setServerClusters([]);
         setMaintenanceCases({});
@@ -552,7 +555,9 @@ export default function App() {
       setPublicSummary([]);
       setPublicCells([]);
       setPublicStatsStatus('idle');
-      setObservations(obsPage?.rows || []);
+      const loadedRows = obsPage?.rows || [];
+      setObservations(loadedRows);
+      setCatalogueTotal(Number.isFinite(obsPage?.total) ? obsPage.total : loadedRows.length);
       setListTruncated(Boolean(obsPage?.truncated));
       setServerClusters(clusterData || []);
       setMaintenanceCases(casesData || {});
@@ -570,6 +575,7 @@ export default function App() {
       if (gen !== fetchGenRef.current) return;
       if (!isAuthorityUser) {
         setObservations([]);
+        setCatalogueTotal(null);
         setServerClusters([]);
         setPublicSummary([]);
         setPublicCells([]);
@@ -831,11 +837,16 @@ export default function App() {
       .filter((cell) => Number.isFinite(cell.latitude) && Number.isFinite(cell.longitude));
   }, [isAuthorityUser, validClusters, publicCells]);
 
+  const publicTotals = useMemo(
+    () => (publicStatsStatus === 'ready' ? publicDamageTotals(publicSummary) : null),
+    [publicStatsStatus, publicSummary],
+  );
+
   const overviewCount = useMemo(() => {
     if (!isAuthorityUser) {
       return overviewCounters({
         status: visitorCountStatus({ loading, publicStatsStatus }),
-        resultCount: mapMarkers.length,
+        resultCount: publicTotals ? publicTotals.total : 0,
         accuracyKnown: false,
         lang,
       });
@@ -855,7 +866,7 @@ export default function App() {
     isAuthorityUser,
     loading,
     publicStatsStatus,
-    mapMarkers.length,
+    publicTotals,
     error,
     observations.length,
     serverClusters.length,
@@ -915,12 +926,29 @@ export default function App() {
     return buildMinistryOverview(withHistory, { period: ranged });
   }, [filteredObservations, searchedObservations, analyticsFilters, filters.dateRange]);
 
-  const shellCounts = useMemo(() => ({
-    critical: actionQueues.critical?.length || 0,
-    unconfirmed: actionQueues.awaiting_validation?.length || 0,
-    clusters: validClusters.length || 0,
-    overdue: actionQueues.overdue?.length || 0,
-  }), [actionQueues, validClusters]);
+  const shellCounts = useMemo(() => {
+    const queueLength = (...keys) => {
+      for (const key of keys) {
+        if (Array.isArray(actionQueues?.[key])) return actionQueues[key].length;
+      }
+      return 0;
+    };
+    if (!isAuthorityUser) {
+      const known = publicStatsStatus === 'ready' && publicTotals;
+      return {
+        critical: known ? publicTotals.highOpen : 0,
+        unconfirmed: 0,
+        clusters: known ? publicTotals.total : 0,
+        overdue: 0,
+      };
+    }
+    return {
+      critical: queueLength('critical', 'criticalQueue'),
+      unconfirmed: queueLength('awaiting_validation', 'validationQueue'),
+      clusters: validClusters.length || 0,
+      overdue: queueLength('overdue', 'overdueQueue'),
+    };
+  }, [isAuthorityUser, publicStatsStatus, publicTotals, actionQueues, validClusters]);
 
   const corridorRisks = useMemo(() => {
     return computeAllCorridorRisks(filteredObservations);
@@ -1547,13 +1575,20 @@ export default function App() {
   }
 
   const isMapVisible = activeNavTab === 'overview' || activeNavTab === 'gis_map';
+  const figureStatus = isAuthorityUser
+    ? authorityCountStatus({
+      loading,
+      error,
+      hasPayload: observations.length > 0 || serverClusters.length > 0,
+    })
+    : visitorCountStatus({ loading, publicStatsStatus });
 
   return (
     <DashboardShell
       activeNavTab={activeNavTab}
       onSelectNavTab={(tabId) => {
         setActiveNavTab(tabId);
-        if (tabId === 'gis_map') {
+        if (tabId === 'gis_map' || tabId === 'overview') {
           setTimeout(() => mapInstanceRef.current?.invalidateSize(), 150);
         }
       }}
@@ -1575,10 +1610,17 @@ export default function App() {
       lang={lang}
       onToggleLang={() => setLang((prev) => (prev === 'fr' ? 'en' : 'fr'))}
       theme={theme}
-      onToggleTheme={() => setTheme((current) => resolveNextTheme(current))}
+      onToggleTheme={() => setTheme((current) => {
+        const next = resolveNextTheme(current);
+        persistTheme(next);
+        return next;
+      })}
+      period={filters.dateRange}
+      onPeriodChange={(value) => setFilters((prev) => ({ ...prev, dateRange: value }))}
+      contentMode={activeNavTab === 'overview' ? 'overview' : 'stack'}
     >
 
-      {isAuthorityUser && (
+      {isAuthorityUser && activeNavTab !== 'overview' && (
       <GlobalFilterBar
         filters={filters}
         onChange={setFilters}
@@ -1595,64 +1637,51 @@ export default function App() {
           })
         }
         lang={lang}
-        totalCount={observations.length}
+        totalCount={Number.isFinite(catalogueTotal) ? Math.max(catalogueTotal, observations.length) : observations.length}
         filteredCount={filteredObservations.length}
         organizations={organizations}
         organizationsUnavailable={organizationsUnavailable}
       />
       )}
 
-      {activeNavTab === 'overview' && !isAuthorityUser && (
-        <section className="section-intro">
-          <h2 style={{ fontSize: '1.1rem', fontWeight: 800 }}>
-            {lang === 'fr' ? 'Situation publique' : 'Public situation'}
-          </h2>
-          <p style={{ fontSize: '0.78rem', color: 'var(--text-muted)', marginTop: '2px' }}>
-            {lang === 'fr'
-              ? 'Totaux nationaux et mailles d\'environ 1 km. Les dossiers individuels restent réservés aux comptes autorisés.'
-              : 'National totals and roughly 1 km cells. Individual cases stay with authorized accounts.'}
-          </p>
-          {!loading && (
-            <p style={{ marginTop: '8px' }}>
-              {publicSituationText({ status: publicStatsStatus, summary: publicSummary, lang })}
-            </p>
+      {activeNavTab === 'overview' && (
+        <OverviewBoard
+          observations={isAuthorityUser ? filteredObservations : []}
+          canSeeRows={isAuthorityUser}
+          figureStatus={figureStatus}
+          publicSummary={publicSummary}
+          publicCells={publicCells}
+          comparison={isAuthorityUser ? ministry?.comparison : null}
+          authorityTotal={isAuthorityUser ? ministry?.total : null}
+          authorityClassCounts={isAuthorityUser ? ministry?.classCounts : null}
+          authorityPriorityCounts={isAuthorityUser ? ministry?.priorityCounts : null}
+          organizations={organizations}
+          catalogueTotal={catalogueTotal}
+          loadedCount={observations.length}
+          listTruncated={listTruncated}
+          note={!isAuthorityUser && publicStatsStatus === 'ready'
+            ? publicCatalogueText({ status: publicStatsStatus, summary: publicSummary, lang })
+            : null}
+          lang={lang}
+          onOpenReports={() => setActiveNavTab('reports')}
+          onOpenIncidents={() => setActiveNavTab('action_center')}
+          onOpenObservation={isAuthorityUser ? openObservation : undefined}
+          assistant={(
+            <TechnicalRecommendation
+              lang={lang}
+              selection={isAuthorityUser ? ragSelection : null}
+              request={isAuthorityUser ? ragRequest : null}
+            />
           )}
-        </section>
+        />
       )}
 
-      {/* ── Tab 1: Executive Overview ── */}
-      {activeNavTab === 'overview' && isAuthorityUser && (
-        <>
-          <ExecutiveKpiGrid
-            kpis={executiveKpis}
-            loading={loading && observations.length === 0}
-            lang={lang}
-            onSelectQueue={(queueKey) => {
-              if (queueKey) {
-                setActiveActionQueue(queueKey === 'all' ? 'critical' : queueKey);
-                setActiveNavTab('action_center');
-              }
-            }}
-          />
-
-          <MinistryOverview
-            overview={ministry}
-            lang={lang}
-            period={filters.dateRange}
-            onPeriodChange={(value) => setFilters((prev) => ({ ...prev, dateRange: value }))}
-            loading={loading && observations.length === 0}
-            error={error}
-            onRetry={loadData}
-            onOpenObservation={openObservation}
-            onAskObservation={(item) => askObservationRef.current(item)}
-          />
-
-          <TechnicalRecommendation
-            lang={lang}
-            selection={ragSelection}
-            request={ragRequest}
-          />
-        </>
+      {activeNavTab === 'assistant' && (
+        <TechnicalRecommendation
+          lang={lang}
+          selection={isAuthorityUser ? ragSelection : null}
+          request={isAuthorityUser ? ragRequest : null}
+        />
       )}
 
       {/* ── Tab 2: Operations Action Center ── */}
@@ -1739,7 +1768,7 @@ export default function App() {
       )}
 
       {/* ── Tab 3: Main GIS Operations Map / Overview Map ── */}
-      {isMapVisible && (
+      {isMapVisible && activeNavTab !== 'overview' && (
         <div className="ministry-map-heading">
           <h2>{lang === 'fr' ? 'Intelligence géographique & SIG' : 'Geographic intelligence & GIS'}</h2>
           <p>
@@ -1756,8 +1785,13 @@ export default function App() {
 
       <div
         id="ministry-map"
-        className={`main-layout ${isSidebarCollapsed ? 'sidebar-collapsed' : ''} ${!isMapVisible ? 'hidden-map' : ''}`}
+        className={`main-layout ${isSidebarCollapsed ? 'sidebar-collapsed' : ''} ${!isMapVisible ? 'hidden-map' : ''} ${activeNavTab === 'overview' ? 'overview-embed' : ''}`}
       >
+        {activeNavTab === 'overview' && (
+          <div className="ov-map-card-title">
+            <h2>{lang === 'fr' ? 'Carte des incidents' : 'Incident map'}</h2>
+          </div>
+        )}
         {/* Left Map View */}
         <div className="map-wrapper">
           <div ref={mapRef} className="leaflet-map-host" />
@@ -1791,8 +1825,12 @@ export default function App() {
               <div className="map-overlay-banner" role="status">
                 <span>
                   {lang === 'fr'
-                    ? `Totaux limités aux ${OBSERVATION_PAGE_SIZE} signalements les plus récents chargés.`
-                    : `Totals use the latest ${OBSERVATION_PAGE_SIZE} loaded observations.`}
+                    ? (Number.isFinite(catalogueTotal)
+                      ? `Le catalogue visible compte ${catalogueTotal} signalements. ${observations.length} sont chargés pour les totaux.`
+                      : `Totaux limités aux ${OBSERVATION_PAGE_SIZE} signalements les plus récents chargés.`)
+                    : (Number.isFinite(catalogueTotal)
+                      ? `The visible catalogue has ${catalogueTotal} reports. ${observations.length} are loaded into the totals.`
+                      : `Totals use the latest ${OBSERVATION_PAGE_SIZE} loaded observations.`)}
                 </span>
                 <button
                   type="button"

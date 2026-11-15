@@ -18,6 +18,12 @@ function cellCenter(value, size) {
   return Math.round((index + 0.5) * size * 1e6) / 1e6;
 }
 
+/** Same center the public grid uses, so a photo can be matched to a cell. */
+export function publicCellKey(latitude, longitude, cellDegrees = MIN_CELL_DEGREES) {
+  const size = publicCellSize(cellDegrees);
+  return `${cellCenter(latitude, size)}|${cellCenter(longitude, size)}`;
+}
+
 /**
  * A catalogue point can sit on the public grid.
  * Demonstrations, rejections, and missing coordinates stay out.

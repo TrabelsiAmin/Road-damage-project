@@ -227,6 +227,29 @@ html[data-theme="dark"] .public-report-popup a {
   color: #93C5FD;
 }
 
+html[data-theme="dark"] .anomaly-marker-popup a.leaflet-popup-close-button {
+  color: #F5F0E8 !important;
+  background: #292524 !important;
+  box-shadow: 0 0 0 1px #78716C;
+}
+
+html[data-theme="dark"] .anomaly-photo-frame,
+html[data-theme="dark"] .leaflet-container .anomaly-photo-frame img {
+  background: #1C1917;
+}
+
+html[data-theme="dark"] .anomaly-photo-empty {
+  color: #F5F0E8;
+  background: #1C1917;
+  border-color: #78716C;
+}
+
+html[data-theme="dark"] .anomaly-map-popup p,
+html[data-theme="dark"] .anomaly-photo-frame figcaption,
+html[data-theme="dark"] .anomaly-marker-popup .rag-map-popup p {
+  color: #E7E5E4;
+}
+
 html[data-theme="dark"] .rag-panel,
 html[data-theme="dark"] .rag-source,
 html[data-theme="dark"] .rag-selected,

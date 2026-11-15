@@ -2431,6 +2431,86 @@ h1, h2, h3, h4 {
   min-width: 210px;
 }
 
+.anomaly-marker-popup .leaflet-popup-content-wrapper {
+  overflow: auto;
+  max-height: min(70vh, 460px);
+}
+
+.anomaly-marker-popup .leaflet-popup-content {
+  margin: 28px 14px 12px;
+  max-width: min(280px, calc(100vw - 64px));
+}
+
+.anomaly-marker-popup a.leaflet-popup-close-button {
+  color: #172033 !important;
+  background: #ffffff !important;
+  border-radius: 999px;
+  box-shadow: 0 0 0 1px #cbd5e1;
+  font-size: 18px !important;
+  font-weight: 700;
+  width: 26px !important;
+  height: 26px !important;
+  line-height: 24px !important;
+  padding: 0 !important;
+  text-align: center;
+  top: 6px;
+  right: 6px;
+  z-index: 2;
+}
+
+.anomaly-map-popup strong {
+  display: block;
+  font-size: 0.86rem;
+}
+
+.anomaly-map-popup p,
+.anomaly-photo-frame figcaption {
+  margin: 4px 0 8px;
+  color: inherit;
+  font-size: 0.78rem;
+}
+
+.anomaly-photo-frame {
+  margin: 0 0 8px;
+  background: #e8eef8;
+  border-radius: 8px;
+  overflow: hidden;
+}
+
+.leaflet-container .anomaly-photo-frame img {
+  display: block;
+  width: 100% !important;
+  max-width: 100% !important;
+  height: auto !important;
+  max-height: 200px !important;
+  object-fit: contain;
+  background: #e8eef8;
+}
+
+.anomaly-photo-empty {
+  margin: 0 0 8px;
+  padding: 10px 8px;
+  border: 1px dashed #94a3b8;
+  border-radius: 8px;
+  color: #172033;
+  background: #f8fafc;
+  font-size: 0.82rem;
+  font-weight: 700;
+  text-align: center;
+}
+
+.anomaly-map-popup button {
+  width: 100%;
+  background: #1d4ed8;
+  color: #fff;
+  border: none;
+  border-radius: 6px;
+  padding: 7px 10px;
+  font-weight: 700;
+  cursor: pointer;
+  white-space: normal;
+}
+
 .rag-map-popup strong {
   display: block;
   font-size: 0.86rem;
@@ -2461,6 +2541,14 @@ h1, h2, h3, h4 {
 }
 
 @media (max-width: 768px) {
+  .anomaly-marker-popup .leaflet-popup-content-wrapper {
+    max-height: min(52vh, 320px);
+  }
+
+  .leaflet-container .anomaly-photo-frame img {
+    max-height: 110px !important;
+  }
+
   .rag-panel {
     margin-left: 12px;
     margin-right: 12px;

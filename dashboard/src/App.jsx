@@ -26,6 +26,7 @@ import {
   recordMaintenanceEvent,
   subscribeToCommandCenterUpdates,
   fetchOrganizations,
+  fetchPublicMarkerPhotos,
   supabase,
 } from './supabase';
 import { loadVisitorPublicMap } from './catalogueMap';
@@ -59,7 +60,16 @@ import { TechnicalRecommendation } from './components/TechnicalRecommendation';
 import { displayClassCode } from './utils/classCodes';
 import { filterValidClusters } from './utils/mapValidation';
 import { mapLoadCopy, mapLoadState } from './utils/mapLoadState';
-import { catalogueMapNote, catalogueReportCount, preferWiderCells } from './utils/publicMapCells';
+import { catalogueMapNote, catalogueReportCount, preferWiderCells, publicCellKey } from './utils/publicMapCells';
+import {
+  bindAnomalyPhotoErrors,
+  buildVisitorCellPopupHtml,
+  emptyPhotoHtml,
+  schedulePopupReflow,
+  indexCellPhotos,
+  photoFigureHtml,
+  photosFromMembers,
+} from './utils/markerPhoto';
 import { catalogueFloorFor } from './utils/overviewPresentation';
 import { authorityCountStatus, overviewCounters, visitorCountStatus } from './utils/overviewCounters';
 import { canDownloadPublicExport, publicCatalogueText, publicDamageTotals } from './utils/publicStats';
@@ -366,6 +376,7 @@ export default function App() {
   const [authReady, setAuthReady] = useState(false);
   const [publicSummary, setPublicSummary] = useState([]);
   const [publicCells, setPublicCells] = useState([]);
+  const [publicPhotoPoints, setPublicPhotoPoints] = useState([]);
   const [publicCellSource, setPublicCellSource] = useState('idle');
   const [publicStatsStatus, setPublicStatsStatus] = useState('idle');
   const [catalogueStats, setCatalogueStats] = useState(null);
@@ -550,8 +561,11 @@ export default function App() {
     };
     try {
       const visitorPromise = loadVisitorPublicMap().catch(() => null);
+      const photoPromise = isAuthorityUser
+        ? Promise.resolve([])
+        : fetchPublicMarkerPhotos().catch(() => []);
       if (!isAuthorityUser) {
-        const visitor = await visitorPromise;
+        const [visitor, photos] = await Promise.all([visitorPromise, photoPromise]);
         if (gen !== fetchGenRef.current) return;
         setObservations([]);
         setCatalogueTotal(null);
@@ -560,6 +574,7 @@ export default function App() {
         setMaintenanceCases({});
         setAuditEvents([]);
         setSelectedCluster(null);
+        setPublicPhotoPoints(Array.isArray(photos) ? photos : []);
         if (visitor) acceptCatalogue(visitor);
         else if (catalogueCountRef.current === 0) {
           setPublicSummary([]);
@@ -873,6 +888,7 @@ export default function App() {
 
   const mapMarkers = useMemo(() => {
     if (isAuthorityUser) return validClusters;
+    const photoIndex = indexCellPhotos(publicPhotoPoints);
     return (publicCells || [])
       .map((cell, index) => ({
         id: `public-cell-${index}`,
@@ -882,10 +898,11 @@ export default function App() {
         priorityLabel: 'MEDIUM',
         dominantClass: cell.dominant_class || '',
         members: [],
+        photos: photoIndex.get(publicCellKey(cell.cell_lat, cell.cell_lng)) || [],
         publicCell: true,
       }))
       .filter((cell) => Number.isFinite(cell.latitude) && Number.isFinite(cell.longitude));
-  }, [isAuthorityUser, validClusters, publicCells]);
+  }, [isAuthorityUser, validClusters, publicCells, publicPhotoPoints]);
 
   const catalogueNote = !isAuthorityUser && publicCellSource === 'catalogue'
     ? catalogueMapNote({
@@ -1271,36 +1288,52 @@ export default function App() {
         icon: customIcon,
       });
 
-      const popup = L.popup({ maxWidth: 320, minWidth: 220, className: 'rag-leaflet-popup' });
-      popup.setContent('<div class="rag-map-popup-root"></div>');
       if (cluster.publicCell) {
-        const isFr = langRef.current !== 'en';
-        const safeClass = String(cluster.dominantClass || '—').replace(/[^A-Za-z0-9-]/g, '');
-        const keepLabel = isFr ? 'Retenir cette observation' : 'Keep this observation';
-        marker.bindPopup(
-          `<strong>${Number(cluster.count) || 0}</strong> ${isFr ? 'signalements' : 'reports'}<br/>${safeClass || '—'}<br/>${
-            isFr
-              ? 'Centre d\'une maille d\'environ 1 km. Ce n\'est pas la position mesurée.'
-              : 'Center of a roughly 1 km cell. This is not the measured position.'
-          }<br/><button type="button" data-rag-ask="true">${keepLabel}</button>`
-        );
-        marker.on('popupopen', () => {
-          retainObservationRef.current(cluster);
+        const cellPopup = L.popup({
+          maxWidth: 300,
+          minWidth: 220,
+          autoPanPadding: [28, 28],
+          className: 'rag-leaflet-popup anomaly-marker-popup',
         });
-        marker.on('click', () => {
-          retainObservationRef.current(cluster);
+        const paintCell = () => {
+          const popupLang = langRef.current === 'en' ? 'en' : 'fr';
+          cellPopup.setContent(buildVisitorCellPopupHtml(cluster, popupLang));
+          const root = cellPopup.getElement();
+          bindAnomalyPhotoErrors(root);
+          schedulePopupReflow(cellPopup, root);
+          root?.querySelector('[data-rag-ask]')?.addEventListener('click', (event) => {
+            event.preventDefault();
+            event.stopPropagation();
+            retainObservationRef.current(cluster);
+          });
+        };
+        marker.bindPopup(cellPopup);
+        marker.on('popupopen', () => {
+          paintCell();
         });
         marker.addTo(markersGroup);
         return;
       }
 
+      const popup = L.popup({
+        maxWidth: 320,
+        minWidth: 220,
+        autoPanPadding: [28, 28],
+        className: 'rag-leaflet-popup anomaly-marker-popup',
+      });
+      popup.setContent('<div class="rag-map-popup-root"></div>');
       marker.bindPopup(popup);
       marker.on('popupopen', () => {
         const root = popup.getElement()?.querySelector('.rag-map-popup-root');
         if (!root) return;
         const safe = observationForRecommendation(cluster);
         const isFr = langRef.current !== 'en';
-        root.innerHTML = buildMapRagPopupHtml({
+        const popupLang = isFr ? 'fr' : 'en';
+        const photoBlock = photosFromMembers(cluster.members)
+          .map((photo) => photoFigureHtml(photo, popupLang))
+          .filter(Boolean)
+          .join('');
+        root.innerHTML = `${photoBlock}${buildMapRagPopupHtml({
           classCode: safe.classCode || '—',
           classLabel: safe.classCode ? displayClassCode(safe.classCode) : (isFr ? 'Non classé' : 'Unclassified'),
           priorityLabel: safe.priority || '—',
@@ -1308,7 +1341,9 @@ export default function App() {
             ? (isFr ? STATUS_LABELS[safe.status].fr : STATUS_LABELS[safe.status].en)
             : '—',
           buttonLabel: isFr ? 'Recommandation technique' : 'Technical recommendation',
-        });
+        })}`;
+        bindAnomalyPhotoErrors(root);
+        schedulePopupReflow(popup, root);
         root.querySelector('[data-rag-ask]')?.addEventListener('click', (event) => {
           event.preventDefault();
           event.stopPropagation();
@@ -1365,8 +1400,19 @@ export default function App() {
         }),
         zIndexOffset: 400,
       });
-      const popup = L.popup({ maxWidth: 340, minWidth: 240, className: 'rag-leaflet-popup public-report-popup' });
-      const paint = () => popup.setContent(publicReportPopupHtml(point, langRef.current));
+      const popup = L.popup({
+        maxWidth: 340,
+        minWidth: 240,
+        autoPanPadding: [28, 28],
+        className: 'rag-leaflet-popup public-report-popup anomaly-marker-popup',
+      });
+      const paint = () => {
+        const popupLang = langRef.current === 'en' ? 'en' : 'fr';
+        const base = publicReportPopupHtml(point, popupLang);
+        popup.setContent(`${base ? emptyPhotoHtml(popupLang) : ''}${base}`);
+        bindAnomalyPhotoErrors(popup.getElement());
+        schedulePopupReflow(popup, popup.getElement());
+      };
       paint();
       marker.bindPopup(popup);
       marker.on('popupopen', paint);

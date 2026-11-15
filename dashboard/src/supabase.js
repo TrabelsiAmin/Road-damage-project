@@ -161,6 +161,67 @@ export async function getMediaUrl(storagePath, bucket = 'observation-images', is
 }
 
 /**
+ * Public thumbnails an anonymous visitor can already read.
+ * Returned points carry the stored public URL, class, date, and coordinates.
+ * Observation ids are not copied onto the point. Rejected rows stay in the
+ * payload so the map helper can apply the same catalogue rule as the cells.
+ */
+export async function fetchPublicMarkerPhotos() {
+  try {
+    const { data: media, error } = await supabase
+      .from('media_files')
+      .select('observation_id, bucket, storage_path, public_url')
+      .eq('bucket', 'public-photos');
+    if (error || !media?.length) return [];
+
+    const ids = [...new Set(media.map((row) => row.observation_id).filter(Boolean))];
+    if (!ids.length) return [];
+
+    const observations = [];
+    const locations = [];
+    for (let offset = 0; offset < ids.length; offset += 100) {
+      const slice = ids.slice(offset, offset + 100);
+      const [obsRes, locRes] = await Promise.all([
+        supabase.from('observations').select('id, anomaly_type, status, is_demo, created_at').in('id', slice),
+        supabase.from('locations').select('observation_id, latitude, longitude').in('observation_id', slice),
+      ]);
+      if (obsRes.error || locRes.error) return [];
+      observations.push(...(obsRes.data || []));
+      locations.push(...(locRes.data || []));
+    }
+
+    const obsById = new Map(observations.map((row) => [row.id, row]));
+    const locById = new Map(locations.map((row) => [row.observation_id, row]));
+    const points = [];
+    const seen = new Set();
+    for (const row of media) {
+      const obs = obsById.get(row.observation_id);
+      const loc = locById.get(row.observation_id);
+      if (!obs || !loc) continue;
+      const stored = typeof row.public_url === 'string' ? row.public_url.trim() : '';
+      const url = stored.startsWith('https://')
+        ? stored
+        : getPublicMediaUrl(row.storage_path, 'public-photos');
+      if (!url || seen.has(url)) continue;
+      seen.add(url);
+      points.push({
+        latitude: loc.latitude,
+        longitude: loc.longitude,
+        status: obs.status,
+        is_demo: obs.is_demo,
+        anomaly_type: obs.anomaly_type,
+        created_at: obs.created_at,
+        public_url: url,
+      });
+    }
+    return points;
+  } catch (err) {
+    console.warn('[Supabase] fetchPublicMarkerPhotos failed');
+    return [];
+  }
+}
+
+/**
  * Fetches fresh media_files rows for a specific set of observation IDs.
  * Used whenever a cluster is opened or auth session state changes.
  */

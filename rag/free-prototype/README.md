@@ -24,4 +24,13 @@ python3 scripts/export_faiss.py \
   --out export/index.json
 ```
 
-Les résultats mesurés ici sont dans `RESULTS.md`.
+Les résultats mesurés ici sont dans `RESULTS.md`. La lecture du notebook et l’absence des vrais fichiers sont dans `REAL_INDEX.md`.
+
+```bash
+python3 scripts/compare_real_index.py \
+  --index /chemin/index.faiss \
+  --chunks /chemin/chunks.pkl \
+  --work-dir export/real
+```
+
+Ce dossier `export/real` est ignoré par Git. La commande ne réécrit pas l’index Colab.

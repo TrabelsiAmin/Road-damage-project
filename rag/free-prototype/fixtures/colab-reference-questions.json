@@ -1,0 +1,122 @@
+{
+  "origin": "Questions déjà présentes dans rag/RDDRAG.ipynb. Les scores sont ceux imprimés par Colab, pas un nouveau classement.",
+  "runs": [
+    {
+      "commit": "09e38d98",
+      "chunks": 479,
+      "dimension": 1024,
+      "questions": [
+        {
+          "id": 1,
+          "question": "Qu'est-ce qu'une fissure longitudinale et quelles sont ses caractéristiques ?",
+          "sources": [
+            ["Manuel_identification_degradations_chaussees_flexibles_contenu_organise.txt", 0.6195],
+            ["Cours_Pathologies_Entretien_Routes_Ouvrages_contenu_organise.txt", 0.5831],
+            ["Cours_Pathologies_Entretien_Routes_Ouvrages_contenu_organise.txt", 0.5826],
+            ["Cours_Pathologies_Entretien_Routes_Ouvrages_contenu_organise.txt", 0.5751],
+            ["Manuel_identification_degradations_chaussees_flexibles_contenu_organise.txt", 0.5579]
+          ]
+        },
+        {
+          "id": 2,
+          "question": "Qu'est-ce qu'une fissure transversale ?",
+          "sources": [
+            ["Cours_Pathologies_Entretien_Routes_Ouvrages_contenu_organise.txt", 0.6903],
+            ["Cours_Pathologies_Entretien_Routes_Ouvrages_contenu_organise.txt", 0.5753],
+            ["Manuel_identification_degradations_chaussees_flexibles_contenu_organise.txt", 0.5711],
+            ["Manuel_identification_degradations_chaussees_flexibles_contenu_organise.txt", 0.5674],
+            ["Manuel_identification_degradations_chaussees_flexibles_contenu_organise.txt", 0.561]
+          ]
+        },
+        {
+          "id": 3,
+          "question": "Quelles sont les principales causes des fissures de chaussée ?",
+          "sources": [
+            ["Cours_Pathologies_Entretien_Routes_Ouvrages_contenu_organise.txt", 0.76],
+            ["Cours_Pathologies_Entretien_Routes_Ouvrages_contenu_organise.txt", 0.743],
+            ["Cours_Pathologies_Entretien_Routes_Ouvrages_contenu_organise.txt", 0.698],
+            ["Cours_Pathologies_Entretien_Routes_Ouvrages_contenu_organise.txt", 0.6953],
+            ["Cours_Pathologies_Entretien_Routes_Ouvrages_contenu_organise.txt", 0.6814]
+          ]
+        },
+        {
+          "id": 4,
+          "question": "Quelle est la différence entre une fissure longitudinale et une fissure transversale ?",
+          "sources": [
+            ["Cours_Pathologies_Entretien_Routes_Ouvrages_contenu_organise.txt", 0.6416],
+            ["Manuel_identification_degradations_chaussees_flexibles_contenu_organise.txt", 0.6055],
+            ["Cours_Pathologies_Entretien_Routes_Ouvrages_contenu_organise.txt", 0.5716],
+            ["Cours_Pathologies_Entretien_Routes_Ouvrages_contenu_organise.txt", 0.5685],
+            ["Cours_Pathologies_Entretien_Routes_Ouvrages_contenu_organise.txt", 0.5642]
+          ]
+        },
+        {
+          "id": 5,
+          "question": "Qu'est-ce que le faïençage d'une chaussée ?",
+          "sources": [
+            ["Cours_Pathologies_Entretien_Routes_Ouvrages_contenu_organise.txt", 0.6978],
+            ["Cours_Pathologies_Entretien_Routes_Ouvrages_contenu_organise.txt", 0.634],
+            ["Cours_Pathologies_Entretien_Routes_Ouvrages_contenu_organise.txt", 0.5836],
+            ["Cours_Pathologies_Entretien_Routes_Ouvrages_contenu_organise.txt", 0.5641],
+            ["Cours_Pathologies_Entretien_Routes_Ouvrages_contenu_organise.txt", 0.562]
+          ]
+        },
+        {
+          "id": 6,
+          "question": "Qu'est-ce qu'une ornière et comment se manifeste-t-elle ?",
+          "sources": [
+            ["Cours_Pathologies_Entretien_Routes_Ouvrages_contenu_organise.txt", 0.6243],
+            ["Cours_Pathologies_Entretien_Routes_Ouvrages_contenu_organise.txt", 0.608],
+            ["Cours_Pathologies_Entretien_Routes_Ouvrages_contenu_organise.txt", 0.5748],
+            ["Cours_Pathologies_Entretien_Routes_Ouvrages_contenu_organise.txt", 0.5351],
+            ["Manuel_identification_degradations_chaussees_flexibles_contenu_organise.txt", 0.5273]
+          ]
+        },
+        {
+          "id": 7,
+          "question": "Quels sont les principaux types de dégradations des chaussées ?",
+          "sources": [
+            ["Cours_Pathologies_Entretien_Routes_Ouvrages_contenu_organise.txt", 0.7163],
+            ["Pathologie_des_routes_contenu_organise.txt", 0.7094],
+            ["Cours_Pathologies_Entretien_Routes_Ouvrages_contenu_organise.txt", 0.6996],
+            ["Cours_Pathologies_Entretien_Routes_Ouvrages_contenu_organise.txt", 0.6995],
+            ["Pathologie_des_routes_contenu_organise.txt", 0.6685]
+          ]
+        },
+        {
+          "id": 8,
+          "question": "Comment identifier une dégradation de la chaussée à partir de son aspect visuel ?",
+          "sources": [
+            ["Manuel_identification_degradations_chaussees_flexibles_contenu_organise.txt", 0.6989],
+            ["Manuel_identification_degradations_chaussees_flexibles_contenu_organise.txt", 0.6759],
+            ["Cours_Pathologies_Entretien_Routes_Ouvrages_contenu_organise.txt", 0.673],
+            ["Manuel_identification_degradations_chaussees_flexibles_contenu_organise.txt", 0.6707],
+            ["Manuel_identification_degradations_chaussees_flexibles_contenu_organise.txt", 0.669]
+          ]
+        },
+        {
+          "id": 9,
+          "question": "Quelles sont les classes de dommages présentes dans RDD2022 ?",
+          "sources": [
+            ["RDD2022_contenu_organise.txt", 0.6391],
+            ["RDD2022_contenu_organise.txt", 0.6341],
+            ["RDD2022_contenu_organise.txt", 0.6085],
+            ["RDD2022_contenu_organise.txt", 0.5998],
+            ["RDD2022_contenu_organise.txt", 0.5958]
+          ]
+        },
+        {
+          "id": 10,
+          "question": "Quelle est la différence entre longitudinal crack et lateral crack ?",
+          "sources": [
+            ["Distress_Identification_Manual_contenu_organise.txt", 0.6119],
+            ["Distress_Identification_Manual_contenu_organise.txt", 0.5861],
+            ["Distress_Identification_Manual_contenu_organise.txt", 0.5848],
+            ["Distress_Identification_Manual_contenu_organise.txt", 0.5698],
+            ["Distress_Identification_Manual_contenu_organise.txt", 0.5687]
+          ]
+        }
+      ]
+    }
+  ]
+}

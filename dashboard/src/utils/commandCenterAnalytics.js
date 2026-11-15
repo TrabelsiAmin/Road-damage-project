@@ -6,11 +6,122 @@
  */
 
 import { observationClassCode, statClassCode } from './classCodes';
+import { haversineDistanceMeters } from './clustering';
 import { eventTimeMs, uniqueObservations, utcDayKey } from './records';
 import { resolveTunisiaAdmin } from './tunisiaGeo';
 import { computeRoadSegmentsRisk } from './roadSegmentRisk';
 
 const ACTIVE_STATUSES = new Set(['unconfirmed', 'confirmed', 'in_progress']);
+const DAY_MS = 86400000;
+const REPEAT_RADIUS_METERS = 20;
+
+/** Printed on the overdue KPI and the operations queue. One threshold for both. */
+export const OVERDUE_AFTER_DAYS = 14;
+
+/**
+ * Start of the selected date pill, or null when the full loaded history stays visible.
+ * `period` remains the numeric day count used by older callers.
+ */
+export function filterCutoffMs(filters = {}, now = Date.now()) {
+  const range = filters.dateRange;
+  if (range && range !== 'all') {
+    if (range === 'today') {
+      const date = new Date(now);
+      return Date.UTC(date.getUTCFullYear(), date.getUTCMonth(), date.getUTCDate());
+    }
+    if (range === 'year') {
+      const date = new Date(now);
+      return Date.UTC(date.getUTCFullYear(), 0, 1);
+    }
+    const days = Number(String(range).replace(/d$/, ''));
+    if (Number.isFinite(days) && days > 0) return now - days * DAY_MS;
+  }
+  if (filters.period && filters.period !== 'all') {
+    const days = Number(filters.period);
+    if (Number.isFinite(days) && days > 0) return now - days * DAY_MS;
+  }
+  return null;
+}
+
+/** HIGH/CRITICAL label, or a stored score of at least 65. A class code alone is not critical. */
+export function isCriticalObservation(obs) {
+  const label = String(obs?.priority_label || '').toUpperCase();
+  if (label === 'CRITICAL' || label === 'HIGH') return true;
+  const score = Number(obs?.priority_score);
+  return Number.isFinite(score) && score >= 65;
+}
+
+export function isOverdueObservation(obs, maintenanceCase = {}, now = Date.now()) {
+  const status = obs?.status || 'unconfirmed';
+  if (!ACTIVE_STATUSES.has(status)) return false;
+  const dueRaw = obs?.due_date || maintenanceCase?.due_date;
+  const dueMs = dueRaw ? new Date(dueRaw).getTime() : NaN;
+  if (Number.isFinite(dueMs) && dueMs < now) return true;
+  const timestamp = eventTimeMs(obs);
+  if (timestamp == null) return false;
+  return Math.floor((now - timestamp) / DAY_MS) > OVERDUE_AFTER_DAYS;
+}
+
+function isAssignedObservation(obs, maintenanceCase = {}) {
+  return Boolean(
+    maintenanceCase?.assigned_to
+    || maintenanceCase?.assigned_contractor_id
+    || obs?.assigned_to
+    || obs?.assigned_contractor_id
+  );
+}
+
+function repeatCounts(rows) {
+  const located = [];
+  rows.forEach((obs) => {
+    const lat = Number(obs?.latitude);
+    const lng = Number(obs?.longitude);
+    if (!Number.isFinite(lat) || !Number.isFinite(lng)) return;
+    if (lat === 0 && lng === 0) return;
+    located.push(obs);
+  });
+  const parent = located.map((_, index) => index);
+  const find = (index) => {
+    let cursor = index;
+    while (parent[cursor] !== cursor) {
+      parent[cursor] = parent[parent[cursor]];
+      cursor = parent[cursor];
+    }
+    return cursor;
+  };
+  const unite = (left, right) => {
+    const rootLeft = find(left);
+    const rootRight = find(right);
+    if (rootLeft !== rootRight) parent[rootRight] = rootLeft;
+  };
+  for (let i = 0; i < located.length; i += 1) {
+    for (let j = i + 1; j < located.length; j += 1) {
+      const distance = haversineDistanceMeters(
+        Number(located[i].latitude),
+        Number(located[i].longitude),
+        Number(located[j].latitude),
+        Number(located[j].longitude),
+      );
+      if (distance <= REPEAT_RADIUS_METERS) unite(i, j);
+    }
+  }
+  const size = new Map();
+  located.forEach((_, index) => {
+    const root = find(index);
+    size.set(root, (size.get(root) || 0) + 1);
+  });
+  const counts = new Map();
+  located.forEach((obs, index) => {
+    const key = obs?.id != null && obs.id !== '' ? obs.id : obs;
+    counts.set(key, size.get(find(index)) || 1);
+  });
+  return counts;
+}
+
+function clockMs(now) {
+  const value = Number(now);
+  return Number.isFinite(value) ? value : Date.now();
+}
 
 /**
  * The checkbox stores includeDemo. The filter itself only understands demoFilter.
@@ -47,12 +158,11 @@ export function clustersForDemoSelection(clusters, includeDemo) {
 /**
  * Filter evaluation across all dashboard dimensions.
  */
-export function filterObservations(observations, filters = {}) {
+export function filterObservations(observations, filters = {}, now = Date.now()) {
   const unique = uniqueObservations(observations);
   if (!unique || unique.length === 0) return [];
 
   const {
-    period = 'all',
     governorate = 'all',
     municipality = 'all',
     organization = 'all',
@@ -62,9 +172,8 @@ export function filterObservations(observations, filters = {}) {
     demoFilter = 'all', // 'all', 'exclude_demo', 'only_demo'
   } = filters;
 
-  const now = Date.now();
-  const periodDays = period !== 'all' ? Number(period) : null;
-  const periodCutoff = periodDays ? now - periodDays * 86400000 : null;
+  const clock = clockMs(now);
+  const periodCutoff = filterCutoffMs(filters, clock);
 
   return unique.filter((obs) => {
     // 1. Demo filter
@@ -99,10 +208,10 @@ export function filterObservations(observations, filters = {}) {
       if (priority === 'LOW' && resolvedPriority !== 'LOW') return false;
     }
 
-    // 5. Date Period
-    if (periodCutoff) {
+    // 5. Date period. Undated rows stay out of a bounded window.
+    if (periodCutoff != null) {
       const t = eventTimeMs(obs);
-      if (t == null || t < periodCutoff) return false;
+      if (t == null || t < periodCutoff || t > clock) return false;
     }
 
     // 6. Organization filter
@@ -132,85 +241,68 @@ export function filterObservations(observations, filters = {}) {
 
 /**
  * Calculates Executive KPI numbers and period delta comparisons.
+ * A full-history view has no previous window, so the delta stays null.
  */
-export function buildExecutiveKpis(observations, filters = {}, now = Date.now()) {
-  const filtered = filterObservations(observations, filters);
+export function buildExecutiveKpis(observations, filters = {}, now = Date.now(), maintenanceCasesMap = {}) {
+  const clock = clockMs(now);
+  const filtered = filterObservations(observations, filters, clock);
 
-  // Compute prior window for trend comparisons
-  const periodDays = filters.period && filters.period !== 'all' ? Number(filters.period) : 30;
-  const currentWindowStart = now - periodDays * 86400000;
-  const priorWindowStart = currentWindowStart - periodDays * 86400000;
-
-  const source = uniqueObservations(observations);
-  const currentWindowReports = source.filter((o) => {
-    const t = eventTimeMs(o);
-    return t != null && t >= currentWindowStart && t <= now && o.status !== 'rejected';
-  });
-
-  const priorWindowReports = source.filter((o) => {
-    const t = eventTimeMs(o);
-    return t != null && t >= priorWindowStart && t < currentWindowStart && o.status !== 'rejected';
-  });
-
-  // KPI 1: Active anomalies (excluding rejected)
   const activeReports = filtered.filter((o) => ACTIVE_STATUSES.has(o.status || 'unconfirmed'));
   const activeCount = activeReports.length;
 
-  // KPI 2: Critical anomalies (Score >= 65 or HIGH/CRITICAL)
-  const criticalReports = activeReports.filter((o) => {
-    const p = (o.priority_label || '').toUpperCase();
-    return p === 'CRITICAL' || p === 'HIGH' || Number(o.priority_score) >= 65;
-  });
+  const criticalReports = activeReports.filter((o) => isCriticalObservation(o));
   const criticalCount = criticalReports.length;
 
-  // Prior window critical count for delta
-  const priorCriticalCount = priorWindowReports.filter((o) => {
-    const p = (o.priority_label || '').toUpperCase();
-    return (p === 'CRITICAL' || p === 'HIGH' || Number(o.priority_score) >= 65) && ACTIVE_STATUSES.has(o.status || 'unconfirmed');
-  }).length;
-  const criticalDelta = criticalCount - priorCriticalCount;
-
-  // KPI 3: High-risk road segments
   const segments = computeRoadSegmentsRisk(filtered);
   const highRiskSegments = segments.filter((s) => s.riskLevel === 'CRITICAL' || s.riskLevel === 'HIGH').length;
 
-  // KPI 4: New reports this week (last 7 days)
-  const sevenDaysAgo = now - 7 * 86400000;
+  const sevenDaysAgo = clock - 7 * DAY_MS;
   const newThisWeek = filtered.filter((o) => {
     const t = eventTimeMs(o);
-    return t != null && t >= sevenDaysAgo && o.status !== 'rejected';
+    return t != null && t >= sevenDaysAgo && t <= clock && o.status !== 'rejected';
   }).length;
 
-  // KPI 5: Unconfirmed reports (Awaiting validation)
   const unconfirmedCount = filtered.filter((o) => (o.status || 'unconfirmed') === 'unconfirmed').length;
 
-  // KPI 6: Overdue maintenance cases (> 30 days without resolution or past due date)
-  const overdueCount = activeReports.filter((o) => {
-    const t = eventTimeMs(o);
-    const ageDays = t == null ? 0 : Math.floor((now - t) / 86400000);
-    const dueDatePassed = o.due_date && new Date(o.due_date).getTime() < now;
-    return (t != null && ageDays > 30) || dueDatePassed;
-  }).length;
+  const overdueCount = activeReports.filter((o) => (
+    isOverdueObservation(o, maintenanceCasesMap[o.id] || {}, clock)
+  )).length;
 
-  // KPI 7: Repairs in progress
   const inProgressCount = filtered.filter((o) => o.status === 'in_progress').length;
-
-  // KPI 8: Repairs completed
   const repairedCount = filtered.filter((o) => o.status === 'repaired').length;
-  const priorRepairedCount = priorWindowReports.filter((o) => o.status === 'repaired').length;
-  const repairDelta = repairedCount - priorRepairedCount;
 
-  // Repair completion rate
+  const cutoff = filterCutoffMs(filters, clock);
+  let criticalDelta = null;
+  let repairDelta = null;
+  if (cutoff != null) {
+    const length = Math.max(clock - cutoff, DAY_MS);
+    const priorStart = cutoff - length;
+    const comparable = filterObservations(
+      observations,
+      { ...filters, dateRange: 'all', period: 'all' },
+      clock,
+    );
+    const prior = comparable.filter((o) => {
+      const t = eventTimeMs(o);
+      return t != null && t >= priorStart && t < cutoff && o.status !== 'rejected';
+    });
+    const priorCritical = prior.filter((o) => (
+      ACTIVE_STATUSES.has(o.status || 'unconfirmed') && isCriticalObservation(o)
+    )).length;
+    criticalDelta = criticalCount - priorCritical;
+    repairDelta = repairedCount - prior.filter((o) => o.status === 'repaired').length;
+  }
+
   const totalClosedOrActive = activeCount + repairedCount;
   const repairCompletionRate =
     totalClosedOrActive > 0 ? Math.round((repairedCount / totalClosedOrActive) * 100) : null;
 
-  // KPI 9: Repair cost is unavailable. There is no cited TND schedule,
-  // so a known class is not given a price and an unknown class is not priced as D40.
+  // Repair cost is unavailable. There is no cited TND schedule.
   const estimatedBudgetTnd = null;
-
   // Not computed from stored repair timestamps.
   const avgResolutionDays = null;
+  const activeDateRange = filters.dateRange
+    || (filters.period && filters.period !== 'all' ? String(filters.period) : 'all');
 
   return {
     activeAnomalies: activeCount,
@@ -227,81 +319,66 @@ export function buildExecutiveKpis(observations, filters = {}, now = Date.now())
     estimatedOpenBudgetTnd: estimatedBudgetTnd,
     avgResolutionDays,
     totalEvaluated: filtered.length,
+    activeDateRange,
+  };
+}
+
+function withQueueAliases(queues) {
+  return {
+    ...queues,
+    criticalQueue: queues.critical,
+    validationQueue: queues.awaiting_validation,
+    overdueQueue: queues.overdue,
+    unassignedQueue: queues.unassigned,
+    inProgressQueue: queues.in_progress,
+    verificationQueue: queues.awaiting_verification,
+    multiReportQueue: queues.repeated_reports,
+    poorGpsQueue: queues.poor_gps,
   };
 }
 
 /**
- * Partitions observations into actionable operational queues for the Action Center.
+ * Partitions observations into the operational queues the Action Center renders.
+ * Keys match the queue tabs. Legacy names stay as aliases for existing tests.
  */
 export function partitionActionCenterQueues(observations, maintenanceCasesMap = {}, now = Date.now()) {
   const queues = {
-    criticalQueue: [],
-    validationQueue: [],
-    overdueQueue: [],
-    unassignedQueue: [],
-    inProgressQueue: [],
-    verificationQueue: [],
-    multiReportQueue: [],
-    poorGpsQueue: [],
+    critical: [],
+    awaiting_validation: [],
+    overdue: [],
+    unassigned: [],
+    in_progress: [],
+    awaiting_verification: [],
+    repeated_reports: [],
+    poor_gps: [],
   };
 
-  if (!observations) return queues;
+  if (!observations) return withQueueAliases(queues);
 
-  uniqueObservations(observations).forEach((obs) => {
-    if (obs.status === 'rejected') return;
+  const clock = clockMs(now);
+  const rows = uniqueObservations(observations).filter((obs) => obs && obs.status !== 'rejected');
+  const counts = repeatCounts(rows);
 
+  rows.forEach((obs) => {
     const mCase = maintenanceCasesMap[obs.id] || {};
     const status = obs.status || 'unconfirmed';
     const isActive = ACTIVE_STATUSES.has(status);
-
-    const pLabel = (obs.priority_label || '').toUpperCase();
-    const pScore = Number(obs.priority_score) || 0;
-    const isCritical = pLabel === 'CRITICAL' || pLabel === 'HIGH' || pScore >= 65 || obs.anomaly_type === 'D40';
-
-    const t = new Date(obs.created_at || obs.captured_at || now).getTime();
-    const ageDays = Math.floor((now - t) / 86400000);
-    const isOverdue = isActive && (ageDays > 30 || (mCase.due_date && new Date(mCase.due_date).getTime() < now));
-
-    const isAssigned = Boolean(mCase.assigned_to || obs.assigned_to);
+    const key = obs.id != null && obs.id !== '' ? obs.id : obs;
+    const reportsCount = counts.get(key) || 1;
+    const view = reportsCount > 1 ? { ...obs, reportsCount } : obs;
     const accuracy = Number(obs.accuracy_meters);
 
-    // Queue 1: Critical safety hazards
-    if (isActive && isCritical) {
-      queues.criticalQueue.push(obs);
-    }
-
-    // Queue 2: Awaiting validation
-    if (status === 'unconfirmed') {
-      queues.validationQueue.push(obs);
-    }
-
-    // Queue 3: Overdue maintenance
-    if (isOverdue) {
-      queues.overdueQueue.push(obs);
-    }
-
-    // Queue 4: Unassigned cases
-    if (isActive && !isAssigned) {
-      queues.unassignedQueue.push(obs);
-    }
-
-    // Queue 5: In progress
-    if (status === 'in_progress') {
-      queues.inProgressQueue.push(obs);
-    }
-
-    // Queue 6: Repairs awaiting verification pass
-    if (status === 'repaired' && mCase.verification_status !== 'passed') {
-      queues.verificationQueue.push(obs);
-    }
-
-    // Queue 7: Poor GPS accuracy (> 25m)
-    if (Number.isFinite(accuracy) && accuracy > 25.0) {
-      queues.poorGpsQueue.push(obs);
-    }
+    if (isActive && isCriticalObservation(obs)) queues.critical.push(view);
+    if (status === 'unconfirmed') queues.awaiting_validation.push(view);
+    if (isOverdueObservation(obs, mCase, clock)) queues.overdue.push(view);
+    if (isActive && !isAssignedObservation(obs, mCase)) queues.unassigned.push(view);
+    if (status === 'in_progress') queues.in_progress.push(view);
+    if (status === 'repaired' && mCase.verification_status !== 'passed') queues.awaiting_verification.push(view);
+    if (reportsCount > 1) queues.repeated_reports.push(view);
+    if (Number.isFinite(accuracy) && accuracy > 25) queues.poor_gps.push(view);
   });
 
-  return queues;
+  return withQueueAliases(queues);
 }
 
 /**

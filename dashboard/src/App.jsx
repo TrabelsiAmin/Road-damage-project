@@ -44,6 +44,7 @@ import { AuditHistoryView } from './components/AuditHistoryView';
 import { CaseDetailModal } from './components/CaseDetailModal';
 import {
   filterObservations,
+  filterCutoffMs,
   demoFilterForSelection,
   clustersForDemoSelection,
   buildExecutiveKpis,
@@ -66,8 +67,6 @@ import { usableOrganizations } from './utils/organizations';
 import { applyTheme, getInitialTheme, resolveNextTheme } from './utils/theme';
 import {
   buildMinistryOverview,
-  isWithinPeriod,
-  matchesObservationFilters,
   observationClass,
   observationPriority,
   observationTime,
@@ -377,7 +376,6 @@ export default function App() {
   const [classFilter, setClassFilter] = useState('all');
   const [priorityFilter, setPriorityFilter] = useState('all');
   const [statusFilter, setStatusFilter] = useState('all');
-  const [period, setPeriod] = useState('all');
 
   // Command Center Navigation & Sub-views
   const [activeNavTab, setActiveNavTab] = useState('overview'); // 'overview' | 'action_center' | 'gis_map' | 'road_segments' | 'analytics' | 'data_quality' | 'reports' | 'audit'
@@ -798,17 +796,19 @@ export default function App() {
         const memberStatus = c.members.some((member) => (member.status || 'unconfirmed') === statusFilter);
         if (c.status !== statusFilter && !counted && !memberStatus) return false;
       }
-      if (period !== 'all') {
+      const cutoff = filterCutoffMs(filters);
+      if (cutoff != null) {
         const memberInPeriod = c.members.some((member) => {
           const timestamp = observationTime(member);
-          return timestamp != null && isWithinPeriod(timestamp, period);
+          return timestamp != null && timestamp >= cutoff;
         });
-        const clusterInPeriod = c.members.length === 0 && isWithinPeriod(c.newestDate, period);
+        const newest = c.newestDate ? new Date(c.newestDate).getTime() : NaN;
+        const clusterInPeriod = c.members.length === 0 && Number.isFinite(newest) && newest >= cutoff;
         if (!memberInPeriod && !clusterInPeriod) return false;
       }
       return true;
     });
-  }, [clusters, classFilter, priorityFilter, statusFilter, period, filters.includeDemo]);
+  }, [clusters, classFilter, priorityFilter, statusFilter, filters]);
 
   // Valid geolocated clusters for Leaflet map markers and bounds calculation
   const validClusters = useMemo(() => {
@@ -864,46 +864,56 @@ export default function App() {
     lang,
   ]);
 
-  const ministry = useMemo(() => {
-    const demoScoped = filterObservations(observations, {
-      demoFilter: demoFilterForSelection(filters.includeDemo),
+  const analyticsFilters = useMemo(() => ({
+    ...filters,
+    demoFilter: demoFilterForSelection(filters.includeDemo),
+  }), [filters]);
+
+  const searchedObservations = useMemo(() => {
+    const q = searchQuery.trim().toLowerCase();
+    if (!q) return observations;
+    return observations.filter((obs) => {
+      const fields = [
+        obs.id,
+        obs.anomaly_type,
+        obs.anomaly_class,
+        obs.municipality,
+        obs.governorate,
+        obs.road_name,
+        obs.status,
+        obs.priority_label,
+        obs.priority,
+      ];
+      return fields.some((value) => String(value || '').toLowerCase().includes(q));
     });
-    const scoped = demoScoped.filter((obs) => matchesObservationFilters(obs, {
-      classFilter,
-      priorityFilter,
-      statusFilter,
-    }));
-    return buildMinistryOverview(scoped, { period });
-  }, [observations, classFilter, priorityFilter, statusFilter, period, filters.includeDemo]);
+  }, [observations, searchQuery]);
 
   // ── Multi-dimensional Filtered Observations & Command Center Analytics ──
-  const filteredObservations = useMemo(() => {
-    const base = filterObservations(observations, {
-      ...filters,
-      demoFilter: demoFilterForSelection(filters.includeDemo),
-    });
-    if (!searchQuery.trim()) return base;
-    const q = searchQuery.trim().toLowerCase();
-    return base.filter((obs) => {
-      return (
-        (obs.id && obs.id.toLowerCase().includes(q)) ||
-        (obs.anomaly_class && obs.anomaly_class.toLowerCase().includes(q)) ||
-        (obs.municipality && obs.municipality.toLowerCase().includes(q)) ||
-        (obs.governorate && obs.governorate.toLowerCase().includes(q)) ||
-        (obs.road_name && obs.road_name.toLowerCase().includes(q)) ||
-        (obs.status && obs.status.toLowerCase().includes(q)) ||
-        (obs.priority && obs.priority.toLowerCase().includes(q))
-      );
-    });
-  }, [observations, filters, searchQuery]);
+  const filteredObservations = useMemo(
+    () => filterObservations(searchedObservations, analyticsFilters),
+    [searchedObservations, analyticsFilters],
+  );
 
-  const executiveKpis = useMemo(() => {
-    return buildExecutiveKpis(filteredObservations, observations, filters.dateRange);
-  }, [filteredObservations, observations, filters.dateRange]);
+  const executiveKpis = useMemo(
+    () => buildExecutiveKpis(searchedObservations, analyticsFilters, Date.now(), maintenanceCases),
+    [searchedObservations, analyticsFilters, maintenanceCases],
+  );
 
-  const actionQueues = useMemo(() => {
-    return partitionActionCenterQueues(filteredObservations);
-  }, [filteredObservations]);
+  const actionQueues = useMemo(
+    () => partitionActionCenterQueues(filteredObservations, maintenanceCases),
+    [filteredObservations, maintenanceCases],
+  );
+
+  const ministry = useMemo(() => {
+    const ranged = { '7d': '7', '30d': '30', '90d': '90' }[filters.dateRange];
+    if (!ranged) return buildMinistryOverview(filteredObservations, { period: 'all' });
+    const withHistory = filterObservations(searchedObservations, {
+      ...analyticsFilters,
+      dateRange: 'all',
+      period: 'all',
+    });
+    return buildMinistryOverview(withHistory, { period: ranged });
+  }, [filteredObservations, searchedObservations, analyticsFilters, filters.dateRange]);
 
   const shellCounts = useMemo(() => ({
     critical: actionQueues.critical?.length || 0,
@@ -925,8 +935,8 @@ export default function App() {
   }, [filteredObservations]);
 
   const backlogTimeSeries = useMemo(() => {
-    return buildNewVsRepairedTimeSeries(observations);
-  }, [observations]);
+    return buildNewVsRepairedTimeSeries(filteredObservations);
+  }, [filteredObservations]);
 
   // Operational Action Handlers
   const handleUpdateStatus = async (obsId, newStatus, reason = null) => {
@@ -1628,8 +1638,8 @@ export default function App() {
           <MinistryOverview
             overview={ministry}
             lang={lang}
-            period={period}
-            onPeriodChange={setPeriod}
+            period={filters.dateRange}
+            onPeriodChange={(value) => setFilters((prev) => ({ ...prev, dateRange: value }))}
             loading={loading && observations.length === 0}
             error={error}
             onRetry={loadData}

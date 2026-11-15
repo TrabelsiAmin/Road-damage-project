@@ -33,8 +33,10 @@ export function ExecutiveKpiGrid({
       id: 'critical',
       title: lang === 'fr' ? 'Anomalies critiques' : 'Critical anomalies',
       value: kpis.criticalAnomalies,
-      sub: `${kpis.criticalDelta >= 0 ? '+' : ''}${kpis.criticalDelta ?? 0} ${lang === 'fr' ? 'vs période préc.' : 'vs prior period'}`,
-      deltaType: kpis.criticalDelta > 0 ? 'negative' : 'positive',
+      sub: kpis.criticalDelta == null
+        ? (lang === 'fr' ? 'Dans le filtre actuel' : 'In the current filter')
+        : `${kpis.criticalDelta >= 0 ? '+' : ''}${kpis.criticalDelta} ${lang === 'fr' ? 'vs période préc.' : 'vs prior period'}`,
+      deltaType: kpis.criticalDelta == null ? 'neutral' : (kpis.criticalDelta > 0 ? 'negative' : 'positive'),
       tooltip: lang === 'fr' ? 'Priorité HIGH ou CRITICAL, ou score de priorité d’au moins 65.' : 'Priority HIGH or CRITICAL, or a priority score of at least 65.',
       clickable: true,
       queueKey: 'critical',
@@ -52,7 +54,9 @@ export function ExecutiveKpiGrid({
       id: 'newReports',
       title: lang === 'fr' ? 'Nouveaux signalements' : 'New reports this period',
       value: kpis.newThisWeek,
-      sub: lang === 'fr' ? '7 derniers jours' : 'Last 7 days',
+      sub: kpis.activeDateRange === 'today'
+        ? (lang === 'fr' ? "Aujourd'hui" : 'Today')
+        : (lang === 'fr' ? '7 derniers jours' : 'Last 7 days'),
       deltaType: 'neutral',
       tooltip: lang === 'fr' ? "Signalements capturés par mobile ou vidéo dans l'intervalle sélectionné." : 'Detections captured in selected window.',
       clickable: false,

@@ -124,8 +124,11 @@ describe('commandCenterAnalytics', () => {
     expect(kpis.unconfirmedReports).toBe(1); // obs-1
     expect(kpis.repairsInProgress).toBe(1); // obs-2
     expect(kpis.repairsCompleted).toBe(1); // obs-3
-    expect(kpis.overdueCases).toBe(1); // obs-2 (> 30 days)
+    expect(kpis.overdueCases).toBe(1); // obs-2 (> 14 days)
+    expect(kpis.newThisWeek).toBe(1); // obs-1, inside the last 7 days
+    expect(kpis.criticalDelta).toBeNull(); // full history has no previous window
     expect(kpis.estimatedOpenBudgetTnd).toBeNull();
+    expect(kpis.avgResolutionDays).toBeNull();
   });
 
   it('partitions observations into Action Center operational queues', () => {
@@ -136,6 +139,72 @@ describe('commandCenterAnalytics', () => {
     expect(queues.unassignedQueue.length).toBe(2); // obs-1, obs-2
     expect(queues.inProgressQueue.length).toBe(1); // obs-2
     expect(queues.poorGpsQueue.length).toBe(1); // obs-2 (35m > 25m)
+    expect(queues.critical).toBe(queues.criticalQueue);
+    expect(queues.awaiting_validation).toBe(queues.validationQueue);
+    expect(queues.overdue).toBe(queues.overdueQueue);
+    expect(queues.unassigned).toBe(queues.unassignedQueue);
+    expect(queues.in_progress).toBe(queues.inProgressQueue);
+    expect(queues.awaiting_verification).toBe(queues.verificationQueue);
+    expect(queues.poor_gps).toBe(queues.poorGpsQueue);
+    expect(queues.repeated_reports).toBe(queues.multiReportQueue);
+  });
+
+  it('counts a case overdue after 14 days and not before', () => {
+    const now = Date.parse('2026-11-15T00:00:00Z');
+    const rows = [
+      { id: 'young', status: 'unconfirmed', priority_label: 'LOW', priority_score: 10, created_at: '2026-11-10T00:00:00Z' },
+      { id: 'late', status: 'confirmed', priority_label: 'LOW', priority_score: 10, created_at: '2026-10-20T00:00:00Z' },
+      { id: 'done', status: 'repaired', priority_label: 'HIGH', priority_score: 90, created_at: '2026-01-01T00:00:00Z' },
+    ];
+    const kpis = buildExecutiveKpis(rows, {}, now);
+    const queues = partitionActionCenterQueues(rows, {}, now);
+    expect(kpis.overdueCases).toBe(1);
+    expect(queues.overdue.map((row) => row.id)).toEqual(['late']);
+    expect(kpis.criticalAnomalies).toBe(0);
+  });
+
+  it('does not treat a low-score D40 as a critical case', () => {
+    const rows = [{
+      id: 'd40-low',
+      status: 'unconfirmed',
+      anomaly_type: 'D40',
+      priority_label: 'LOW',
+      priority_score: 20,
+      created_at: new Date().toISOString(),
+    }];
+    expect(buildExecutiveKpis(rows).criticalAnomalies).toBe(0);
+    expect(partitionActionCenterQueues(rows).critical).toHaveLength(0);
+    expect(partitionActionCenterQueues(rows).awaiting_validation).toHaveLength(1);
+  });
+
+  it('keeps the date pill, the filtered count, and the KPI window on the same rows', () => {
+    const now = Date.parse('2026-11-15T12:00:00Z');
+    const rows = [
+      { id: 'recent', status: 'unconfirmed', priority_label: 'HIGH', priority_score: 80, created_at: '2026-11-14T00:00:00Z', is_demo: false },
+      { id: 'older', status: 'unconfirmed', priority_label: 'HIGH', priority_score: 80, created_at: '2026-10-01T00:00:00Z', is_demo: false },
+      { id: 'demo', status: 'unconfirmed', priority_label: 'HIGH', priority_score: 90, created_at: '2026-11-14T00:00:00Z', is_demo: true },
+    ];
+    const filters = { dateRange: '7d', demoFilter: 'exclude_demo' };
+    const visible = filterObservations(rows, filters, now);
+    const kpis = buildExecutiveKpis(rows, filters, now);
+    const queues = partitionActionCenterQueues(visible, {}, now);
+    expect(visible.map((row) => row.id)).toEqual(['recent']);
+    expect(kpis.totalEvaluated).toBe(1);
+    expect(kpis.activeAnomalies).toBe(1);
+    expect(kpis.criticalAnomalies).toBe(queues.critical.length);
+    expect(kpis.unconfirmedReports).toBe(queues.awaiting_validation.length);
+    expect(kpis.criticalDelta).toBe(1);
+  });
+
+  it('groups observations within 20 m as repeated reports', () => {
+    const rows = [
+      { id: 'a', status: 'unconfirmed', latitude: 36.8, longitude: 10.18, priority_label: 'LOW', priority_score: 10, created_at: new Date().toISOString() },
+      { id: 'b', status: 'confirmed', latitude: 36.80002, longitude: 10.18002, priority_label: 'LOW', priority_score: 10, created_at: new Date().toISOString() },
+      { id: 'c', status: 'unconfirmed', latitude: 36.9, longitude: 10.4, priority_label: 'LOW', priority_score: 10, created_at: new Date().toISOString() },
+    ];
+    const queues = partitionActionCenterQueues(rows);
+    expect(queues.repeated_reports.map((row) => row.id).sort()).toEqual(['a', 'b']);
+    expect(queues.repeated_reports[0].reportsCount).toBe(2);
   });
 
   it('computes Data Quality & Model metrics', () => {

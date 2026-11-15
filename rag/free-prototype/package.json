@@ -1,0 +1,9 @@
+{
+  "name": "tariqmap-rag-free-prototype",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "test": "node --test test/worker.test.mjs",
+    "live": "node scripts/live-check.mjs"
+  }
+}

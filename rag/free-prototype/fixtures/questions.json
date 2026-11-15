@@ -1,0 +1,52 @@
+[
+  {
+    "id": "longitudinale",
+    "question": "Qu'est-ce qu'une fissure longitudinale et quelles sont ses caractéristiques ?",
+    "plantedSource": "Manuel_identification_degradations_chaussees_flexibles_contenu_organise.txt"
+  },
+  {
+    "id": "transversale",
+    "question": "Comment reconnaît-on une fissure transversale sur une chaussée souple ?",
+    "plantedSource": "Pathologie_des_routes_contenu_organise.txt"
+  },
+  {
+    "id": "faiencage",
+    "question": "Quelle est la différence entre le faïençage et la fissuration transversale ?",
+    "plantedSource": "Cours_Pathologies_Entretien_Routes_Ouvrages_contenu_organise.txt"
+  },
+  {
+    "id": "nid-de-poule",
+    "question": "Quelles sont les causes principales d'un nid-de-poule ?",
+    "plantedSource": "Distress_Identification_Manual_contenu_organise.txt"
+  },
+  {
+    "id": "orniere",
+    "question": "Comment évaluer la gravité d'une ornière sur une chaussée ?",
+    "plantedSource": "RDD2022_contenu_organise.txt"
+  },
+  {
+    "id": "d00",
+    "question": "Que désigne la classe D00 dans RDD2022 ?",
+    "plantedSource": "RDD2022_contenu_organise.txt"
+  },
+  {
+    "id": "d20",
+    "question": "Que désigne la classe D20 dans RDD2022 pour une fissure allongée ?",
+    "plantedSource": "RDD2022_contenu_organise.txt"
+  },
+  {
+    "id": "d40",
+    "question": "Que désigne la classe D40 dans RDD2022 pour un nid-de-poule ?",
+    "plantedSource": "ArticleOuargla_contenu_organise.txt"
+  },
+  {
+    "id": "reparation",
+    "question": "Quels principes de réparation s'appliquent à une chaussée faïencée ?",
+    "plantedSource": "Cours_Pathologies_Entretien_Routes_Ouvrages_contenu_organise.txt"
+  },
+  {
+    "id": "absent",
+    "question": "Quel est le prix unitaire d'une tonne d'enrobé en dinars ?",
+    "plantedSource": null
+  }
+]

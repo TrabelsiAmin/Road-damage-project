@@ -18,6 +18,7 @@ import {
   ragAskUrl,
   ragHealthUrl,
   readStoredRagBase,
+  shouldShowColabDemonstration,
   writeStoredRagBase,
 } from './ragClient.js';
 import { ragDevProxy, ragProxyTarget } from '../../vite.ragProxy.js';
@@ -222,7 +223,8 @@ describe('RAG response parsing and errors', () => {
     expect(result.ok).toBe(false);
     expect(result.error.code).toBe('not_configured');
     expect(result.error.message).toBe(RAG_CONNECT_NOTE.fr);
-    expect(result.error.message).toMatch(/URL_DASHBOARD/);
+    expect(result.error.message).toMatch(/127\.0\.0\.1:8000/);
+    expect(result.error.message).toMatch(/autre ordinateur/);
     expect(result.answer).toBeUndefined();
     expect(isRagConfigured({ VITE_RAG_API_URL: '' })).toBe(false);
     expect(isRagConfigured({ VITE_RAG_API_URL: 'https://session.ngrok-free.app' })).toBe(true);
@@ -276,7 +278,7 @@ describe('RAG response parsing and errors', () => {
     expect(calls).toEqual([ragHealthUrl(BASE)]);
     expect(result.ok).toBe(false);
     expect(result.error.code).toBe('unavailable');
-    expect(result.error.message).toMatch(/URL_DASHBOARD/);
+    expect(result.error.message).toMatch(/127\.0\.0\.1:8000/);
     expect(result.answer).toBeUndefined();
     expect(JSON.stringify(result)).not.toContain(COLAB_DEMONSTRATION[0].answer.slice(0, 40));
   });
@@ -316,7 +318,7 @@ describe('RAG response parsing and errors', () => {
       })),
     });
     expect(timeout.error.code).toBe('timeout');
-    expect(timeout.error.message).toMatch(/URL_DASHBOARD/);
+    expect(timeout.error.message).toMatch(/127\.0\.0\.1:8000/);
 
     const network = await askRag({
       question: 'Quelles sont les causes usuelles d\'une fissure ?',
@@ -326,7 +328,7 @@ describe('RAG response parsing and errors', () => {
       }),
     });
     expect(network.error.code).toBe('network');
-    expect(network.error.message).toMatch(/URL_DASHBOARD/);
+    expect(network.error.message).toMatch(/127\.0\.0\.1:8000/);
 
     const down = await askRag({
       question: 'Quelles sont les causes usuelles d\'une fissure ?',
@@ -374,7 +376,8 @@ describe('RAG health', () => {
     expect(called).toBe(false);
     expect(result.ok).toBe(false);
     expect(result.error.code).toBe('not_configured');
-    expect(result.error.message).toMatch(/URL_DASHBOARD/);
+    expect(result.error.message).toMatch(/127\.0\.0\.1:8000/);
+    expect(result.answer).toBeUndefined();
   });
 
   it('accepts {base}/health and falls back to the tunnel root', async () => {
@@ -410,13 +413,14 @@ describe('RAG health', () => {
     expect(down.ok).toBe(false);
     expect(down.error.code).toBe('unavailable');
     expect(down.error.message).toBe(RAG_CONNECT_NOTE.fr);
-    expect(down.error.message).toMatch(/URL_DASHBOARD/);
+    expect(down.error.message).toMatch(/127\.0\.0\.1:8000/);
+    expect(down.error.message).not.toMatch(/Aucune réponse ne sera affichée/);
     expect(down.answer).toBeUndefined();
   });
 });
 
 describe('recorded Colab demonstration', () => {
-  it('keeps the five recorded answers, including the price refusal, as examples only', () => {
+  it('keeps the five recorded answers, including the price refusal, off the live path', () => {
     expect(COLAB_DEMONSTRATION).toHaveLength(5);
     expect(COLAB_DEMONSTRATION.map((item) => item.score.toFixed(4))).toEqual([
       '0.7111',
@@ -434,8 +438,12 @@ describe('recorded Colab demonstration', () => {
     );
     expect(COLAB_DEMONSTRATION[4].answer).not.toMatch(/\d/);
     expect(COLAB_DEMONSTRATION.filter((item) => item.refusal)).toHaveLength(1);
-    expect(RAG_CONNECT_NOTE.fr).toMatch(/URL_DASHBOARD/);
-    expect(RAG_CONNECT_NOTE.en).toMatch(/URL_DASHBOARD/);
+    expect(RAG_CONNECT_NOTE.fr).toMatch(/autre ordinateur/);
+    expect(RAG_CONNECT_NOTE.fr).toMatch(/127\.0\.0\.1:8000/);
+    expect(RAG_CONNECT_NOTE.en).toMatch(/another computer/);
+    expect(shouldShowColabDemonstration({ backend: 'down' })).toBe(true);
+    expect(shouldShowColabDemonstration({ backend: 'up' })).toBe(false);
+    expect(shouldShowColabDemonstration({ backend: 'checking' })).toBe(false);
   });
 
   it('recognizes an example question and does not invent one', () => {

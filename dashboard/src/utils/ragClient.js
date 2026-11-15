@@ -10,19 +10,24 @@ export const RAG_K_MIN = 1;
 export const RAG_K_MAX = 8;
 export const RAG_K_DEFAULT = 5;
 
-/** Public Colab tunnel URL, pasted from the line URL_DASHBOARD=https://… */
+/** Optional API base saved in the browser. Not a public tunnel. */
 export const RAG_URL_STORAGE_KEY = 'tariqmap_rag_url';
 
 /**
- * Instruction shown when the public URL is empty or the call fails.
- * This is not a live answer.
+ * Shown when this dashboard cannot reach the RAG API.
+ * The model answers in the Colab notebook on that machine. This computer
+ * cannot call 127.0.0.1:8000 there. This note is not a live response.
  */
 export const RAG_CONNECT_NOTE = {
-  fr: 'Collez l\'adresse publique imprimée par la cellule Colab, la ligne URL_DASHBOARD=https://… Tant que cette adresse est vide ou que l\'appel échoue, aucune réponse en direct n\'est affichée.',
-  en: 'Paste the public address printed by the Colab cell, the line URL_DASHBOARD=https://… While that address is empty or the call fails, no live answer is shown.',
+  fr: 'Le modèle répond dans le notebook Colab, sur la machine Colab. Ce tableau de bord est sur un autre ordinateur et ne peut pas appeler 127.0.0.1:8000 là-bas.',
+  en: 'The model answers in the Colab notebook, on the Colab machine. This dashboard is on another computer and cannot call 127.0.0.1:8000 there.',
 };
 
-/** Recorded Colab questions. Clicking one fills the box. It is not a live answer. */
+export function shouldShowColabDemonstration({ backend } = {}) {
+  return backend === 'down';
+}
+
+/** Recorded Colab run. Shown only while this dashboard cannot reach the API. */
 export const COLAB_DEMONSTRATION = [
   {
     question: 'Quels sont les principaux types de dégradations des chaussées ?',
@@ -361,10 +366,7 @@ export async function checkRagHealth({
     if (rootProbe.ok) return { ok: true, payload: rootProbe.payload };
   }
   if (health.code === 'timeout') {
-    return errorResult(
-      'timeout',
-      'Le service n\'a pas répondu à temps. Relancez la cellule Colab et collez la nouvelle ligne URL_DASHBOARD=https://…',
-    );
+    return errorResult('timeout', RAG_CONNECT_NOTE.fr);
   }
   return errorResult('unavailable', RAG_CONNECT_NOTE.fr);
 }
@@ -432,7 +434,7 @@ export async function askRag({
       return errorResult(
         'http_error',
         unreachable
-          ? `L'assistant ne répond pas (HTTP ${status}). Relancez la cellule Colab et collez la nouvelle ligne URL_DASHBOARD=https://… Aucune réponse en direct n'est affichée.`
+          ? `L'assistant ne répond pas (HTTP ${status}). ${RAG_CONNECT_NOTE.fr}`
           : `L'API documentaire a renvoyé une erreur HTTP ${status}.`,
         { status },
       );
@@ -448,15 +450,9 @@ export async function askRag({
   } catch (err) {
     if (err?.name === 'AbortError') {
       if (signal?.aborted) return errorResult('aborted', 'Question annulée.');
-      return errorResult(
-        'timeout',
-        'Le service n\'a pas répondu à temps. Relancez la cellule Colab et collez la nouvelle ligne URL_DASHBOARD=https://…',
-      );
+      return errorResult('timeout', RAG_CONNECT_NOTE.fr);
     }
-    return errorResult(
-      'network',
-      'Impossible de joindre l\'assistant. Relancez la cellule Colab et collez la nouvelle ligne URL_DASHBOARD=https://… Aucune réponse en direct n\'est affichée.',
-    );
+    return errorResult('network', RAG_CONNECT_NOTE.fr);
   } finally {
     clearTimeout(timer);
     signal?.removeEventListener('abort', onExternalAbort);

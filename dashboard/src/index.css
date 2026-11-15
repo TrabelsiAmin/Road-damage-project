@@ -2020,6 +2020,7 @@ h1, h2, h3, h4 {
   border-radius: var(--radius-sm);
   padding: 10px;
   min-width: 0;
+  color: #172033;
 }
 
 .rag-demo-item.is-refusal {
@@ -2039,7 +2040,7 @@ h1, h2, h3, h4 {
   display: flex;
   flex-direction: column;
   gap: 2px;
-  color: #172033;
+  color: inherit;
   font-size: 0.82rem;
   line-height: 1.45;
 }

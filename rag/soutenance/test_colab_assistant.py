@@ -2,9 +2,12 @@ import contextlib
 import io
 import json
 import os
+import subprocess
+import sys
 import tempfile
 import unittest
 from pathlib import Path
+from unittest.mock import patch
 
 import faiss
 import numpy as np
@@ -20,12 +23,14 @@ from colab_assistant import (
     build_prompt,
     chunk_text,
     clean_api_answer,
+    cloudflare_command,
     create_app,
     format_dashboard_url,
     http_json,
     index_is_reusable,
     main,
     missing_documents,
+    parse_trycloudflare_url,
     prepare,
     signals_missing_information,
     try_upload_documents,
@@ -107,14 +112,20 @@ class AssistantPreparationTest(unittest.TestCase):
         self.assertIn("ngrok.connect", script)
         self.assertIn("NGROK_AUTHTOKEN", script)
         self.assertIn("userdata", script)
-        self.assertNotIn("cloudflared", script)
-        self.assertNotIn("trycloudflare", script)
+        self.assertIn("cloudflared tunnel --url http://127.0.0.1:8000", script)
+        self.assertIn("trycloudflare.com", script)
+        self.assertIn("ensure_cloudflared", script)
         self.assertNotIn("localtunnel", script)
+        self.assertNotIn("secrets du notebook", script)
         self.assertNotIn("NGROK_AUTH_TOKEN", script)
         self.assertNotRegex(script, r"set_auth_token\(\s*[\"']")
         self.assertIn("URL_DASHBOARD=", script)
         self.assertIn('globals()["QuestionRequest"] = QuestionRequest', script)
-        self.assertLess(script.index("start_api(app)"), script.index("open_public_tunnel()"))
+        self.assertIn("Qwen n'est pas rechargé.", script)
+        prepare_body = script.split("def prepare", 1)[1].split("\ndef ", 1)[0]
+        self.assertLess(prepare_body.index("finish_public_session()"), prepare_body.index("start_api(app)"))
+        self.assertLess(prepare_body.index("start_api(app)"), prepare_body.rindex("finish_public_session()"))
+        self.assertLess(prepare_body.index("Qwen n'est pas rechargé"), prepare_body.index("load_llm("))
 
     def test_ask_accepts_question_body_and_keeps_document_only_answers(self):
         seen = {}
@@ -244,6 +255,18 @@ class AssistantPreparationTest(unittest.TestCase):
             )
             self.assertEqual(response.status_code, 200, response.text)
             self.assertEqual(response.headers.get("access-control-allow-origin"), origin)
+        preflight = client.options(
+            "/ask",
+            headers={
+                "Origin": "http://127.0.0.1:4317",
+                "Access-Control-Request-Method": "POST",
+                "Access-Control-Request-Headers": "content-type,ngrok-skip-browser-warning,bypass-tunnel-reminder",
+            },
+        )
+        self.assertEqual(preflight.status_code, 200, preflight.text)
+        allowed_headers = preflight.headers.get("access-control-allow-headers", "").lower()
+        self.assertIn("content-type", allowed_headers)
+        self.assertIn("ngrok-skip-browser-warning", allowed_headers)
         posted = client.post(
             "/ask",
             json={"question": "fissure", "k": 5},
@@ -258,15 +281,24 @@ class AssistantPreparationTest(unittest.TestCase):
             "URL_DASHBOARD=https://abc.ngrok-free.app",
         )
 
-    def test_missing_ngrok_token_prints_the_secret_step(self):
+    def test_missing_ngrok_token_opens_a_cloudflare_tunnel(self):
         import colab_assistant as module
 
         previous = os.environ.get("NGROK_AUTHTOKEN")
         os.environ.pop("NGROK_AUTHTOKEN", None)
         module.__dict__.pop("_TUNNEL", None)
         output = io.StringIO()
+
+        def fake_cloudflare():
+            return "https://demo-session.trycloudflare.com", None
+
+        def fake_ngrok(token):
+            raise AssertionError(token)
+
         try:
-            with contextlib.redirect_stdout(output):
+            with patch.object(module, "start_cloudflare_tunnel", fake_cloudflare), \
+                 patch.object(module, "start_ngrok_tunnel", fake_ngrok), \
+                 contextlib.redirect_stdout(output):
                 url = module.open_public_tunnel()
         finally:
             module.__dict__.pop("_TUNNEL", None)
@@ -274,12 +306,193 @@ class AssistantPreparationTest(unittest.TestCase):
                 os.environ.pop("NGROK_AUTHTOKEN", None)
             else:
                 os.environ["NGROK_AUTHTOKEN"] = previous
-        self.assertIsNone(url)
+        self.assertEqual(url, "https://demo-session.trycloudflare.com")
         text = output.getvalue()
-        self.assertIn("NGROK_AUTHTOKEN", text)
-        self.assertIn("secrets du notebook", text)
-        self.assertNotIn("cloudflared", text)
-        self.assertNotRegex(text, r"https://")
+        self.assertIn("NGROK_AUTHTOKEN absent", text)
+        self.assertIn("sans jeton", text)
+        self.assertIn("URL_DASHBOARD=https://demo-session.trycloudflare.com", text)
+        self.assertNotIn("secrets du notebook", text)
+
+    def test_ngrok_token_skips_cloudflare(self):
+        import colab_assistant as module
+
+        previous = os.environ.get("NGROK_AUTHTOKEN")
+        os.environ["NGROK_AUTHTOKEN"] = "test-token-not-a-real-secret"
+        module.__dict__.pop("_TUNNEL", None)
+        seen = {}
+
+        def fake_ngrok(token):
+            seen["token"] = token
+            return "https://abc.ngrok-free.app"
+
+        def fake_cloudflare():
+            raise AssertionError("cloudflare")
+
+        output = io.StringIO()
+        try:
+            with patch.object(module, "start_ngrok_tunnel", fake_ngrok), \
+                 patch.object(module, "start_cloudflare_tunnel", fake_cloudflare), \
+                 contextlib.redirect_stdout(output):
+                url = module.open_public_tunnel()
+        finally:
+            module.__dict__.pop("_TUNNEL", None)
+            if previous is None:
+                os.environ.pop("NGROK_AUTHTOKEN", None)
+            else:
+                os.environ["NGROK_AUTHTOKEN"] = previous
+        self.assertEqual(seen["token"], "test-token-not-a-real-secret")
+        self.assertEqual(url, "https://abc.ngrok-free.app")
+        self.assertIn("URL_DASHBOARD=https://abc.ngrok-free.app", output.getvalue())
+
+    def test_failed_ngrok_falls_back_to_cloudflare(self):
+        import colab_assistant as module
+
+        previous = os.environ.get("NGROK_AUTHTOKEN")
+        os.environ["NGROK_AUTHTOKEN"] = "test-token-not-a-real-secret"
+        module.__dict__.pop("_TUNNEL", None)
+        output = io.StringIO()
+        try:
+            with patch.object(module, "start_ngrok_tunnel", lambda token: None), \
+                 patch.object(
+                     module,
+                     "start_cloudflare_tunnel",
+                     lambda: ("https://fallback.trycloudflare.com", None),
+                 ), \
+                 contextlib.redirect_stdout(output):
+                url = module.open_public_tunnel()
+        finally:
+            module.__dict__.pop("_TUNNEL", None)
+            if previous is None:
+                os.environ.pop("NGROK_AUTHTOKEN", None)
+            else:
+                os.environ["NGROK_AUTHTOKEN"] = previous
+        self.assertEqual(url, "https://fallback.trycloudflare.com")
+        self.assertIn("Ouverture d'un tunnel Cloudflare", output.getvalue())
+
+    def test_cloudflare_command_targets_the_local_api(self):
+        command = cloudflare_command("/tmp/cloudflared")
+        self.assertEqual(command[:2], ["/tmp/cloudflared", "tunnel"])
+        self.assertIn("--url", command)
+        self.assertEqual(command[command.index("--url") + 1], "http://127.0.0.1:8000")
+        self.assertIn("http2", command)
+        boxed = "INF |  https://random-name.trycloudflare.com  |"
+        self.assertEqual(parse_trycloudflare_url(boxed), "https://random-name.trycloudflare.com")
+        self.assertIsNone(parse_trycloudflare_url("pas d'adresse"))
+
+    def test_cloudflared_already_on_path_is_reused(self):
+        import colab_assistant as module
+
+        with patch.object(module.shutil, "which", return_value="/usr/bin/cloudflared"):
+            self.assertEqual(module.ensure_cloudflared(), "/usr/bin/cloudflared")
+
+    def test_cloudflare_output_yields_the_public_url(self):
+        import colab_assistant as module
+
+        process = subprocess.Popen(
+            [
+                sys.executable,
+                "-c",
+                "print('boot', flush=True); print('https://demo-session.trycloudflare.com', flush=True); import time; time.sleep(2)",
+            ],
+            stdout=subprocess.PIPE,
+            stderr=subprocess.STDOUT,
+            text=True,
+            bufsize=1,
+        )
+        try:
+            origin, _tail = module.wait_for_cloudflare_url(process, timeout=5)
+        finally:
+            process.kill()
+            process.wait(timeout=5)
+        self.assertEqual(origin, "https://demo-session.trycloudflare.com")
+
+    def test_cloudflare_output_without_url_returns_none(self):
+        import colab_assistant as module
+
+        process = subprocess.Popen(
+            [sys.executable, "-c", "print('echec du tunnel', flush=True)"],
+            stdout=subprocess.PIPE,
+            stderr=subprocess.STDOUT,
+            text=True,
+            bufsize=1,
+        )
+        origin, tail = module.wait_for_cloudflare_url(process, timeout=5)
+        process.wait(timeout=5)
+        if process.stdout is not None:
+            process.stdout.close()
+        self.assertIsNone(origin)
+        self.assertTrue(any("echec" in line for line in tail))
+
+    def test_existing_api_opens_the_tunnel_without_reloading_qwen(self):
+        import colab_assistant as module
+
+        def fake_http(method, path, payload=None, timeout=180):
+            if path == "/openapi.json":
+                return {
+                    "paths": {
+                        "/ask": {
+                            "post": {
+                                "requestBody": {
+                                    "content": {
+                                        "application/json": {
+                                            "schema": {"$ref": "#/components/schemas/QuestionRequest"}
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            if path == "/health":
+                return {"status": "ok", "vectors": 431}
+            if path == "/ask":
+                question = (payload or {}).get("question", "")
+                answer = (
+                    "L'information n'a pas été trouvée dans les manuels."
+                    if "prix" in question
+                    else "Les dégradations comprennent les fissures."
+                )
+                return {
+                    "answer": answer,
+                    "sources": [{"source": "manuel.txt", "score": 0.9, "text": "extrait"}],
+                }
+            raise AssertionError(path)
+
+        with tempfile.TemporaryDirectory() as folder:
+            with patch.object(module, "port_open", return_value=True), \
+                 patch.object(module, "http_json", side_effect=fake_http), \
+                 patch.object(module, "open_public_tunnel", return_value="https://demo.trycloudflare.com") as tunnel, \
+                 patch.object(module, "load_llm", side_effect=AssertionError("Qwen")), \
+                 patch.object(module, "load_embedding", side_effect=AssertionError("BGE")):
+                output = io.StringIO()
+                with contextlib.redirect_stdout(output):
+                    code = module.prepare(folder)
+        self.assertEqual(code, 0)
+        tunnel.assert_called_once()
+        text = output.getvalue()
+        self.assertIn("Qwen n'est pas rechargé", text)
+        self.assertIn("URL_DASHBOARD=https://demo.trycloudflare.com", text)
+        self.assertIn("API locale : http://127.0.0.1:8000", text)
+        for item in DEMO_QUESTIONS:
+            self.assertIn(item["id"], text)
+
+    def test_old_api_on_port_8000_does_not_reload_qwen(self):
+        import colab_assistant as module
+
+        def fake_http(method, path, payload=None, timeout=180):
+            if path == "/openapi.json":
+                return {"paths": {"/ask": {"post": {}}}}
+            raise AssertionError(path)
+
+        with tempfile.TemporaryDirectory() as folder:
+            with patch.object(module, "port_open", return_value=True), \
+                 patch.object(module, "http_json", side_effect=fake_http), \
+                 patch.object(module, "load_llm", side_effect=AssertionError("Qwen")), \
+                 patch.object(module, "open_public_tunnel", side_effect=AssertionError("tunnel")):
+                with self.assertRaises(RuntimeError) as caught:
+                    module.prepare(folder)
+        self.assertIn("ancienne API", str(caught.exception))
+        self.assertIn("{question, k}", str(caught.exception))
 
     def test_ngrok_token_comes_from_the_environment(self):
         import colab_assistant as module

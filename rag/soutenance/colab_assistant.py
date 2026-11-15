@@ -1,11 +1,13 @@
 """Assistant RAG de soutenance, exécuté dans le notebook Colab.
 
 Qwen2.5-7B-Instruct en 4 bits, BGE-M3, FAISS IndexFlatIP.
-L'API écoute seulement 127.0.0.1. Après le démarrage, un tunnel ngrok
-HTTPS est la seule porte publique. Le tableau de bord colle la ligne
-URL_DASHBOARD=https://….ngrok-free.app
-Le jeton se lit dans NGROK_AUTHTOKEN (environnement ou secret Colab).
-Les embeddings ne sont recalculés que si aucun index valide n'est déjà là.
+L'API écoute seulement 127.0.0.1. Le tableau de bord colle la ligne
+URL_DASHBOARD=https://…
+Si NGROK_AUTHTOKEN est défini (environnement ou secret Colab), le tunnel
+est ngrok. Sinon cloudflared ouvre un tunnel Cloudflare rapide vers
+http://127.0.0.1:8000, sans jeton. Les embeddings ne sont recalculés que
+si aucun index valide n'est déjà là. Si l'API répond déjà sur le port 8000,
+Qwen n'est pas rechargé : seul le tunnel est ouvert.
 """
 
 from __future__ import annotations
@@ -14,6 +16,9 @@ import argparse
 import json
 import os
 import pickle
+import platform
+import re
+import shutil
 import subprocess
 import sys
 import threading
@@ -29,6 +34,8 @@ CHUNK_OVERLAP = 100
 DIMENSION = 1024
 API_HOST = "127.0.0.1"
 API_PORT = 8000
+TRYCLOUDFLARE_RE = re.compile(r"https://[A-Za-z0-9-]+\.trycloudflare\.com")
+CLOUDFLARED_RELEASE = "https://github.com/cloudflare/cloudflared/releases/latest/download"
 
 # Noms réels du corpus, présents sur origin/feature/road-damage-rag.
 EXPECTED_DOCS = (
@@ -458,6 +465,24 @@ def port_open(port=API_PORT):
         return sock.connect_ex((API_HOST, port)) == 0
 
 
+def question_body_status():
+    """'ok' si /ask attend le JSON, 'old' si le schéma est l'ancien, 'unknown' sinon."""
+    try:
+        spec = http_json("GET", "/openapi.json", timeout=5)
+    except Exception:
+        return "unknown"
+    if ask_body_accepts_question(spec):
+        return "ok"
+    return "old"
+
+
+OLD_API_ERROR = (
+    "Le port 8000 sert encore l'ancienne API : elle attend un paramètre "
+    "d'URL nommé request et refuse le JSON {question, k}. "
+    "Redémarrez l'environnement d'exécution, puis relancez cette cellule."
+)
+
+
 def ask_body_accepts_question(spec):
     post = (spec.get("paths") or {}).get("/ask", {}).get("post") or {}
     schema = (
@@ -473,19 +498,11 @@ def ask_body_accepts_question(spec):
 
 def start_api(app):
     if port_open():
-        try:
-            spec = http_json("GET", "/openapi.json", timeout=5)
-            reusable = ask_body_accepts_question(spec)
-        except Exception:
-            reusable = False
-        if reusable:
-            print("Une API répond déjà sur", API_HOST, API_PORT)
-            return
-        raise RuntimeError(
-            "Le port 8000 sert encore l'ancienne API : elle attend un paramètre "
-            "d'URL nommé request et refuse le JSON {question, k}. "
-            "Redémarrez l'environnement d'exécution, puis relancez cette cellule."
-        )
+        status = question_body_status()
+        if status == "old":
+            raise RuntimeError(OLD_API_ERROR)
+        print("Une API répond déjà sur", API_HOST, API_PORT, flush=True)
+        return
     import uvicorn
 
     thread = threading.Thread(
@@ -581,27 +598,34 @@ def _connect_ngrok(ngrok):
 def tunnel_state():
     state = globals().get("_TUNNEL")
     if not isinstance(state, dict):
-        state = {"url": None}
+        state = {"url": None, "process": None}
         globals()["_TUNNEL"] = state
     return state
 
 
-def open_public_tunnel():
-    """Ouvre un seul tunnel ngrok HTTPS vers l'API locale. L'API reste sur 127.0.0.1."""
-    state = tunnel_state()
-    if state.get("url"):
-        print(format_dashboard_url(state["url"]))
-        return state["url"]
-
-    token = read_ngrok_token()
-    if not token:
-        print(
-            "NGROK_AUTHTOKEN manquant. "
-            "Ajoutez le secret NGROK_AUTHTOKEN dans les secrets du notebook, "
-            "puis relancez la cellule."
-        )
+def cached_public_url(state):
+    url = state.get("url")
+    if not url:
         return None
+    process = state.get("process")
+    if process is not None and process.poll() is not None:
+        state["url"] = None
+        state["process"] = None
+        return None
+    return url
 
+
+def remember_public_url(origin, process=None):
+    state = tunnel_state()
+    state["url"] = origin
+    state["process"] = process
+    print("Copiez cette ligne dans le tableau de bord, champ « Adresse de l'API Colab ».", flush=True)
+    print(format_dashboard_url(origin), flush=True)
+    return origin
+
+
+def start_ngrok_tunnel(token):
+    """Tunnel ngrok HTTPS. Retourne l'origine https, ou None si ngrok échoue."""
     try:
         from pyngrok import ngrok
     except Exception:
@@ -610,27 +634,169 @@ def open_public_tunnel():
 
     try:
         ngrok.set_auth_token(token)
-        existing = []
         for tunnel in list(ngrok.get_tunnels()):
             origin = _https_origin(tunnel)
             if origin.startswith("https://"):
-                existing.append(origin)
-        if existing:
-            state["url"] = existing[0]
-            print(format_dashboard_url(existing[0]))
-            return existing[0]
+                return origin
         origin = _https_origin(_connect_ngrok(ngrok))
     except Exception as exc:
         detail = str(exc).replace(token, "…")
-        print("ngrok n'a pas démarré :", detail)
+        print("ngrok n'a pas démarré :", detail, flush=True)
         return None
-
     if not origin.startswith("https://"):
-        print("ngrok n'a pas renvoyé d'adresse HTTPS.")
+        print("ngrok n'a pas renvoyé d'adresse HTTPS.", flush=True)
         return None
-    state["url"] = origin
-    print(format_dashboard_url(origin))
     return origin
+
+
+def cloudflared_asset_name():
+    machine = platform.machine().lower()
+    if machine in ("x86_64", "amd64"):
+        return "cloudflared-linux-amd64"
+    if machine in ("aarch64", "arm64"):
+        return "cloudflared-linux-arm64"
+    if machine in ("armv7l", "armv6l"):
+        return "cloudflared-linux-arm"
+    raise RuntimeError(f"Architecture non prise en charge pour cloudflared : {machine}")
+
+
+def cloudflare_command(binary):
+    # cloudflared tunnel --url http://127.0.0.1:8000
+    # http2 : le réseau Colab bloque souvent QUIC.
+    return [
+        binary,
+        "tunnel",
+        "--no-autoupdate",
+        "--protocol",
+        "http2",
+        "--url",
+        f"http://{API_HOST}:{API_PORT}",
+    ]
+
+
+def ensure_cloudflared():
+    found = shutil.which("cloudflared")
+    if found:
+        return found
+    dest = Path(os.environ.get("TMPDIR") or "/tmp") / "cloudflared"
+    if dest.is_file() and os.access(dest, os.X_OK) and dest.stat().st_size > 1_000_000:
+        return str(dest)
+    name = cloudflared_asset_name()
+    url = f"{CLOUDFLARED_RELEASE}/{name}"
+    print("Installation de cloudflared…", flush=True)
+    partial = dest.with_name(dest.name + ".partial")
+    request = urllib.request.Request(url, headers={"User-Agent": "tariqmap-colab"})
+    with urllib.request.urlopen(request, timeout=120) as response, partial.open("wb") as handle:
+        while True:
+            chunk = response.read(256 * 1024)
+            if not chunk:
+                break
+            handle.write(chunk)
+    partial.chmod(0o755)
+    partial.replace(dest)
+    return str(dest)
+
+
+def parse_trycloudflare_url(text):
+    match = TRYCLOUDFLARE_RE.search(text or "")
+    return match.group(0) if match else None
+
+
+def wait_for_cloudflare_url(process, timeout=75):
+    """Lit stdout fusionné avec stderr jusqu'à l'URL trycloudflare, ou None."""
+    found = {}
+    tail = []
+
+    def consume():
+        stream = process.stdout
+        if stream is None:
+            return
+        try:
+            for line in iter(stream.readline, ""):
+                tail.append(line.rstrip())
+                del tail[:-20]
+                if "url" not in found:
+                    origin = parse_trycloudflare_url(line)
+                    if origin:
+                        found["url"] = origin
+        except Exception:
+            return
+
+    thread = threading.Thread(target=consume, daemon=True)
+    thread.start()
+    deadline = time.time() + timeout
+    while time.time() < deadline and "url" not in found:
+        if process.poll() is not None:
+            break
+        time.sleep(0.25)
+    thread.join(timeout=1)
+    return found.get("url"), tail
+
+
+def start_cloudflare_tunnel():
+    """cloudflared tunnel --url http://127.0.0.1:8000. Aucun jeton."""
+    binary = ensure_cloudflared()
+    command = cloudflare_command(binary)
+    print("Tunnel Cloudflare :", " ".join(command), flush=True)
+    process = subprocess.Popen(
+        command,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.STDOUT,
+        text=True,
+        bufsize=1,
+    )
+    origin, tail = wait_for_cloudflare_url(process)
+    if not origin:
+        if process.poll() is None:
+            process.terminate()
+            try:
+                process.wait(timeout=3)
+            except subprocess.TimeoutExpired:
+                process.kill()
+        detail = " | ".join(tail[-8:])
+        print("cloudflared n'a pas renvoyé d'adresse trycloudflare.com.", detail, flush=True)
+        return None, None
+    return origin, process
+
+
+def open_public_tunnel():
+    """Ouvre ngrok si le jeton est là, sinon un tunnel Cloudflare. L'API reste locale."""
+    state = tunnel_state()
+    cached = cached_public_url(state)
+    if cached:
+        print(format_dashboard_url(cached), flush=True)
+        return cached
+
+    token = read_ngrok_token()
+    if token:
+        origin = start_ngrok_tunnel(token)
+        if origin:
+            return remember_public_url(origin)
+        print("ngrok n'a pas démarré. Ouverture d'un tunnel Cloudflare.", flush=True)
+    else:
+        print(
+            "NGROK_AUTHTOKEN absent. Ouverture d'un tunnel Cloudflare, sans jeton.",
+            flush=True,
+        )
+
+    origin, process = start_cloudflare_tunnel()
+    if not origin:
+        return None
+    return remember_public_url(origin, process)
+
+
+def finish_public_session():
+    public_url = open_public_tunnel()
+    try:
+        run_demo()
+    finally:
+        print("API locale :", f"http://{API_HOST}:{API_PORT}", flush=True)
+        if public_url:
+            print("Copiez cette ligne dans le tableau de bord, champ « Adresse de l'API Colab ».", flush=True)
+            print(format_dashboard_url(public_url), flush=True)
+        else:
+            print("Pas de ligne URL_DASHBOARD : le tunnel public n'a pas démarré.", flush=True)
+    return 0
 
 
 def prepare(root, check_only=False, embedding_model=None, llm_pair=None):
@@ -644,6 +810,14 @@ def prepare(root, check_only=False, embedding_model=None, llm_pair=None):
     if check_only:
         print(json.dumps(report, ensure_ascii=False))
         return 0 if report["gpu"] and not report["missingDocuments"] else 2
+
+    # Une cellule précédente a déjà chargé Qwen. On ouvre seulement le tunnel.
+    if port_open():
+        if question_body_status() == "old":
+            raise RuntimeError(OLD_API_ERROR)
+        print("Une API répond déjà sur", API_HOST, API_PORT, flush=True)
+        print("Qwen n'est pas rechargé.", flush=True)
+        return finish_public_session()
 
     if not report["gpu"]:
         print(json.dumps(report, ensure_ascii=False))
@@ -700,17 +874,7 @@ def prepare(root, check_only=False, embedding_model=None, llm_pair=None):
     generate_answer = make_generate(tokenizer, llm)
     app = create_app(retrieve, generate_answer, int(index.ntotal))
     start_api(app)
-    public_url = open_public_tunnel()
-    try:
-        run_demo()
-    finally:
-        print("API locale :", f"http://{API_HOST}:{API_PORT}")
-        if public_url:
-            print("Copiez cette ligne dans le tableau de bord, champ « Adresse de l'API Colab ».")
-            print(format_dashboard_url(public_url))
-        else:
-            print("Pas de ligne URL_DASHBOARD : le tunnel public n'a pas démarré.")
-    return 0
+    return finish_public_session()
 
 
 def running_in_notebook():

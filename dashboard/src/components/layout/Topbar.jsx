@@ -9,6 +9,8 @@ import {
   ShieldCheck,
   ShieldAlert,
   LogIn,
+  Moon,
+  Sun,
   X,
 } from 'lucide-react';
 import { Breadcrumbs } from './Breadcrumbs';
@@ -30,6 +32,8 @@ export function Topbar({
   isAuthorityUser,
   onOpenLogin,
   lang = 'fr',
+  theme = 'light',
+  onToggleTheme,
 }) {
   const titles = {
     overview: {
@@ -145,6 +149,23 @@ export function Topbar({
 
       {/* Right side: Actions & Status */}
       <div className="tm-topbar-right">
+        <button
+          type="button"
+          className="btn btn-secondary tm-btn-theme"
+          onClick={onToggleTheme}
+          aria-pressed={theme === 'dark'}
+          title={theme === 'dark'
+            ? (lang === 'fr' ? 'Passer en mode clair' : 'Switch to light mode')
+            : (lang === 'fr' ? 'Passer en mode sombre' : 'Switch to dark mode')}
+        >
+          {theme === 'dark' ? <Sun size={14} /> : <Moon size={14} />}
+          <span className="hide-on-tablet">
+            {theme === 'dark'
+              ? (lang === 'fr' ? 'Mode clair' : 'Light mode')
+              : (lang === 'fr' ? 'Mode sombre' : 'Dark mode')}
+          </span>
+        </button>
+
         {/* Demo Data Indicator */}
         {hasDemoData && (
           <div

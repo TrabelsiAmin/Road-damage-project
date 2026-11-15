@@ -1,32 +1,40 @@
 import { describe, it, expect } from 'vitest';
 import { getInitialTheme, resolveNextTheme } from './theme';
 
-describe('Theme State Utilities', () => {
-  it('stays light even when a dark preference was stored', () => {
-    const mockStorage = {
-      store: { tariqmap_theme: 'dark' },
-      getItem(key) {
-        return this.store[key] || null;
-      },
-    };
+function storageWith(value) {
+  return {
+    getItem(key) {
+      return key === 'tariqmap_theme' ? value : null;
+    },
+  };
+}
 
-    expect(getInitialTheme(mockStorage, false)).toBe('light');
-    expect(getInitialTheme(mockStorage, true)).toBe('light');
+describe('Theme State Utilities', () => {
+  it('restores a stored dark or light choice', () => {
+    expect(getInitialTheme(storageWith('dark'), false)).toBe('dark');
+    expect(getInitialTheme(storageWith('light'), true)).toBe('light');
   });
 
-  it('stays light when storage is empty or throws', () => {
-    expect(getInitialTheme({ getItem: () => null }, true)).toBe('light');
-    expect(getInitialTheme({ getItem: () => null }, false)).toBe('light');
+  it('follows the system preference only when nothing valid is stored', () => {
+    expect(getInitialTheme(storageWith(null), true)).toBe('dark');
+    expect(getInitialTheme(storageWith(null), false)).toBe('light');
+    expect(getInitialTheme(storageWith('sepia'), true)).toBe('dark');
+    expect(getInitialTheme(storageWith('sepia'), false)).toBe('light');
+  });
+
+  it('falls back safely when storage throws or is missing', () => {
     expect(getInitialTheme({
       getItem() {
         throw new Error('Access denied');
       },
-    }, true)).toBe('light');
+    }, true)).toBe('dark');
     expect(getInitialTheme(null, false)).toBe('light');
+    expect(getInitialTheme(undefined, true)).toBe('dark');
   });
 
-  it('does not switch into a dark theme', () => {
-    expect(resolveNextTheme('light')).toBe('light');
+  it('toggles between light and dark', () => {
+    expect(resolveNextTheme('light')).toBe('dark');
     expect(resolveNextTheme('dark')).toBe('light');
+    expect(resolveNextTheme('other')).toBe('dark');
   });
 });

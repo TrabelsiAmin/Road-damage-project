@@ -22,6 +22,8 @@ export function DashboardShell({
   onLogout,
   lang = 'fr',
   onToggleLang,
+  theme = 'light',
+  onToggleTheme,
   children,
 }) {
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
@@ -66,6 +68,8 @@ export function DashboardShell({
           isAuthorityUser={isAuthorityUser}
           onOpenLogin={onOpenLogin}
           lang={lang}
+          theme={theme}
+          onToggleTheme={onToggleTheme}
         />
 
         {/* Dynamic Content Region */}

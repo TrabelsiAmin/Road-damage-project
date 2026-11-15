@@ -1,0 +1,249 @@
+/* Dark shell. Loaded after light.css so the same surfaces follow data-theme. */
+
+html[data-theme="dark"] {
+  color-scheme: dark;
+  --bg-primary: #1C1917;
+  --bg-secondary: #292524;
+  --bg-card: #292524;
+  --bg-card-hover: #44403C;
+  --bg-glass: #1C1917;
+  --border-subtle: #44403C;
+  --border-accent: rgba(96, 165, 250, 0.45);
+  --text-main: #F5F0E8;
+  --text-muted: #A8A29E;
+  --text-dim: #A8A29E;
+  --color-primary: #60A5FA;
+  --color-primary-hover: #93C5FD;
+  --tm-sidebar: #231F1C;
+  --tm-sidebar-hover: #3F3A36;
+  --tm-sidebar-active: #1E3A5F;
+  --tm-page-bg: #1C1917;
+  --tm-card: #292524;
+  --tm-card-muted: #1C1917;
+  --tm-border: #44403C;
+  --tm-text: #F5F0E8;
+  --tm-text-muted: #A8A29E;
+  --tm-primary: #60A5FA;
+  --tm-canvas: #1C1917;
+}
+
+html[data-theme="dark"],
+html[data-theme="dark"] body,
+html[data-theme="dark"] #root,
+html[data-theme="dark"] .tm-shell,
+html[data-theme="dark"] .tm-main-viewport,
+html[data-theme="dark"] .tm-content-area {
+  background: #1C1917;
+  color: #F5F0E8;
+}
+
+html[data-theme="dark"] .tm-topbar,
+html[data-theme="dark"] .tm-sidebar,
+html[data-theme="dark"] .sidebar,
+html[data-theme="dark"] .tm-sidebar-footer,
+html[data-theme="dark"] .header {
+  background: #231F1C;
+  border-color: #44403C;
+  color: #F5F0E8;
+}
+
+html[data-theme="dark"] .tm-topbar-kicker,
+html[data-theme="dark"] .road-brief-kicker,
+html[data-theme="dark"] .ministry-kicker,
+html[data-theme="dark"] .filter-title-text,
+html[data-theme="dark"] .road-brief-caption,
+html[data-theme="dark"] .road-brief-action span,
+html[data-theme="dark"] .road-brief-action em,
+html[data-theme="dark"] .road-brief-facts dt,
+html[data-theme="dark"] .road-brief-facts dd span,
+html[data-theme="dark"] .filter-count-badge,
+html[data-theme="dark"] .date-pill,
+html[data-theme="dark"] .rag-answer,
+html[data-theme="dark"] .rag-excerpt,
+html[data-theme="dark"] .rag-help,
+html[data-theme="dark"] .rag-empty {
+  color: #A8A29E;
+}
+
+html[data-theme="dark"] .tm-search-input,
+html[data-theme="dark"] .select-input,
+html[data-theme="dark"] .text-input,
+html[data-theme="dark"] input,
+html[data-theme="dark"] select,
+html[data-theme="dark"] textarea,
+html[data-theme="dark"] .btn,
+html[data-theme="dark"] .action-queue-btn,
+html[data-theme="dark"] .tm-sidebar-toggle-btn,
+html[data-theme="dark"] .tm-sidebar-control-btn,
+html[data-theme="dark"] .tm-sidebar-user-card {
+  background: #1C1917;
+  color: #F5F0E8;
+  border-color: #44403C;
+}
+
+html[data-theme="dark"] .btn:hover,
+html[data-theme="dark"] .action-queue-btn:hover,
+html[data-theme="dark"] .tm-sidebar-control-btn:hover,
+html[data-theme="dark"] .tm-sidebar-toggle-btn:hover {
+  background: #3F3A36;
+  border-color: #57534E;
+  color: #F5F0E8;
+}
+
+html[data-theme="dark"] .btn-primary,
+html[data-theme="dark"] .btn-primary:hover {
+  background: #2563EB;
+  border-color: #2563EB;
+  color: #FFFFFF;
+}
+
+html[data-theme="dark"] .kpi-card,
+html[data-theme="dark"] .executive-kpi-card,
+html[data-theme="dark"] .metric-card,
+html[data-theme="dark"] .rag-panel,
+html[data-theme="dark"] .action-table-container,
+html[data-theme="dark"] .action-queue-card,
+html[data-theme="dark"] .corridor-card,
+html[data-theme="dark"] .analytics-card,
+html[data-theme="dark"] .telemetry-card,
+html[data-theme="dark"] .reports-card,
+html[data-theme="dark"] .audit-event-card,
+html[data-theme="dark"] .quality-card,
+html[data-theme="dark"] .modal-card,
+html[data-theme="dark"] .case-detail-drawer,
+html[data-theme="dark"] .report-card,
+html[data-theme="dark"] .tm-empty-state,
+html[data-theme="dark"] .stat-card,
+html[data-theme="dark"] .tm-stat-card,
+html[data-theme="dark"] .main-layout,
+html[data-theme="dark"] .map-layer-controls,
+html[data-theme="dark"] .map-legend,
+html[data-theme="dark"] .map-filter-overlay,
+html[data-theme="dark"] .sidebar-expand-btn,
+html[data-theme="dark"] .modal-header,
+html[data-theme="dark"] .modal-footer,
+html[data-theme="dark"] .case-detail-header,
+html[data-theme="dark"] .case-detail-section {
+  background: #292524;
+  border-color: #44403C;
+  color: #F5F0E8;
+}
+
+html[data-theme="dark"] .action-table th,
+html[data-theme="dark"] th,
+html[data-theme="dark"] .sidebar-tabs {
+  background: #1C1917;
+  color: #A8A29E;
+  border-color: #44403C;
+}
+
+html[data-theme="dark"] td {
+  border-bottom-color: #44403C;
+  color: #F5F0E8;
+}
+
+html[data-theme="dark"] tbody tr:hover {
+  background: #3F3A36;
+}
+
+html[data-theme="dark"] .action-queue-btn.active {
+  background: #1E3A5F;
+  color: #93C5FD;
+  border-color: #60A5FA;
+}
+
+html[data-theme="dark"] .leaflet-container,
+html[data-theme="dark"] .leaflet-map-host .leaflet-container {
+  background: #1C1917 !important;
+}
+
+html[data-theme="dark"] .leaflet-tile-pane {
+  filter: invert(1) hue-rotate(180deg) brightness(0.85) contrast(0.92);
+}
+
+html[data-theme="dark"] .leaflet-popup-content-wrapper,
+html[data-theme="dark"] .leaflet-popup-tip,
+html[data-theme="dark"] .leaflet-bar a {
+  background: #292524;
+  color: #F5F0E8;
+  border-color: #44403C;
+}
+
+html[data-theme="dark"] .rag-panel,
+html[data-theme="dark"] .rag-source,
+html[data-theme="dark"] .rag-selected,
+html[data-theme="dark"] .road-brief,
+html[data-theme="dark"] .road-brief-link,
+html[data-theme="dark"] .date-pill.active {
+  color: #F5F0E8;
+}
+
+html[data-theme="dark"] .rag-unavailable,
+html[data-theme="dark"] .rag-error {
+  background: #292524;
+  color: #FCA5A5;
+  border-color: #DC2626;
+}
+
+html[data-theme="dark"] .tm-chip-authority {
+  background: #052E16;
+  border-color: #16A34A;
+  color: #86EFAC;
+}
+
+html[data-theme="dark"] .tm-chip-public,
+html[data-theme="dark"] .tm-demo-pill {
+  background: #451A03;
+  border-color: #F59E0B;
+  color: #FDE68A;
+}
+
+html[data-theme="dark"] .road-brief-actions,
+html[data-theme="dark"] .ministry-kpi-grid {
+  border-color: #44403C;
+}
+
+html[data-theme="dark"] .road-brief-action {
+  border-right-color: #44403C;
+}
+
+html[data-theme="dark"] .select-filter,
+html[data-theme="dark"] .ministry-period select,
+html[data-theme="dark"] .date-pill.active {
+  border-color: #57534E;
+  box-shadow: none;
+}
+
+html[data-theme="dark"] .date-pill.active {
+  box-shadow: inset 0 -1px 0 #F5F0E8;
+}
+
+html[data-theme="dark"] .tm-badge-primary {
+  background: #1E3A5F;
+  color: #93C5FD;
+  border-color: #1D4ED8;
+}
+
+html[data-theme="dark"] .tm-badge-neutral {
+  background: #1C1917;
+  color: #A8A29E;
+}
+
+html[data-theme="dark"] .tm-btn-theme[aria-pressed="true"] {
+  border-color: #60A5FA;
+  color: #93C5FD;
+}
+
+html[data-theme="dark"] .map-overlay-banner.map-loading,
+html[data-theme="dark"] .map-overlay-banner.map-empty-state {
+  background: #292524;
+  border-color: #44403C;
+  color: #F5F0E8;
+}
+
+html[data-theme="dark"] .map-overlay-banner.map-tile-error,
+html[data-theme="dark"] .map-overlay-banner.map-error-state {
+  background: #292524;
+  border-color: #F87171;
+  color: #FCA5A5;
+}

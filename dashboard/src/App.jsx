@@ -63,7 +63,7 @@ import { mapLoadCopy, mapLoadState } from './utils/mapLoadState';
 import { authorityCountStatus, overviewCounters, visitorCountStatus } from './utils/overviewCounters';
 import { canDownloadPublicExport, publicSituationText } from './utils/publicStats';
 import { usableOrganizations } from './utils/organizations';
-import { THEME_STORAGE_KEY } from './utils/theme';
+import { applyTheme, getInitialTheme, resolveNextTheme } from './utils/theme';
 import {
   buildMinistryOverview,
   isWithinPeriod,
@@ -346,19 +346,15 @@ export default function App() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [lang, setLang] = useState('fr');
+  const [theme, setTheme] = useState(() => getInitialTheme(
+    typeof localStorage !== 'undefined' ? localStorage : null,
+    typeof window !== 'undefined' && window.matchMedia('(prefers-color-scheme: dark)').matches,
+  ));
   const [dataVersion, setDataVersion] = useState(0);
 
   useEffect(() => {
-    document.documentElement.setAttribute('data-theme', 'light');
-    document.body.setAttribute('data-theme', 'light');
-    document.documentElement.classList.remove('dark-mode');
-    document.body.classList.remove('dark-mode');
-    try {
-      localStorage.removeItem(THEME_STORAGE_KEY);
-    } catch (err) {
-      console.warn('Failed to clear stored theme:', err);
-    }
-  }, []);
+    applyTheme(theme);
+  }, [theme]);
 
   // Auth State
   const [currentUser, setCurrentUser] = useState(null);
@@ -1568,6 +1564,8 @@ export default function App() {
       onLogout={handleLogout}
       lang={lang}
       onToggleLang={() => setLang((prev) => (prev === 'fr' ? 'en' : 'fr'))}
+      theme={theme}
+      onToggleTheme={() => setTheme((current) => resolveNextTheme(current))}
     >
 
       {isAuthorityUser && (

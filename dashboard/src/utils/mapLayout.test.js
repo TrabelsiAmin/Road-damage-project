@@ -50,4 +50,14 @@ describe('Leaflet Map Layout & Architecture Validation', () => {
     expect(cssContent).toContain('position: absolute;');
     expect(cssContent).toContain('z-index: 1000;');
   });
+
+  it('keeps map banners clear of the layer panel on desktop, tablet, and mobile', () => {
+    expect(appContent).toContain('className="map-banner-stack"');
+    expect(cssContent).toContain('.map-banner-stack {');
+    expect(cssContent).toContain('right: 320px;');
+    expect(cssContent).toMatch(/@media \(max-width: 1100px\) \{[\s\S]*\.map-banner-stack \{[\s\S]*top: 208px;/);
+    expect(cssContent).toMatch(/@media \(max-width: 768px\) \{[\s\S]*\.map-banner-stack \{[\s\S]*bottom: 10px;/);
+    expect(cssContent).toContain('.map-banner-stack .map-overlay-banner {');
+    expect(cssContent).toContain('transform: none;');
+  });
 });

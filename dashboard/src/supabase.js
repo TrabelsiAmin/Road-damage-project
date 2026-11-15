@@ -1,4 +1,5 @@
 import { createClient } from '@supabase/supabase-js';
+import { publicRequestError } from './utils/publicStats';
 import { OBSERVATION_PAGE_SIZE } from './utils/records';
 
 // Public anon key only. A production Vite build does not use the debug
@@ -521,7 +522,7 @@ export async function fetchOrganizations() {
 export async function fetchPublicDamageSummary() {
   const { data, error } = await supabase.rpc('public_damage_summary');
   if (error) {
-    throw new Error('Les totaux publics ne sont pas disponibles.');
+    throw publicRequestError(error, 'Les totaux publics ne sont pas disponibles.');
   }
   return data || [];
 }
@@ -534,7 +535,7 @@ export async function fetchPublicMapCells(cellDegrees = 0.01) {
     cell_degrees: cellDegrees,
   });
   if (error) {
-    throw new Error('La carte publique n\'est pas disponible.');
+    throw publicRequestError(error, 'La carte publique n\'est pas disponible.');
   }
   return data || [];
 }

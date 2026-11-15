@@ -60,6 +60,7 @@ import { TechnicalRecommendation } from './components/TechnicalRecommendation';
 import { displayClassCode } from './utils/classCodes';
 import { filterValidClusters } from './utils/mapValidation';
 import { mapLoadCopy, mapLoadState } from './utils/mapLoadState';
+import { authorityCountStatus, overviewCounters, visitorCountStatus } from './utils/overviewCounters';
 import { canDownloadPublicExport, publicSituationText } from './utils/publicStats';
 import { usableOrganizations } from './utils/organizations';
 import { THEME_STORAGE_KEY } from './utils/theme';
@@ -833,6 +834,39 @@ export default function App() {
       }))
       .filter((cell) => Number.isFinite(cell.latitude) && Number.isFinite(cell.longitude));
   }, [isAuthorityUser, validClusters, publicCells]);
+
+  const overviewCount = useMemo(() => {
+    if (!isAuthorityUser) {
+      return overviewCounters({
+        status: visitorCountStatus({ loading, publicStatsStatus }),
+        resultCount: mapMarkers.length,
+        accuracyKnown: false,
+        lang,
+      });
+    }
+    return overviewCounters({
+      status: authorityCountStatus({
+        loading,
+        error,
+        hasPayload: observations.length > 0 || serverClusters.length > 0,
+      }),
+      resultCount: filteredClusters.length,
+      accuracyExcluded: accuracyExcludedCount,
+      accuracyKnown: true,
+      lang,
+    });
+  }, [
+    isAuthorityUser,
+    loading,
+    publicStatsStatus,
+    mapMarkers.length,
+    error,
+    observations.length,
+    serverClusters.length,
+    filteredClusters.length,
+    accuracyExcludedCount,
+    lang,
+  ]);
 
   const ministry = useMemo(() => {
     const demoScoped = filterObservations(observations, {
@@ -1720,62 +1754,60 @@ export default function App() {
         <div className="map-wrapper">
           <div ref={mapRef} className="leaflet-map-host" />
 
-          {/* Map Loading State */}
-          {mapLoadState({ loading, error, markerCount: mapMarkers.length }) === 'loading' && (
-            <div className="map-overlay-banner map-loading" role="status">
-              <div className="spinner-small" />
-              <span>{mapLoadCopy('loading', lang)}</span>
-            </div>
-          )}
+          <div className="map-banner-stack">
+            {mapLoadState({ loading, error, markerCount: mapMarkers.length }) === 'loading' && (
+              <div className="map-overlay-banner map-loading" role="status">
+                <div className="spinner-small" />
+                <span>{mapLoadCopy('loading', lang)}</span>
+              </div>
+            )}
 
-          {/* Basemap Tile Error Banner */}
-          {tileError && (
-            <div className="map-overlay-banner map-tile-error" role="alert">
-              <span>
-                {lang === 'fr'
-                  ? 'Impossible de charger le fond cartographique. Vérifiez la connexion réseau.'
-                  : 'Unable to load map tiles. Please check your network connection.'}
-              </span>
-            </div>
-          )}
+            {tileError && (
+              <div className="map-overlay-banner map-tile-error" role="alert">
+                <span>
+                  {lang === 'fr'
+                    ? 'Impossible de charger le fond cartographique. Vérifiez la connexion réseau.'
+                    : 'Unable to load map tiles. Please check your network connection.'}
+                </span>
+              </div>
+            )}
 
-          {/* Empty Valid Coordinates State */}
-          {mapLoadState({ loading, error, markerCount: mapMarkers.length }) === 'empty' && (
-            <div className="map-overlay-banner map-empty-state" role="status">
-              <MapPinOff size={15} />
-              <span>{mapLoadCopy('empty', lang)}</span>
-            </div>
-          )}
+            {mapLoadState({ loading, error, markerCount: mapMarkers.length }) === 'empty' && (
+              <div className="map-overlay-banner map-empty-state" role="status">
+                <MapPinOff size={15} />
+                <span>{mapLoadCopy('empty', lang)}</span>
+              </div>
+            )}
 
-          {/* Supabase Data Error State */}
-          {listTruncated && (
-            <div className="map-overlay-banner" role="status">
-              <span>
-                {lang === 'fr'
-                  ? `Totaux limités aux ${OBSERVATION_PAGE_SIZE} signalements les plus récents chargés.`
-                  : `Totals use the latest ${OBSERVATION_PAGE_SIZE} loaded observations.`}
-              </span>
-              <button
-                type="button"
-                className="btn btn-secondary btn-sm"
-                onClick={loadOlderObservations}
-                disabled={loadingOlder}
-              >
-                {loadingOlder
-                  ? (lang === 'fr' ? 'Chargement…' : 'Loading…')
-                  : (lang === 'fr' ? 'Charger les plus anciens' : 'Load older')}
-              </button>
-            </div>
-          )}
+            {listTruncated && (
+              <div className="map-overlay-banner" role="status">
+                <span>
+                  {lang === 'fr'
+                    ? `Totaux limités aux ${OBSERVATION_PAGE_SIZE} signalements les plus récents chargés.`
+                    : `Totals use the latest ${OBSERVATION_PAGE_SIZE} loaded observations.`}
+                </span>
+                <button
+                  type="button"
+                  className="btn btn-secondary btn-sm"
+                  onClick={loadOlderObservations}
+                  disabled={loadingOlder}
+                >
+                  {loadingOlder
+                    ? (lang === 'fr' ? 'Chargement…' : 'Loading…')
+                    : (lang === 'fr' ? 'Charger les plus anciens' : 'Load older')}
+                </button>
+              </div>
+            )}
 
-          {mapLoadState({ loading, error, markerCount: mapMarkers.length }) === 'error' && (
-            <div className="map-overlay-banner map-error-state" role="alert">
-              <span>{mapLoadCopy('error', lang)}</span>
-              <button type="button" className="btn btn-secondary btn-sm" onClick={loadData}>
-                {lang === 'fr' ? 'Réessayer' : 'Retry'}
-              </button>
-            </div>
-          )}
+            {mapLoadState({ loading, error, markerCount: mapMarkers.length }) === 'error' && (
+              <div className="map-overlay-banner map-error-state" role="alert">
+                <span>{mapLoadCopy('error', lang)}</span>
+                <button type="button" className="btn btn-secondary btn-sm" onClick={loadData}>
+                  {lang === 'fr' ? 'Réessayer' : 'Retry'}
+                </button>
+              </div>
+            )}
+          </div>
 
           {/* Expand Sidebar Button (when collapsed) */}
           {isSidebarCollapsed && (
@@ -1901,9 +1933,11 @@ export default function App() {
                 <span>LOW (&lt;35)</span>
               </div>
             </div>
-            <div style={{ marginTop: '8px', paddingTop: '6px', borderTop: '1px solid var(--border-subtle)', fontSize: '0.70rem', color: 'var(--text-dim)', lineHeight: 1.3 }}>
-              <span>Positions avec précision &gt; 25 m non affichées ({accuracyExcludedCount} signalements exclus)</span>
-            </div>
+            {overviewCount.accuracyLine && (
+              <div style={{ marginTop: '8px', paddingTop: '6px', borderTop: '1px solid var(--border-subtle)', fontSize: '0.70rem', color: 'var(--text-dim)', lineHeight: 1.3 }}>
+                <span>{overviewCount.accuracyLine}</span>
+              </div>
+            )}
           </div>
         </div>
 
@@ -2252,7 +2286,7 @@ export default function App() {
               <div style={{ width: '100%', marginTop: '16px' }}>
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
                   <span style={{ fontSize: '0.72rem', fontWeight: 800, color: 'var(--text-dim)', textTransform: 'uppercase' }}>
-                    Top clusters prioritaires ({filteredClusters.length})
+                    {overviewCount.clusterHeading}
                   </span>
                   {isAuthorityUser && rejectedObservations.length > 0 && (
                     <button

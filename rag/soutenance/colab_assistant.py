@@ -24,13 +24,14 @@ DIMENSION = 1024
 API_HOST = "127.0.0.1"
 API_PORT = 8000
 
+# Noms réels du corpus, présents sur origin/feature/road-damage-rag.
 EXPECTED_DOCS = (
-    "ArticleOuargla_contenu_organise.txt",
-    "Cours_Pathologies_Entretien_Routes_Ouvrages_contenu_organise.txt",
-    "Distress_Identification_Manual_contenu_organise.txt",
-    "Manuel_identification_degradations_chaussees_flexibles_contenu_organise.txt",
-    "Pathologie_des_routes_contenu_organise.txt",
-    "RDD2022_contenu_organise.txt",
+    "Arya_2024_RDD2022_Geoscience_Data_Journal (2).txt",
+    "Benjelloun_Cours_Routes_EPA_Agadir_Chapitres_1-2 (2).txt",
+    "Cours_Pathologies_et_entretien_des_routes_et_ouvrages_dart_4geniecivil (2).txt",
+    "FHWA_HRT-13-092_Distress_Identification_Manual_LTPP (2).txt",
+    "MTQ_Manuel_identification_degradations_chaussees_flexibles_PROJET (2).txt",
+    "Pathologie_des_routes_clean (3).txt",
 )
 
 DEMO_QUESTIONS = (
@@ -552,6 +553,9 @@ def prepare(root, check_only=False, embedding_model=None, llm_pair=None):
 
 
 def running_in_notebook():
+    # Colab always launches the cell with "-f <kernel.json>".
+    if "-f" in sys.argv:
+        return True
     try:
         from IPython import get_ipython
     except Exception:

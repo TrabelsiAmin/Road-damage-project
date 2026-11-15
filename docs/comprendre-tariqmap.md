@@ -53,14 +53,14 @@ Sur un écran large, la carte, l’anneau avec les barres, et l’assistant sont
 
 Les quatre cartes sont :
 
-- **Total des incidents** — signalements non rejetés dans la vue ;
+- **Total des incidents** — signalements TariqMap non rejetés dans la vue, plus un compte par rapport de presse stocké ;
 - **Routes concernées** — voies approximatives, déduites des coordonnées ;
 - **Zones concernées** — gouvernorats déduits des coordonnées ;
 - **Dernier incident recensé**.
 
 Les routes et les gouvernorats ne sont pas des champs enregistrés. L’écran le dit : le gouvernorat est déduit du point le plus proche.
 
-L’anneau s’intitule « Répartition par classe » dès qu’un code de classe est présent. Les parts portent les codes, pas un nom de dégradation. S’il n’y a aucun code connu, l’anneau passe à la priorité. Le centre de l’anneau reprend le total et le mot « incidents ».
+L’anneau s’intitule « Répartition par classe » dès qu’un code de classe est présent. Les parts portent les codes, pas un nom de dégradation. S’il n’y a aucun code connu, l’anneau passe à la priorité. Le centre de l’anneau reste sur le compte TariqMap, 21 pour le visiteur, et le mot affiché est « signalements ».
 
 Les barres s’intitulent « Incidents par gouvernorat ». Au-delà de six gouvernorats, les suivants sont regroupés sous « Autres gouvernorats ».
 
@@ -82,9 +82,9 @@ Le visiteur ne voit pas les dossiers un par un. Le tableau des derniers incident
 
 Ce que montrent les quatre cartes, dans le code actuel :
 
-- **Visiteur.** Le total officiel a échoué. La première carte reprend le total du catalogue visible, donc 21, avec la phrase : « Signalements réels non rejetés du catalogue visible. Le total public officiel reste indisponible. » Les cartes des routes et des zones sont déduites des centres de mailles.
-- **Compte connecté, lignes chargées.** Les lignes de démonstration sont exclues par défaut. La case « Inclure enregistrements démo » existe sur la barre de filtres des autres vues, pas sur l’accueil, et elle part décochée. La première carte compte les signalements non rejetés de ce filtre. Tant qu’aucune recherche et aucun filtre ne réduisent la vue, ce total ne descend pas sous le compte public : si le nombre chargé était plus petit que 21, la carte afficherait 21. Les 21 signalements localisés font partie des lignes réelles non rejetées, donc le compte chargé n’est pas remplacé par 21. Les derniers incidents de ce compte sont listés. Une recherche ou un filtre peut montrer une part plus petite, et dans ce cas le plancher de 21 ne s’applique plus.
-- **Compte connecté, chargement des lignes échoué.** Si les mailles du catalogue sont déjà là, les cartes reprennent ce total connu, 21, et le tableau dit « Liste détaillée non chargée ».
+- **Visiteur.** Le total officiel a échoué. La première carte affiche 27 : 21 signalements TariqMap non rejetés du catalogue visible, plus 6 rapports de presse. Chaque rapport stocké compte une fois, pas chaque rue. Le détail dit : « 21 signalements TariqMap + 6 rapports publics ». La phrase reste : « Signalements réels non rejetés du catalogue visible. Le total public officiel reste indisponible. » Les cartes des routes et des zones sont déduites des centres de mailles.
+- **Compte connecté, lignes chargées.** Les lignes de démonstration sont exclues par défaut. La case « Inclure enregistrements démo » existe sur la barre de filtres des autres vues, pas sur l’accueil, et elle part décochée. La première carte additionne les six rapports publics au compte TariqMap de la vue. Ce compte TariqMap est celui des signalements non rejetés du filtre. Tant qu’aucune recherche et aucun filtre ne réduisent la vue, il ne descend pas sous le compte public : si le nombre chargé était plus petit que 21, ce compte resterait 21 et la carte afficherait 27. Les 21 signalements localisés font partie des lignes réelles non rejetées, donc le compte TariqMap chargé n’est pas remplacé par 21. Les derniers incidents de ce compte sont listés. Une recherche ou un filtre peut montrer une part TariqMap plus petite, et dans ce cas le plancher de 21 ne s’applique plus. Les six rapports restent ajoutés.
+- **Compte connecté, chargement des lignes échoué.** Si les mailles du catalogue sont déjà là, la première carte affiche 27, soit ce total connu de 21 plus les six rapports, et le tableau dit « Liste détaillée non chargée ».
 
 La carte du compte connecté, sur l’onglet Cartographie, utilise les agrégats du serveur à 20 m, pour les observations qui ont un point. La couleur suit la priorité, la taille suit le nombre de signalements. La légende HTTP 404 est celle du visiteur.
 
@@ -94,7 +94,7 @@ Le bouton d’export du visiteur reste inactif tant que les fonctions publiques 
 
 Six rapports de presse sont ajoutés à part. Ils sont dans le fichier `dashboard/src/data/publicRoadReports.js`. Ils ne viennent pas de Supabase. Ils ne viennent pas d’une capture du téléphone. Ils n’ont pas de code D00, D10, D20 ou D40. Aucune photo n’a été ajoutée avec eux.
 
-Le bloc s’intitule « Signalements publics ». Le texte sous le titre dit : « Articles et communiqués ouverts sur le web. Ils restent séparés du catalogue TariqMap et ne changent pas les totaux. » Chaque ligne porte le lieu, une citation, la date de l’article, la mention « Rapport public, pas une capture TariqMap. », et le lien de la source. Quand un point existe, le bouton « Voir sur la carte » l’ouvre.
+Le bloc s’intitule « Signalements publics ». Le texte sous le titre dit : « Articles et communiqués ouverts sur le web. Chaque rapport compte une fois dans le total des incidents et reste hors du catalogue TariqMap. » Chaque ligne porte le lieu, une citation, la date de l’article, la mention « Rapport public, pas une capture TariqMap. », et le lien de la source. Quand un point existe, le bouton « Voir sur la carte » l’ouvre.
 
 Sur la carte de l’accueil et sur l’onglet Cartographie, ces rapports sont des losanges, à part des mailles et des agrégats. Aucune case des couches SIG ne les retire. La légende dit « Signalement public (position approximative) ». L’infobulle commence par « Rapport public ». Le point dessiné est un centroïde de lieu renvoyé par Nominatim le 15 novembre 2026. Ce n’est pas un GPS mesuré, et ce n’est pas le point du dégât.
 
@@ -110,7 +110,7 @@ Deux rapports restent dans la liste, parce que la source ne donne pas de coordon
 - **Périmètre municipal de Sfax**, axes principaux et secondaires, dépêche du 27 août 2026. La source ne donne ni rue ni coordonnées. Le centre de Sfax n’est pas utilisé comme point. Source : [Directinfo (avec TAP)](https://directinfo.webmanagercenter.com/2026/08/27/sfax-la-municipalite-lance-des-travaux-pour-reparer-les-nids-de-poule-et-fissures/).
 - **Autoroute A1**, PK 69 – PK 84, axe Sousse – Tunis. La source donne des points kilométriques, pas des coordonnées. Source : [Tunisie Numérique, droit de réponse de Tunisie Autoroutes](https://www.tunisienumerique.com/droit-de-reponse-de-tunisie-autoroutes/).
 
-Ces six rapports restent hors des **21** signalements, des **15** mailles, des **31** lignes réelles et des **67** du catalogue. La carte « Total des incidents » ne les additionne pas au compte TariqMap. Le visiteur voit 21. Le compte connecté voit les lignes réelles non rejetées de la vue, avec le plancher de 21 tant que la vue n’est pas filtrée. L’écran n’affiche pas 21 plus 6.
+Ces six rapports restent hors des **21** signalements, des **15** mailles, des **31** lignes réelles et des **67** du catalogue. La carte « Total des incidents » les additionne à ce compte TariqMap, un enregistrement par rapport stocké. Le visiteur voit 27. Le compte connecté voit les lignes réelles non rejetées de la vue, et le même ajout de 6 à son total TariqMap, avec le plancher de 21 sur cette part tant que la vue n’est pas filtrée. L’écran affiche 21 plus 6 pour le visiteur.
 
 ## Ce que l’écran ne fabrique pas
 
@@ -292,6 +292,6 @@ La vignette publique, si elle a été produite, est la seule image prévue pour 
 
 1. Le téléphone crée l’observation. La photo est confirmée, le modèle `road_damage` pose un code parmi D00, D10, D20 et D40, la ligne est écrite dans SQLite, puis **Sync** l’envoie à Supabase avec le lieu, les détections et, selon les réglages, la photo et une vignette floutée. L’identifiant d’appareil ne part pas.
 
-2. Le tableau de bord lit Supabase. Le visiteur voit le total public de substitution, 21 signalements en 15 mailles, et pas les dossiers. Les six rapports de presse restent à côté de ce compte : ils ne sont pas dans ce 21, et ils ne sont pas des dossiers. Le compte connecté voit au moins ce compte public tant que la vue n’est pas filtrée, et il voit les lignes. Les deux fonctions officielles `public_damage_summary` et `public_map_cells` répondent encore 404 : le total officiel est absent. Le coût reste Indisponible, le délai moyen reste Non calculé quand il n’a pas été mesuré, et 128 ne revient pas.
+2. Le tableau de bord lit Supabase. Le visiteur voit 27 au total des incidents : 21 signalements TariqMap non rejetés en 15 mailles, plus 6 rapports de presse. Il ne voit pas les dossiers. Ces six rapports ne sont pas dans ce 21, et ils ne sont pas des dossiers. Le compte connecté voit son total TariqMap plus ces 6, donc au moins 27 tant que la vue n’est pas filtrée, et il voit les lignes. Les deux fonctions officielles `public_damage_summary` et `public_map_cells` répondent encore 404 : le total officiel est absent. Le coût reste Indisponible, le délai moyen reste Non calculé quand il n’a pas été mesuré, et 128 ne revient pas.
 
 3. L’assistant explique la pathologie à partir des six manuels, via Qwen2.5-7B-Instruct en 4 bits, BGE-M3 et l’index FAISS de 431 vecteurs. **Observation retenue** et **Demander une recommandation** appellent la même API que la question libre. Ils n’envoient ni la photo, ni les coordonnées exactes, ni l’identifiant d’appareil. L’assistant ne lit pas la photo qui vient d’être prise. Si on lui demande le prix d’une tonne d’enrobé, il doit refuser, parce que ce prix n’est pas dans les manuels.

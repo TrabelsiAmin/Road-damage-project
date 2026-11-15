@@ -1,26 +1,46 @@
 import { describe, it, expect } from 'vitest';
 import {
   COLAB_DEMONSTRATION,
-  RAG_ASK_PATH,
-  RAG_HEALTH_PATH,
-  RAG_REMOTE_NOTE,
+  RAG_CONNECT_NOTE,
+  RAG_URL_STORAGE_KEY,
   askRag,
   checkRagHealth,
   buildMapRagPopupHtml,
   buildTechnicalQuestion,
   clampK,
   excerpt,
+  findColabDemonstration,
   isRagConfigured,
+  normalizeRagBase,
   observationForRecommendation,
   parseRagResponse,
   questionHasForbiddenContent,
-  shouldShowColabDemonstration,
-  checkThisMachineRag,
-  findColabDemonstration,
-  RAG_LOCAL_ASK_URL,
-  RAG_LOCAL_HEALTH_URL,
+  ragAskUrl,
+  ragHealthUrl,
+  readStoredRagBase,
+  writeStoredRagBase,
 } from './ragClient.js';
 import { ragDevProxy, ragProxyTarget } from '../../vite.ragProxy.js';
+
+const BASE = 'https://demo.trycloudflare.com';
+
+function memoryStorage(initial) {
+  const data = new Map(initial ? Object.entries(initial) : []);
+  return {
+    getItem(key) { return data.has(key) ? data.get(key) : null; },
+    setItem(key, value) { data.set(key, String(value)); },
+    removeItem(key) { data.delete(key); },
+  };
+}
+
+function liveFetch(onAsk) {
+  return async (url, init) => {
+    if (String(url).endsWith('/health')) {
+      return { ok: true, status: 200, json: async () => ({ status: 'ok', vectors: 12 }) };
+    }
+    return onAsk(url, init);
+  };
+}
 
 const LEAKY = {
   id: 'obs-1',
@@ -194,7 +214,6 @@ describe('RAG response parsing and errors', () => {
     let called = false;
     const result = await askRag({
       question: 'Qu\'est-ce qu\'une ornière ?',
-      configured: false,
       fetchImpl: () => {
         called = true;
       },
@@ -202,22 +221,24 @@ describe('RAG response parsing and errors', () => {
     expect(called).toBe(false);
     expect(result.ok).toBe(false);
     expect(result.error.code).toBe('not_configured');
-    expect(result.error.message).toMatch(/VITE_RAG_API_URL/);
+    expect(result.error.message).toBe(RAG_CONNECT_NOTE.fr);
+    expect(result.error.message).toMatch(/URL_DASHBOARD/);
+    expect(result.answer).toBeUndefined();
     expect(isRagConfigured({ VITE_RAG_API_URL: '' })).toBe(false);
     expect(isRagConfigured({ VITE_RAG_API_URL: 'https://session.ngrok-free.app' })).toBe(true);
   });
 
-  it('posts only question and k to the same-origin proxy', async () => {
+  it('checks /health then posts question and k to {base}/ask', async () => {
     const calls = [];
     const result = await askRag({
       question: '  Causes usuelles d\'un nid-de-poule ?  ',
       k: 5,
+      base: `${BASE}/`,
       latitude: 36.8,
       longitude: 10.18,
       device_id: 'should-not-send',
       photo: 'https://cdn.example.com/a.jpg',
-      configured: true,
-      fetchImpl: async (url, init) => {
+      fetchImpl: liveFetch(async (url, init) => {
         calls.push({ url, init });
         return {
           ok: true,
@@ -226,20 +247,38 @@ describe('RAG response parsing and errors', () => {
             sources: [{ source: 'Pathologie_des_routes.txt', score: 0.71, text: 'Désagrégation localisée de l\'enrobé.' }],
           }),
         };
-      },
+      }),
     });
 
     expect(result.ok).toBe(true);
     expect(calls).toHaveLength(1);
-    expect(calls[0].url).toBe(RAG_ASK_PATH);
-    expect(calls[0].url).not.toMatch(/ngrok/i);
+    expect(calls[0].url).toBe(ragAskUrl(BASE));
+    expect(calls[0].url).toBe(`${BASE}/ask`);
     expect(calls[0].init.method).toBe('POST');
     expect(calls[0].init.headers['ngrok-skip-browser-warning']).toBe('true');
     const body = JSON.parse(calls[0].init.body);
     expect(Object.keys(body).sort()).toEqual(['k', 'question']);
     expect(body.k).toBe(5);
     expect(body.question).toBe('Causes usuelles d\'un nid-de-poule ?');
-    expect(calls[0].init.body).not.toMatch(/latitude|longitude|device_id|photo|https?:/i);
+    expect(calls[0].init.body).not.toMatch(/latitude|longitude|device_id|photo/i);
+  });
+
+  it('does not post /ask when /health fails and does not invent an answer', async () => {
+    const calls = [];
+    const result = await askRag({
+      question: COLAB_DEMONSTRATION[0].question,
+      base: BASE,
+      fetchImpl: async (url) => {
+        calls.push(url);
+        return { ok: false, status: 503, json: async () => ({}) };
+      },
+    });
+    expect(calls).toEqual([ragHealthUrl(BASE)]);
+    expect(result.ok).toBe(false);
+    expect(result.error.code).toBe('unavailable');
+    expect(result.error.message).toMatch(/URL_DASHBOARD/);
+    expect(result.answer).toBeUndefined();
+    expect(JSON.stringify(result)).not.toContain(COLAB_DEMONSTRATION[0].answer.slice(0, 40));
   });
 
   it('blocks a question that itself carries a link or coordinates', async () => {
@@ -249,12 +288,12 @@ describe('RAG response parsing and errors', () => {
     };
     const linked = await askRag({
       question: 'Voir https://cdn.example.com/photo.jpg',
-      configured: true,
+      base: BASE,
       fetchImpl,
     });
     const coords = await askRag({
       question: 'Dégradation au point 36.8065, 10.1815',
-      configured: true,
+      base: BASE,
       fetchImpl,
     });
     expect(called).toBe(false);
@@ -264,51 +303,53 @@ describe('RAG response parsing and errors', () => {
 
   it('maps timeout, network, and HTTP failures', async () => {
     const timeout = await askRag({
-      question: 'Qu\'est-ce que le faïençage ?',
+      question: 'Quelles sont les causes usuelles d\'une fissure ?',
       k: 99,
-      configured: true,
+      base: BASE,
       timeoutMs: 20,
-      fetchImpl: (_url, init) => new Promise((_resolve, reject) => {
+      fetchImpl: liveFetch((_url, init) => new Promise((_resolve, reject) => {
         init.signal.addEventListener('abort', () => {
           const err = new Error('aborted');
           err.name = 'AbortError';
           reject(err);
         });
-      }),
+      })),
     });
     expect(timeout.error.code).toBe('timeout');
+    expect(timeout.error.message).toMatch(/URL_DASHBOARD/);
 
     const network = await askRag({
-      question: 'Qu\'est-ce que le faïençage ?',
-      configured: true,
-      fetchImpl: () => {
+      question: 'Quelles sont les causes usuelles d\'une fissure ?',
+      base: BASE,
+      fetchImpl: liveFetch(() => {
         throw new TypeError('Failed to fetch');
-      },
+      }),
     });
     expect(network.error.code).toBe('network');
+    expect(network.error.message).toMatch(/URL_DASHBOARD/);
 
     const down = await askRag({
-      question: 'Qu\'est-ce que le faïençage ?',
-      configured: true,
-      fetchImpl: async () => ({ ok: false, status: 502, json: async () => ({}) }),
+      question: 'Quelles sont les causes usuelles d\'une fissure ?',
+      base: BASE,
+      fetchImpl: liveFetch(async () => ({ ok: false, status: 502, json: async () => ({}) })),
     });
     expect(down.error.code).toBe('http_error');
     expect(down.error.status).toBe(502);
-    expect(down.error.message).toMatch(/ne répond pas|Colab|GPU/i);
+    expect(down.error.message).toMatch(/ne répond pas|Colab|URL_DASHBOARD/i);
 
     const cancelled = new AbortController();
     cancelled.abort();
     const aborted = await askRag({
-      question: 'Qu\'est-ce que le faïençage ?',
-      configured: true,
+      question: 'Quelles sont les causes usuelles d\'une fissure ?',
+      base: BASE,
       signal: cancelled.signal,
-      fetchImpl: (_url, init) => new Promise((_resolve, reject) => {
+      fetchImpl: liveFetch((_url, init) => new Promise((_resolve, reject) => {
         init.signal.addEventListener('abort', () => {
           const err = new Error('aborted');
           err.name = 'AbortError';
           reject(err);
         });
-      }),
+      })),
     });
     expect(aborted.error.code).toBe('aborted');
   });
@@ -323,10 +364,9 @@ describe('RAG response parsing and errors', () => {
 });
 
 describe('RAG health', () => {
-  it('stays unavailable without a configured address and does not call the network', async () => {
+  it('stays unavailable without a public address and does not call the network', async () => {
     let called = false;
     const result = await checkRagHealth({
-      configured: false,
       fetchImpl: () => {
         called = true;
       },
@@ -334,49 +374,49 @@ describe('RAG health', () => {
     expect(called).toBe(false);
     expect(result.ok).toBe(false);
     expect(result.error.code).toBe('not_configured');
+    expect(result.error.message).toMatch(/URL_DASHBOARD/);
   });
 
-  it('accepts /health and falls back to the notebook root', async () => {
+  it('accepts {base}/health and falls back to the tunnel root', async () => {
     const calls = [];
     const health = await checkRagHealth({
-      configured: true,
+      base: `URL_DASHBOARD=${BASE}/ask`,
       fetchImpl: async (url) => {
         calls.push(url);
         return { ok: true, status: 200, json: async () => ({ status: 'ok', vectors: 12 }) };
       },
     });
     expect(health.ok).toBe(true);
-    expect(calls).toEqual([RAG_HEALTH_PATH]);
+    expect(calls).toEqual([ragHealthUrl(BASE)]);
 
     const fallbackCalls = [];
     const fallback = await checkRagHealth({
-      configured: true,
+      base: BASE,
       fetchImpl: async (url) => {
         fallbackCalls.push(url);
-        if (url === RAG_HEALTH_PATH) return { ok: false, status: 404, json: async () => ({}) };
+        if (url === ragHealthUrl(BASE)) return { ok: false, status: 404, json: async () => ({}) };
         return { ok: true, status: 200, json: async () => ({ status: 'ok' }) };
       },
     });
     expect(fallback.ok).toBe(true);
-    expect(fallbackCalls).toEqual([RAG_HEALTH_PATH, '/rag/']);
+    expect(fallbackCalls).toEqual([ragHealthUrl(BASE), `${BASE}/`]);
   });
 
   it('does not report the assistant ready when the probe fails', async () => {
     const down = await checkRagHealth({
-      configured: true,
+      base: BASE,
       fetchImpl: async () => ({ ok: false, status: 503, json: async () => ({}) }),
     });
     expect(down.ok).toBe(false);
     expect(down.error.code).toBe('unavailable');
-    expect(down.error.message).toBe(RAG_REMOTE_NOTE.fr);
-    expect(down.error.message).toMatch(/127\.0\.0\.1:8000/);
-    expect(down.error.message).not.toMatch(/Aucune réponse ne sera affichée/);
+    expect(down.error.message).toBe(RAG_CONNECT_NOTE.fr);
+    expect(down.error.message).toMatch(/URL_DASHBOARD/);
     expect(down.answer).toBeUndefined();
   });
 });
 
 describe('recorded Colab demonstration', () => {
-  it('keeps the five recorded answers, including the price refusal, off the live path', () => {
+  it('keeps the five recorded answers, including the price refusal, as examples only', () => {
     expect(COLAB_DEMONSTRATION).toHaveLength(5);
     expect(COLAB_DEMONSTRATION.map((item) => item.score.toFixed(4))).toEqual([
       '0.7111',
@@ -394,16 +434,11 @@ describe('recorded Colab demonstration', () => {
     );
     expect(COLAB_DEMONSTRATION[4].answer).not.toMatch(/\d/);
     expect(COLAB_DEMONSTRATION.filter((item) => item.refusal)).toHaveLength(1);
-
-    expect(shouldShowColabDemonstration({ configured: true, backend: 'down' })).toBe(true);
-    expect(shouldShowColabDemonstration({ configured: true, backend: 'up' })).toBe(false);
-    expect(shouldShowColabDemonstration({ configured: true, backend: 'checking' })).toBe(false);
-    expect(shouldShowColabDemonstration({ configured: false, backend: 'down' })).toBe(false);
-    expect(RAG_REMOTE_NOTE.fr).toMatch(/autre ordinateur/);
-    expect(RAG_REMOTE_NOTE.en).toMatch(/another computer/);
+    expect(RAG_CONNECT_NOTE.fr).toMatch(/URL_DASHBOARD/);
+    expect(RAG_CONNECT_NOTE.en).toMatch(/URL_DASHBOARD/);
   });
 
-  it('fills a recorded question and does not invent one', () => {
+  it('recognizes an example question and does not invent one', () => {
     const match = findColabDemonstration('  Quels sont les principaux types de dégradations des chaussées ?  ');
     expect(match.score).toBeCloseTo(0.7111);
     expect(match.source).toContain('Cours_Pathologies');
@@ -413,43 +448,17 @@ describe('recorded Colab demonstration', () => {
   });
 });
 
-describe('health on this machine', () => {
-  it('posts to the local API only after /health on this machine succeeds', async () => {
-    const calls = [];
-    const remote = await checkThisMachineRag({
-      env: { VITE_RAG_API_URL: 'https://session.ngrok-free.app' },
-      fetchImpl: async (url) => {
-        calls.push(url);
-        return { ok: false, status: 0, json: async () => ({}) };
-      },
-    });
-    expect(calls).toEqual([RAG_LOCAL_HEALTH_URL]);
-    expect(remote.ok).toBe(false);
-    expect(remote.error.message).toBe(RAG_REMOTE_NOTE.fr);
-
-    const ready = await checkThisMachineRag({
-      env: { VITE_RAG_API_URL: 'https://session.ngrok-free.app' },
-      fetchImpl: async (url) => {
-        expect(url).toBe(RAG_LOCAL_HEALTH_URL);
-        return { ok: true, status: 200, json: async () => ({ status: 'ok' }) };
-      },
-    });
-    expect(ready.ok).toBe(true);
-    expect(ready.path).toBe(RAG_LOCAL_ASK_URL);
-  });
-
-  it('uses the same-origin proxy when the configured API is this machine', async () => {
-    const calls = [];
-    const health = await checkThisMachineRag({
-      env: { VITE_RAG_API_URL: 'http://127.0.0.1:8000' },
-      fetchImpl: async (url) => {
-        calls.push(url);
-        return { ok: true, status: 200, json: async () => ({ status: 'ok' }) };
-      },
-    });
-    expect(health.ok).toBe(true);
-    expect(health.path).toBe(RAG_ASK_PATH);
-    expect(calls).toEqual([RAG_HEALTH_PATH]);
+describe('stored Colab address', () => {
+  it('saves the public URL under tariqmap_rag_url and strips the printed prefix', () => {
+    const store = memoryStorage();
+    const saved = writeStoredRagBase('URL_DASHBOARD=https://abc.trycloudflare.com/ask', store);
+    expect(saved).toBe('https://abc.trycloudflare.com');
+    expect(store.getItem(RAG_URL_STORAGE_KEY)).toBe('https://abc.trycloudflare.com');
+    expect(readStoredRagBase(store)).toBe('https://abc.trycloudflare.com');
+    expect(normalizeRagBase('https://abc.trycloudflare.com/health')).toBe('https://abc.trycloudflare.com');
+    expect(normalizeRagBase('pas une url')).toBe('');
+    expect(writeStoredRagBase('', store)).toBe('');
+    expect(store.getItem(RAG_URL_STORAGE_KEY)).toBeNull();
   });
 });
 

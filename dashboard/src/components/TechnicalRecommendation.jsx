@@ -3,23 +3,27 @@ import { BookOpen } from 'lucide-react';
 import { DAMAGE_CLASSES, STATUS_LABELS } from '../constants';
 import {
   COLAB_DEMONSTRATION,
-  RAG_ASK_PATH,
+  RAG_CONNECT_NOTE,
   RAG_K_DEFAULT,
   RAG_K_MAX,
   RAG_K_MIN,
-  RAG_REMOTE_NOTE,
   askRag,
   buildTechnicalQuestion,
-  checkThisMachineRag,
-  findColabDemonstration,
+  checkRagHealth,
+  readStoredRagBase,
   sourceFileName,
+  writeStoredRagBase,
 } from '../utils/ragClient';
 
 const COPY = {
   fr: {
     title: 'Recommandation technique',
     intro: 'L\'assistant répond à partir des manuels de pathologie routière. Il ne lit pas les observations en direct et ne reçoit ni photo, ni coordonnée, ni identifiant d\'appareil.',
-    unavailable: 'L\'assistant est indisponible : aucune adresse d\'API n\'est configurée (VITE_RAG_API_URL). Le notebook Colab n\'est pas lancé depuis ce tableau de bord.',
+    urlLabel: 'Adresse de l\'API Colab',
+    urlPlaceholder: 'URL_DASHBOARD=https://….trycloudflare.com',
+    saveUrl: 'Enregistrer',
+    needUrl: RAG_CONNECT_NOTE.fr,
+    badUrl: 'Cette adresse n\'est pas une URL http(s). Collez la ligne URL_DASHBOARD=https://… telle qu\'elle est imprimée.',
     selected: 'Observation retenue',
     none: 'Choisissez une observation dans la file prioritaire ou dans l\'infobulle d\'un agrégat sur la carte.',
     askSelection: 'Demander une recommandation',
@@ -28,24 +32,17 @@ const COPY = {
     passages: 'Passages',
     passagesHelp: 'Nombre d\'extraits de manuels transmis au modèle.',
     submit: 'Envoyer',
-    session: 'Session Colab',
-    sessionNote: 'Réponse enregistrée de cette session Colab. Pas un appel en direct.',
-    notRecorded: 'Cette question ne figure pas dans la session Colab enregistrée. Aucune réponse n\'est inventée.',
-    checking: 'Vérification de l\'assistant…',
-    ready: 'L\'assistant est prêt.',
-    down: RAG_REMOTE_NOTE.fr,
-    demoKicker: 'Démonstration Colab',
-    demoCaption: 'Réponses enregistrées dans le notebook Colab. Pas une requête en direct.',
-    demoQuestion: 'Question',
-    demoAnswer: 'Réponse',
-    topSource: 'Source principale',
-    refusal: 'Refus',
+    examples: 'Exemples de questions',
+    examplesHelp: 'Un clic remplit la question. La réponse vient du modèle Colab une fois l\'adresse enregistrée.',
+    checking: 'Vérification de l\'adresse Colab…',
+    ready: 'Connecté. Vous pouvez envoyer une question au modèle Colab.',
     loading: 'Recherche dans les manuels et rédaction de la réponse… Cela peut prendre une minute.',
     empty: 'Aucune réponse à afficher. Les manuels ne sont interrogés qu\'à votre demande.',
     sent: 'Question envoyée',
     answer: 'Réponse',
     sources: 'Sources',
     noSources: 'Aucun passage n\'a été renvoyé avec cette réponse.',
+    topSource: 'Source principale',
     score: 'Score',
     disclaimer: 'Réponse rédigée par un modèle à partir des manuels. Vérifiez les sources avant toute décision technique.',
     unclassified: 'Non classé',
@@ -55,7 +52,11 @@ const COPY = {
   en: {
     title: 'Technical recommendation',
     intro: 'The assistant answers from road-pathology manuals. It does not read live observations and is not sent photos, coordinates, or device identifiers.',
-    unavailable: 'The assistant is unavailable: no API address is configured (VITE_RAG_API_URL). The Colab notebook is not running from this dashboard.',
+    urlLabel: 'Colab API address',
+    urlPlaceholder: 'URL_DASHBOARD=https://….trycloudflare.com',
+    saveUrl: 'Save',
+    needUrl: RAG_CONNECT_NOTE.en,
+    badUrl: 'This is not an http(s) URL. Paste the line URL_DASHBOARD=https://… as printed.',
     selected: 'Selected observation',
     none: 'Choose an observation in the priority list or in a map cluster popup.',
     askSelection: 'Ask for a recommendation',
@@ -64,24 +65,17 @@ const COPY = {
     passages: 'Passages',
     passagesHelp: 'Number of manual excerpts sent to the model.',
     submit: 'Send',
-    session: 'Colab session',
-    sessionNote: 'Answer recorded from that Colab session. Not a live call.',
-    notRecorded: 'This question is not in the recorded Colab session. No answer is invented.',
-    checking: 'Checking the assistant…',
-    ready: 'The assistant is ready.',
-    down: RAG_REMOTE_NOTE.en,
-    demoKicker: 'Colab demonstration',
-    demoCaption: 'Answers recorded in the Colab notebook. Not a live query.',
-    demoQuestion: 'Question',
-    demoAnswer: 'Answer',
-    topSource: 'Top source',
-    refusal: 'Refusal',
+    examples: 'Example questions',
+    examplesHelp: 'A click fills the question. The answer comes from the Colab model once the address is saved.',
+    checking: 'Checking the Colab address…',
+    ready: 'Connected. You can send a question to the Colab model.',
     loading: 'Searching the manuals and drafting an answer… This can take a minute.',
     empty: 'No answer yet. The manuals are queried only when you ask.',
     sent: 'Question sent',
     answer: 'Answer',
     sources: 'Sources',
     noSources: 'No passage was returned with this answer.',
+    topSource: 'Top source',
     score: 'Score',
     disclaimer: 'The answer is generated from the manuals. Check the sources before a technical decision.',
     unclassified: 'Unclassified',
@@ -101,70 +95,69 @@ function selectionLine(selection, lang, copy) {
   return `${classText} · ${priority} · ${status}`;
 }
 
-function recordedResult(item) {
-  return {
-    recorded: true,
-    answer: item.answer,
-    sources: [{ source: item.source, score: item.score, text: '', excerpt: '' }],
-  };
-}
-
 export function TechnicalRecommendation({ lang = 'fr', selection = null, request = null }) {
   const copy = COPY[lang] || COPY.fr;
   const [k, setK] = useState(RAG_K_DEFAULT);
+  const [urlDraft, setUrlDraft] = useState(() => readStoredRagBase());
+  const [base, setBase] = useState(() => readStoredRagBase());
   const [draft, setDraft] = useState('');
   const [phase, setPhase] = useState('idle');
   const [asked, setAsked] = useState('');
   const [result, setResult] = useState(null);
   const [error, setError] = useState(null);
-  const [backend, setBackend] = useState('checking');
+  const [backend, setBackend] = useState(() => (readStoredRagBase() ? 'checking' : 'down'));
   const runId = useRef(0);
   const abortRef = useRef(null);
   const kRef = useRef(k);
-  const livePathRef = useRef(RAG_ASK_PATH);
-  const backendRef = useRef(backend);
+  const baseRef = useRef(base);
   kRef.current = k;
-  backendRef.current = backend;
+  baseRef.current = base;
 
   useEffect(() => {
+    const root = base;
+    if (!root) {
+      setBackend('down');
+      return undefined;
+    }
     let cancelled = false;
     setBackend('checking');
-    checkThisMachineRag().then((status) => {
-      if (cancelled) return;
-      if (status.ok) {
-        livePathRef.current = status.path || RAG_ASK_PATH;
-        setBackend('up');
-        return;
-      }
-      setBackend('down');
+    checkRagHealth({ base: root }).then((status) => {
+      if (!cancelled) setBackend(status.ok ? 'up' : 'down');
     });
     return () => {
       cancelled = true;
     };
-  }, []);
+  }, [base]);
 
-  function fillRecorded(item) {
-    abortRef.current?.abort();
-    runId.current += 1;
-    setDraft(item.question);
-    setAsked(item.question);
-    setError(null);
-    setResult(recordedResult(item));
-    setPhase('recorded');
+  function saveUrl(event) {
+    event?.preventDefault();
+    const next = writeStoredRagBase(urlDraft);
+    if (!next && String(urlDraft || '').trim()) {
+      setBase('');
+      setUrlDraft(String(urlDraft || '').trim());
+      setResult(null);
+      setError({ code: 'bad_url', message: copy.badUrl });
+      setPhase('error');
+      return;
+    }
+    setUrlDraft(next);
+    setBase(next);
+    if (phase === 'error' && error?.code === 'bad_url') {
+      setError(null);
+      setPhase('idle');
+    }
   }
 
   async function run(question, passages) {
     const trimmed = String(question || '').trim();
-    if (backendRef.current !== 'up') {
-      const recorded = findColabDemonstration(trimmed);
-      if (recorded) {
-        fillRecorded(recorded);
-        return;
-      }
-      setAsked(trimmed);
+    const root = baseRef.current;
+    setAsked(trimmed);
+    if (!root) {
+      abortRef.current?.abort();
+      runId.current += 1;
       setResult(null);
+      setError({ code: 'not_configured', message: copy.needUrl });
       setPhase(trimmed ? 'error' : 'idle');
-      setError(trimmed ? { code: 'not_recorded', message: copy.notRecorded } : null);
       return;
     }
     abortRef.current?.abort();
@@ -174,26 +167,21 @@ export function TechnicalRecommendation({ lang = 'fr', selection = null, request
     setPhase('loading');
     setError(null);
     setResult(null);
-    setAsked(trimmed);
     const response = await askRag({
       question: trimmed,
       k: passages,
+      base: root,
       signal: controller.signal,
-      configured: true,
-      path: livePathRef.current,
     });
     if (id !== runId.current || response.error?.code === 'aborted') return;
     if (response.ok) {
       setResult(response);
       setPhase('ready');
+      setBackend('up');
       return;
     }
-    const recorded = findColabDemonstration(trimmed);
-    setBackend('down');
-    backendRef.current = 'down';
-    if (recorded) {
-      fillRecorded(recorded);
-      return;
+    if (response.error?.code === 'unavailable' || response.error?.code === 'network' || response.error?.code === 'timeout') {
+      setBackend('down');
     }
     setError(response.error);
     setPhase('error');
@@ -213,9 +201,7 @@ export function TechnicalRecommendation({ lang = 'fr', selection = null, request
   }
 
   const summary = selectionLine(selection, lang, copy);
-  const showDemo = backend === 'down';
-  const live = backend === 'up';
-  const busy = backend === 'checking' || phase === 'loading';
+  const busy = phase === 'loading';
   const topSource = result?.sources?.[0];
 
   return (
@@ -228,15 +214,54 @@ export function TechnicalRecommendation({ lang = 'fr', selection = null, request
         </div>
       </div>
 
+      <form className="rag-url" onSubmit={saveUrl}>
+        <div className="rag-url-row">
+          <label htmlFor="rag-api-url">
+            <span>{copy.urlLabel}</span>
+            <input
+              id="rag-api-url"
+              name="tariqmap_rag_url"
+              type="text"
+              inputMode="url"
+              autoComplete="off"
+              spellCheck="false"
+              placeholder={copy.urlPlaceholder}
+              value={urlDraft}
+              data-assistant-url="true"
+              onChange={(event) => setUrlDraft(event.target.value)}
+            />
+          </label>
+          <button type="submit" className="btn btn-secondary">{copy.saveUrl}</button>
+        </div>
+      </form>
+
       {backend === 'checking' && (
         <p className="rag-loading" role="status">{copy.checking}</p>
       )}
-      {live && (
+      {backend === 'up' && (
         <p className="rag-loading" role="status">{copy.ready}</p>
       )}
-      {showDemo && (
-        <p className="rag-demo-note" role="status">{copy.down}</p>
+      {backend === 'down' && (
+        <p className="rag-connect" role="status">{copy.needUrl}</p>
       )}
+
+      <div className="rag-demo">
+        <p className="rag-kicker">{copy.examples}</p>
+        <p className="rag-demo-caption">{copy.examplesHelp}</p>
+        <ul className="rag-example-list">
+          {COLAB_DEMONSTRATION.map((item) => (
+            <li key={item.question}>
+              <button
+                type="button"
+                className="rag-example"
+                onClick={() => setDraft(item.question)}
+              >
+                {item.question}
+              </button>
+            </li>
+          ))}
+        </ul>
+      </div>
 
       <form className="rag-form" onSubmit={onSubmit}>
         <label htmlFor="rag-question">
@@ -250,25 +275,23 @@ export function TechnicalRecommendation({ lang = 'fr', selection = null, request
           />
         </label>
         <div className="rag-controls">
-          {live && (
-            <label htmlFor="rag-k">
-              <span>{copy.passages}</span>
-              <select
-                id="rag-k"
-                value={k}
-                disabled={phase === 'loading'}
-                onChange={(event) => setK(Number(event.target.value))}
-              >
-                {Array.from({ length: RAG_K_MAX - RAG_K_MIN + 1 }, (_, index) => RAG_K_MIN + index).map((value) => (
-                  <option key={value} value={value}>{value}</option>
-                ))}
-              </select>
-            </label>
-          )}
+          <label htmlFor="rag-k">
+            <span>{copy.passages}</span>
+            <select
+              id="rag-k"
+              value={k}
+              disabled={busy}
+              onChange={(event) => setK(Number(event.target.value))}
+            >
+              {Array.from({ length: RAG_K_MAX - RAG_K_MIN + 1 }, (_, index) => RAG_K_MIN + index).map((value) => (
+                <option key={value} value={value}>{value}</option>
+              ))}
+            </select>
+          </label>
           <button type="submit" className="btn btn-primary" disabled={busy}>
             {copy.submit}
           </button>
-          {live && <p className="rag-help">{copy.passagesHelp}</p>}
+          <p className="rag-help">{copy.passagesHelp}</p>
         </div>
       </form>
 
@@ -279,86 +302,40 @@ export function TechnicalRecommendation({ lang = 'fr', selection = null, request
       {phase === 'error' && error && (
         <p className="rag-error" role="alert">{error.message}</p>
       )}
-      {phase === 'idle' && live && <p className="rag-empty">{copy.empty}</p>}
+      {phase === 'idle' && backend === 'up' && <p className="rag-empty">{copy.empty}</p>}
 
-      {(phase === 'ready' || phase === 'recorded') && result && (
+      {phase === 'ready' && result && (
         <article className="rag-result" data-assistant-answer="true">
-          {result.recorded && (
-            <>
-              <p className="rag-kicker">{copy.session}</p>
-              <p className="rag-demo-caption">{copy.sessionNote}</p>
-            </>
-          )}
           <h3>{copy.answer}</h3>
           <p className="rag-answer">{result.answer}</p>
-          {result.recorded && topSource ? (
-            <p className="rag-demo-source" data-assistant-source="true">
+          {topSource && (
+            <p className="rag-top-source" data-assistant-source="true">
               <span>{copy.topSource}</span>
               <strong title={topSource.source}>{sourceFileName(topSource.source)}</strong>
-              <em>{copy.score} {topSource.score.toFixed(4)}</em>
+              <em>{copy.score} {Number(topSource.score).toFixed(4)}</em>
             </p>
-          ) : (
-            <>
-              <h3>{copy.sources} ({result.sources.length})</h3>
-              {result.sources.length === 0 ? (
-                <p className="rag-empty">{copy.noSources}</p>
-              ) : (
-                <ul className="rag-sources">
-                  {result.sources.map((source, index) => (
-                    <li key={`${source.source}-${index}`} className="rag-source">
-                      <div className="rag-source-top">
-                        <strong title={source.source}>{sourceFileName(source.source)}</strong>
-                        <span>{copy.score} {source.score.toFixed(3)}</span>
-                      </div>
-                      <div className="rag-score-bar" aria-hidden="true">
-                        <span style={{ width: `${Math.max(0, Math.min(source.score, 1)) * 100}%` }} />
-                      </div>
-                      <p className="rag-excerpt">{source.excerpt || source.text}</p>
-                    </li>
-                  ))}
-                </ul>
-              )}
-              <p className="rag-disclaimer">{copy.disclaimer}</p>
-            </>
           )}
-        </article>
-      )}
-
-      {showDemo && (
-        <div className="rag-demo">
-          <p className="rag-kicker">{copy.demoKicker}</p>
-          <p className="rag-demo-caption">{copy.demoCaption}</p>
-          <ol className="rag-demo-list">
-            {COLAB_DEMONSTRATION.map((item, index) => {
-              const selected = phase === 'recorded' && asked === item.question;
-              return (
-                <li key={item.question} className={item.refusal ? 'rag-demo-item is-refusal' : 'rag-demo-item'}>
-                  <p className="rag-demo-q">
-                    <span>{copy.demoQuestion} {index + 1}</span>
-                    <button
-                      type="button"
-                      className="rag-demo-pick"
-                      aria-pressed={selected}
-                      onClick={() => fillRecorded(item)}
-                    >
-                      {item.question}
-                    </button>
-                  </p>
-                  {item.refusal && <p className="rag-demo-refusal">{copy.refusal}</p>}
-                  <p className="rag-demo-a">
-                    <span>{copy.demoAnswer}</span>
-                    {item.answer}
-                  </p>
-                  <p className="rag-demo-source">
-                    <span>{copy.topSource}</span>
-                    <strong title={item.source}>{sourceFileName(item.source)}</strong>
-                    <em>{copy.score} {item.score.toFixed(4)}</em>
-                  </p>
+          <h3>{copy.sources} ({result.sources.length})</h3>
+          {result.sources.length === 0 ? (
+            <p className="rag-empty">{copy.noSources}</p>
+          ) : (
+            <ul className="rag-sources">
+              {result.sources.map((source, index) => (
+                <li key={`${source.source}-${index}`} className="rag-source">
+                  <div className="rag-source-top">
+                    <strong title={source.source}>{sourceFileName(source.source)}</strong>
+                    <span>{copy.score} {source.score.toFixed(4)}</span>
+                  </div>
+                  <div className="rag-score-bar" aria-hidden="true">
+                    <span style={{ width: `${Math.max(0, Math.min(source.score, 1)) * 100}%` }} />
+                  </div>
+                  <p className="rag-excerpt">{source.excerpt || source.text}</p>
                 </li>
-              );
-            })}
-          </ol>
-        </div>
+              ))}
+            </ul>
+          )}
+          <p className="rag-disclaimer">{copy.disclaimer}</p>
+        </article>
       )}
 
       <div className="rag-selected">
@@ -367,7 +344,7 @@ export function TechnicalRecommendation({ lang = 'fr', selection = null, request
         <button
           type="button"
           className="btn btn-secondary"
-          disabled={!live || !selection || phase === 'loading'}
+          disabled={!selection || busy}
           onClick={() => selection && run(buildTechnicalQuestion(selection, lang), k)}
         >
           {copy.askSelection}

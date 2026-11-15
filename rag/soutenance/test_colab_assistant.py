@@ -14,17 +14,22 @@ from colab_assistant import (
     EMBEDDING_MODEL,
     EXPECTED_DOCS,
     LLM_MODEL,
+    ORIGIN_REFLECT_RE,
     ask_body_accepts_question,
     build_prompt,
     chunk_text,
     clean_api_answer,
+    cloudflared_command,
     create_app,
+    extract_tunnel_url,
+    format_dashboard_url,
     http_json,
     index_is_reusable,
     main,
     missing_documents,
     prepare,
     signals_missing_information,
+    try_upload_documents,
 )
 
 
@@ -102,6 +107,9 @@ class AssistantPreparationTest(unittest.TestCase):
         self.assertNotIn("pyngrok", script)
         self.assertNotIn("ngrok.connect", script)
         self.assertNotIn("NGROK_AUTH_TOKEN", script)
+        self.assertIn("URL_DASHBOARD=", script)
+        self.assertLess(script.index("start_api(app)"), script.index("open_public_tunnel()"))
+        self.assertIn("cloudflared tunnel --url http://127.0.0.1:8000", " ".join(cloudflared_command("cloudflared")))
 
     def test_ask_accepts_question_body_and_keeps_document_only_answers(self):
         seen = {}
@@ -193,6 +201,68 @@ class AssistantPreparationTest(unittest.TestCase):
         self.assertIn("HTTP 422", message)
         self.assertIn("question", message)
         self.assertIn("Field required", message)
+
+    def test_zero_missing_manuals_does_not_ask_for_an_upload(self):
+        output = io.StringIO()
+        with contextlib.redirect_stdout(output):
+            left = try_upload_documents(Path("/tmp/tariqmap-rag-no-upload"), [])
+        self.assertEqual(left, [])
+        text = output.getvalue()
+        self.assertIn("déjà", text)
+        self.assertNotIn("Il manque 0", text)
+        self.assertNotIn("Sélectionnez", text)
+        source = Path(__file__).with_name("colab_assistant.py").read_text(encoding="utf-8")
+        upload = source.split("def try_upload_documents", 1)[1].split("\ndef ", 1)[0]
+        self.assertLess(upload.index("if not pending"), upload.index("Il manque"))
+
+    def test_cors_reflects_the_dashboard_origin(self):
+        import re
+
+        from fastapi.testclient import TestClient
+
+        self.assertIsNotNone(re.fullmatch(ORIGIN_REFLECT_RE, "http://127.0.0.1:4317"))
+        self.assertIsNotNone(re.fullmatch(ORIGIN_REFLECT_RE, "https://random-name.trycloudflare.com"))
+        app = create_app(lambda query, k=5: [], lambda question, context: "ok", 1)
+        client = TestClient(app)
+        for origin in (
+            "http://127.0.0.1:4317",
+            "http://localhost:5173",
+            "https://random-name.trycloudflare.com",
+        ):
+            response = client.options(
+                "/ask",
+                headers={
+                    "Origin": origin,
+                    "Access-Control-Request-Method": "POST",
+                    "Access-Control-Request-Headers": "content-type",
+                },
+            )
+            self.assertEqual(response.status_code, 200, response.text)
+            self.assertEqual(response.headers.get("access-control-allow-origin"), origin)
+        posted = client.post(
+            "/ask",
+            json={"question": "fissure", "k": 5},
+            headers={"Origin": "http://127.0.0.1:4317"},
+        )
+        self.assertEqual(posted.status_code, 200, posted.text)
+        self.assertEqual(posted.headers.get("access-control-allow-origin"), "http://127.0.0.1:4317")
+
+    def test_public_url_line_comes_from_the_tunnel_output(self):
+        self.assertEqual(
+            format_dashboard_url("https://abc.trycloudflare.com"),
+            "URL_DASHBOARD=https://abc.trycloudflare.com",
+        )
+        self.assertEqual(
+            extract_tunnel_url("INF |  https://happy-road.trycloudflare.com  |"),
+            "https://happy-road.trycloudflare.com",
+        )
+        self.assertEqual(
+            extract_tunnel_url("your url is: https://pink-cat.loca.lt"),
+            "https://pink-cat.loca.lt",
+        )
+        self.assertIsNone(extract_tunnel_url("http://127.0.0.1:8000"))
+        command = cloudflared_command("/tmp/cloudflared")
+        self.assertEqual(command[1:4], ["tunnel", "--url", "http://127.0.0.1:8000"])
 
 
 if __name__ == "__main__":

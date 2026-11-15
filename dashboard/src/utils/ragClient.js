@@ -10,17 +10,19 @@ export const RAG_K_MIN = 1;
 export const RAG_K_MAX = 8;
 export const RAG_K_DEFAULT = 5;
 
+/** Public Colab tunnel URL, pasted from the line URL_DASHBOARD=https://… */
+export const RAG_URL_STORAGE_KEY = 'tariqmap_rag_url';
+
 /**
- * Shown only when this dashboard cannot reach the configured RAG URL.
- * The model answers in the Colab notebook on that machine. This computer
- * cannot call 127.0.0.1:8000 there. These strings are not a live response.
+ * Instruction shown when the public URL is empty or the call fails.
+ * This is not a live answer.
  */
-export const RAG_REMOTE_NOTE = {
-  fr: 'Le modèle répond dans le notebook Colab, sur la machine Colab. Ce tableau de bord est sur un autre ordinateur et ne peut pas appeler 127.0.0.1:8000 là-bas.',
-  en: 'The model answers in the Colab notebook, on the Colab machine. This dashboard is on another computer and cannot call 127.0.0.1:8000 there.',
+export const RAG_CONNECT_NOTE = {
+  fr: 'Collez l\'adresse publique imprimée par la cellule Colab, la ligne URL_DASHBOARD=https://… Tant que cette adresse est vide ou que l\'appel échoue, aucune réponse en direct n\'est affichée.',
+  en: 'Paste the public address printed by the Colab cell, the line URL_DASHBOARD=https://… While that address is empty or the call fails, no live answer is shown.',
 };
 
-/** Recorded Colab run. Not a live query from this dashboard. */
+/** Recorded Colab questions. Clicking one fills the box. It is not a live answer. */
 export const COLAB_DEMONSTRATION = [
   {
     question: 'Quels sont les principaux types de dégradations des chaussées ?',
@@ -59,35 +61,6 @@ export const COLAB_DEMONSTRATION = [
   },
 ];
 
-export function shouldShowColabDemonstration({ configured, backend } = {}) {
-  return Boolean(configured) && backend === 'down';
-}
-
-export const RAG_LOCAL_ORIGIN = 'http://127.0.0.1:8000';
-export const RAG_LOCAL_ASK_URL = `${RAG_LOCAL_ORIGIN}/ask`;
-export const RAG_LOCAL_HEALTH_URL = `${RAG_LOCAL_ORIGIN}/health`;
-
-export function ragApiOrigin(env = import.meta.env) {
-  const value = String(env?.VITE_RAG_API_URL ?? '').trim();
-  if (!value) return RAG_LOCAL_ORIGIN;
-  try {
-    const url = new URL(value);
-    if (url.protocol !== 'http:' && url.protocol !== 'https:') return RAG_LOCAL_ORIGIN;
-    return url.origin;
-  } catch {
-    return RAG_LOCAL_ORIGIN;
-  }
-}
-
-export function isThisMachineOrigin(origin) {
-  try {
-    const host = new URL(origin).hostname;
-    return host === '127.0.0.1' || host === 'localhost' || host === '::1';
-  } catch {
-    return false;
-  }
-}
-
 export function findColabDemonstration(question) {
   const key = String(question || '').replace(/\s+/g, ' ').trim().toLocaleLowerCase('fr');
   if (!key) return null;
@@ -96,42 +69,65 @@ export function findColabDemonstration(question) {
   )) || null;
 }
 
-/**
- * Live path only when /health on this machine succeeds.
- * A configured remote address is not this machine: Colab's API listens on
- * Colab's own localhost, which this dashboard cannot call.
- */
-export async function checkThisMachineRag({
-  env = import.meta.env,
-  fetchImpl = globalThis.fetch,
-  timeoutMs = RAG_HEALTH_TIMEOUT_MS,
-} = {}) {
-  const origin = ragApiOrigin(env);
-  if (isRagConfigured(env) && isThisMachineOrigin(origin)) {
-    const health = await checkRagHealth({ fetchImpl, configured: true, timeoutMs });
-    if (!health.ok) return health;
-    return { ...health, path: RAG_ASK_PATH };
-  }
-
-  const controller = new AbortController();
-  const timer = setTimeout(() => controller.abort(), timeoutMs);
+export function normalizeRagBase(value) {
+  let raw = String(value ?? '').trim();
+  if (!raw) return '';
+  const labeled = raw.match(/URL_DASHBOARD\s*=\s*(\S+)/i);
+  if (labeled) raw = labeled[1];
+  raw = raw.replace(/[),.;]+$/g, '');
+  let url;
   try {
-    const response = await fetchImpl(RAG_LOCAL_HEALTH_URL, {
-      method: 'GET',
-      headers: { Accept: 'application/json' },
-      signal: controller.signal,
-    });
-    if (!response?.ok) return errorResult('unavailable', RAG_REMOTE_NOTE.fr);
-    const payload = await response.json();
-    if (payload && payload.status === 'ok') {
-      return { ok: true, payload, path: RAG_LOCAL_ASK_URL };
-    }
-    return errorResult('unavailable', RAG_REMOTE_NOTE.fr);
+    url = new URL(raw);
   } catch {
-    return errorResult('unavailable', RAG_REMOTE_NOTE.fr);
-  } finally {
-    clearTimeout(timer);
+    return '';
   }
+  if (url.protocol !== 'http:' && url.protocol !== 'https:') return '';
+  let path = url.pathname.replace(/\/+$/, '');
+  path = path.replace(/\/(?:ask|health)$/i, '');
+  if (path === '/') path = '';
+  return `${url.origin}${path}`;
+}
+
+function storageOr(storage) {
+  if (storage) return storage;
+  try {
+    return globalThis.localStorage;
+  } catch {
+    return null;
+  }
+}
+
+export function readStoredRagBase(storage) {
+  const store = storageOr(storage);
+  if (!store) return '';
+  try {
+    return normalizeRagBase(store.getItem(RAG_URL_STORAGE_KEY) || '');
+  } catch {
+    return '';
+  }
+}
+
+export function writeStoredRagBase(value, storage) {
+  const store = storageOr(storage);
+  const base = normalizeRagBase(value);
+  if (!store) return base;
+  try {
+    if (base) store.setItem(RAG_URL_STORAGE_KEY, base);
+    else store.removeItem(RAG_URL_STORAGE_KEY);
+  } catch {
+    // Private mode or a full quota still leaves the normalized value in memory.
+  }
+  return base;
+}
+
+export function ragHealthUrl(base) {
+  const root = normalizeRagBase(base);
+  return root ? `${root}/health` : '';
+}
+
+export function ragAskUrl(base) {
+  const root = normalizeRagBase(base);
+  return root ? `${root}/ask` : '';
 }
 
 const PRIORITY_FR = {
@@ -351,38 +347,40 @@ async function probe(path, fetchImpl, timeoutMs) {
 
 export async function checkRagHealth({
   fetchImpl = globalThis.fetch,
-  configured = isRagConfigured(),
+  base = '',
   timeoutMs = RAG_HEALTH_TIMEOUT_MS,
 } = {}) {
-  if (!configured) {
-    return errorResult(
-      'not_configured',
-      'L\'assistant documentaire est indisponible : VITE_RAG_API_URL n\'est pas renseignée. Le notebook Colab n\'est pas lancé depuis ce tableau de bord.',
-    );
+  const root = normalizeRagBase(base);
+  if (!root) {
+    return errorResult('not_configured', RAG_CONNECT_NOTE.fr);
   }
-  const health = await probe(RAG_HEALTH_PATH, fetchImpl, timeoutMs);
+  const health = await probe(ragHealthUrl(root), fetchImpl, timeoutMs);
   if (health.ok) return { ok: true, payload: health.payload };
   if (health.status === 404) {
-    const root = await probe(RAG_ROOT_PATH, fetchImpl, timeoutMs);
-    if (root.ok) return { ok: true, payload: root.payload };
+    const rootProbe = await probe(`${root}/`, fetchImpl, timeoutMs);
+    if (rootProbe.ok) return { ok: true, payload: rootProbe.payload };
   }
-  return errorResult('unavailable', RAG_REMOTE_NOTE.fr);
+  if (health.code === 'timeout') {
+    return errorResult(
+      'timeout',
+      'Le service n\'a pas répondu à temps. Relancez la cellule Colab et collez la nouvelle ligne URL_DASHBOARD=https://…',
+    );
+  }
+  return errorResult('unavailable', RAG_CONNECT_NOTE.fr);
 }
 
 export async function askRag({
   question,
   k = RAG_K_DEFAULT,
   fetchImpl = globalThis.fetch,
-  configured = isRagConfigured(),
+  base = '',
   timeoutMs = RAG_TIMEOUT_MS,
-  path = RAG_ASK_PATH,
   signal,
+  checkHealth = true,
 } = {}) {
-  if (!configured) {
-    return errorResult(
-      'not_configured',
-      'L\'assistant documentaire est indisponible : VITE_RAG_API_URL n\'est pas renseignée. Le notebook Colab n\'est pas lancé depuis ce tableau de bord.',
-    );
+  const root = normalizeRagBase(base);
+  if (!root) {
+    return errorResult('not_configured', RAG_CONNECT_NOTE.fr);
   }
 
   const trimmed = String(question ?? '').trim();
@@ -400,6 +398,15 @@ export async function askRag({
     return errorResult('aborted', 'Question annulée.');
   }
 
+  if (checkHealth) {
+    const health = await checkRagHealth({
+      fetchImpl,
+      base: root,
+      timeoutMs: Math.min(timeoutMs, RAG_HEALTH_TIMEOUT_MS),
+    });
+    if (!health.ok) return health;
+  }
+
   const passages = clampK(k);
   const controller = new AbortController();
   const onExternalAbort = () => controller.abort();
@@ -407,12 +414,13 @@ export async function askRag({
   const timer = setTimeout(() => controller.abort(), timeoutMs);
 
   try {
-    const response = await fetchImpl(path, {
+    const response = await fetchImpl(ragAskUrl(root), {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
         Accept: 'application/json',
         'ngrok-skip-browser-warning': 'true',
+        'Bypass-Tunnel-Reminder': 'true',
       },
       body: JSON.stringify({ question: trimmed, k: passages }),
       signal: controller.signal,
@@ -424,7 +432,7 @@ export async function askRag({
       return errorResult(
         'http_error',
         unreachable
-          ? `L'assistant ne répond pas (HTTP ${status}). La session Colab est arrêtée, ou le GPU n'est pas disponible.`
+          ? `L'assistant ne répond pas (HTTP ${status}). Relancez la cellule Colab et collez la nouvelle ligne URL_DASHBOARD=https://… Aucune réponse en direct n'est affichée.`
           : `L'API documentaire a renvoyé une erreur HTTP ${status}.`,
         { status },
       );
@@ -442,12 +450,12 @@ export async function askRag({
       if (signal?.aborted) return errorResult('aborted', 'Question annulée.');
       return errorResult(
         'timeout',
-        'Le service n\'a pas répondu à temps. Le modèle est peut-être encore en chargement, ou la session Colab est arrêtée.',
+        'Le service n\'a pas répondu à temps. Relancez la cellule Colab et collez la nouvelle ligne URL_DASHBOARD=https://…',
       );
     }
     return errorResult(
       'network',
-      'Impossible de joindre l\'assistant. La session Colab est arrêtée, ou l\'adresse de l\'API n\'est plus valable.',
+      'Impossible de joindre l\'assistant. Relancez la cellule Colab et collez la nouvelle ligne URL_DASHBOARD=https://… Aucune réponse en direct n\'est affichée.',
     );
   } finally {
     clearTimeout(timer);

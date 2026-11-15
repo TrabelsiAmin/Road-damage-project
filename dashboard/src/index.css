@@ -2114,6 +2114,7 @@ h1, h2, h3, h4 {
   gap: 8px;
 }
 
+.rag-url label span,
 .rag-form label span,
 .rag-controls label span {
   display: block;
@@ -2139,6 +2140,103 @@ h1, h2, h3, h4 {
 .rag-form textarea {
   min-height: 84px;
   resize: vertical;
+  color: #172033;
+}
+
+.rag-url {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.rag-url-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: flex-end;
+}
+
+.rag-url-row label {
+  flex: 1 1 220px;
+  min-width: 0;
+}
+
+.rag-url input,
+.rag-form input {
+  width: 100%;
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-sm);
+  background: #fff;
+  color: #172033;
+  font: inherit;
+  padding: 8px 10px;
+}
+
+.rag-url input:focus,
+.rag-form input:focus {
+  outline: none;
+  border-color: var(--color-primary);
+  box-shadow: var(--shadow-glow);
+}
+
+.rag-connect {
+  margin: 0;
+  background: #EFF6FF;
+  border: 1px solid #BFDBFE;
+  border-radius: var(--radius-sm);
+  padding: 12px;
+  color: #172033;
+  font-size: 0.84rem;
+  line-height: 1.45;
+}
+
+.rag-example-list {
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin: 0;
+  padding: 0;
+}
+
+.rag-example {
+  width: 100%;
+  text-align: left;
+  background: #fff;
+  color: #172033;
+  border: 1px solid #DBE7F5;
+  border-radius: var(--radius-sm);
+  padding: 8px 10px;
+  font: inherit;
+  font-size: 0.8rem;
+  line-height: 1.4;
+  cursor: pointer;
+}
+
+.rag-example:hover {
+  border-color: #2563EB;
+  background: #F8FAFF;
+}
+
+.rag-top-source {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 8px;
+  align-items: baseline;
+  margin: 8px 0 0;
+  color: #1D4ED8;
+  font-size: 0.8rem;
+}
+
+.rag-top-source strong {
+  color: #172033;
+  font-weight: 600;
+}
+
+.rag-top-source em {
+  font-style: normal;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
 }
 
 .rag-form textarea:focus,

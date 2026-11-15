@@ -1,7 +1,9 @@
 """Assistant RAG de soutenance, exécuté dans le notebook Colab.
 
 Qwen2.5-7B-Instruct en 4 bits, BGE-M3, FAISS IndexFlatIP.
-Aucun ngrok, aucune adresse publique. L'API écoute seulement 127.0.0.1.
+L'API écoute seulement 127.0.0.1. Après le démarrage, un tunnel HTTPS
+(cloudflared, sinon localtunnel, sinon ngrok) est la seule porte publique.
+Le tableau de bord colle la ligne URL_DASHBOARD=https://…
 Les embeddings ne sont recalculés que si aucun index valide n'est déjà là.
 """
 
@@ -10,6 +12,9 @@ from __future__ import annotations
 import argparse
 import json
 import pickle
+import re
+import shutil
+import subprocess
 import sys
 import threading
 import time
@@ -238,12 +243,16 @@ def save_index(vector_dir, index, chunks, config):
 
 
 def try_upload_documents(data_dir, missing):
+    pending = [name for name in (missing or []) if str(name).strip()]
+    if not pending:
+        print("Les six manuels sont déjà là. Aucun fichier à renvoyer.")
+        return []
     try:
         from google.colab import files
     except Exception:
         print("Hors de Colab : placez les six manuels dans", data_dir)
-        return missing
-    print("Il manque", len(missing), "manuel(s). Sélectionnez les fichiers .txt.")
+        return pending
+    print("Il manque", len(pending), "manuel(s). Sélectionnez les fichiers .txt.")
     uploaded = files.upload()
     folder = Path(data_dir)
     folder.mkdir(parents=True, exist_ok=True)
@@ -360,6 +369,9 @@ def make_retrieve(embedding_model, index, chunks):
 
 
 def make_generate(tokenizer, llm):
+    # La démo du notebook et une question du tableau de bord partagent le GPU.
+    lock = threading.Lock()
+
     def generate_answer(question, context):
         import torch
 
@@ -368,12 +380,24 @@ def make_generate(tokenizer, llm):
             {"role": "user", "content": build_prompt(question, context)},
         ]
         rendered = tokenizer.apply_chat_template(messages, tokenize=False, add_generation_prompt=True)
-        inputs = tokenizer([rendered], return_tensors="pt").to(llm.device)
-        with torch.no_grad():
-            outputs = llm.generate(**inputs, max_new_tokens=300, do_sample=False)
-        return tokenizer.decode(outputs[0][inputs["input_ids"].shape[1]:], skip_special_tokens=True)
+        with lock:
+            inputs = tokenizer([rendered], return_tensors="pt").to(llm.device)
+            with torch.no_grad():
+                outputs = llm.generate(**inputs, max_new_tokens=300, do_sample=False)
+            return tokenizer.decode(outputs[0][inputs["input_ids"].shape[1]:], skip_special_tokens=True)
 
     return generate_answer
+
+
+# Le tableau de bord tourne souvent sur http://127.0.0.1:4317, parfois sur
+# un autre port local, parfois sur une page HTTPS. On renvoie l'Origin reçu.
+DASHBOARD_ORIGINS = (
+    "http://127.0.0.1:4317",
+    "http://localhost:4317",
+    "http://127.0.0.1:5173",
+    "http://localhost:5173",
+)
+ORIGIN_REFLECT_RE = r"https?://[^/\s]+"
 
 
 def create_app(retrieve, generate_answer, vector_count):
@@ -384,7 +408,8 @@ def create_app(retrieve, generate_answer, vector_count):
     app = FastAPI(title="TariqMap RAG soutenance", version="soutenance")
     app.add_middleware(
         CORSMiddleware,
-        allow_origins=["http://127.0.0.1:5173", "http://localhost:5173"],
+        allow_origins=list(DASHBOARD_ORIGINS),
+        allow_origin_regex=ORIGIN_REFLECT_RE,
         allow_methods=["GET", "POST", "OPTIONS"],
         allow_headers=["*"],
     )
@@ -514,6 +539,154 @@ def run_demo():
         print_demo_result(item, payload)
 
 
+_TUNNEL_URL_RE = re.compile(
+    r"https://[A-Za-z0-9][A-Za-z0-9.-]*\.(?:trycloudflare\.com|loca\.lt|ngrok-free\.app|ngrok\.app|ngrok\.io)"
+)
+
+
+def extract_tunnel_url(text):
+    found = _TUNNEL_URL_RE.search(text or "")
+    return found.group(0) if found else None
+
+
+def format_dashboard_url(url):
+    return f"URL_DASHBOARD={url}"
+
+
+def cloudflared_command(binary):
+    # cloudflared tunnel --url http://127.0.0.1:8000
+    return [binary, "tunnel", "--url", f"http://{API_HOST}:{API_PORT}", "--no-autoupdate"]
+
+
+def ensure_cloudflared():
+    found = shutil.which("cloudflared")
+    if found:
+        return found
+    dest = Path("/tmp/cloudflared")
+    if dest.is_file() and dest.stat().st_mode & 0o111:
+        return str(dest)
+    import platform
+
+    machine = platform.machine().lower()
+    asset = "cloudflared-linux-arm64" if machine in ("aarch64", "arm64") else "cloudflared-linux-amd64"
+    download = f"https://github.com/cloudflare/cloudflared/releases/latest/download/{asset}"
+    print("Installation de cloudflared…")
+    try:
+        request = urllib.request.Request(download, headers={"User-Agent": "tariqmap-soutenance"})
+        with urllib.request.urlopen(request, timeout=90) as response:
+            dest.write_bytes(response.read())
+        dest.chmod(0o755)
+        return str(dest)
+    except Exception as exc:
+        print("cloudflared ne s'installe pas :", exc)
+        return None
+
+
+def _stream_until_url(proc, timeout):
+    box = {"url": None, "text": ""}
+
+    def reader():
+        stream = proc.stdout
+        if stream is None:
+            return
+        for line in stream:
+            box["text"] += line
+            if box["url"] is None:
+                found = extract_tunnel_url(box["text"])
+                if found:
+                    box["url"] = found
+
+    thread = threading.Thread(target=reader, daemon=True)
+    thread.start()
+    deadline = time.time() + timeout
+    while time.time() < deadline:
+        if box["url"]:
+            return box["url"], box["text"]
+        if proc.poll() is not None:
+            thread.join(timeout=2)
+            return box["url"] or extract_tunnel_url(box["text"]), box["text"]
+        time.sleep(0.2)
+    return box["url"], box["text"]
+
+
+def _spawn_tunnel(command, timeout):
+    print("Tunnel :", " ".join(str(part) for part in command))
+    try:
+        proc = subprocess.Popen(
+            command,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.STDOUT,
+            text=True,
+            bufsize=1,
+        )
+    except OSError as exc:
+        print("Impossible de lancer", command[0], ":", exc)
+        return None, None
+    url, log = _stream_until_url(proc, timeout)
+    if url:
+        return url, proc
+    tail = (log or "").strip()[-500:]
+    if tail:
+        print(tail)
+    if proc.poll() is None:
+        proc.terminate()
+    return None, None
+
+
+def start_cloudflared_tunnel():
+    binary = ensure_cloudflared()
+    if not binary:
+        return None, None
+    return _spawn_tunnel(cloudflared_command(binary), 45)
+
+
+def start_localtunnel():
+    npx = shutil.which("npx")
+    if not npx:
+        print("localtunnel : npx est absent.")
+        return None, None
+    return _spawn_tunnel([npx, "--yes", "localtunnel", "--port", str(API_PORT)], 70)
+
+
+def start_ngrok_tunnel():
+    binary = shutil.which("ngrok")
+    if not binary:
+        print("ngrok est absent.")
+        return None, None
+    return _spawn_tunnel(
+        [binary, "http", f"{API_HOST}:{API_PORT}", "--log", "stdout"],
+        30,
+    )
+
+
+def tunnel_state():
+    state = globals().get("_TUNNEL")
+    if not isinstance(state, dict):
+        state = {"process": None, "url": None}
+        globals()["_TUNNEL"] = state
+    return state
+
+
+def open_public_tunnel():
+    """Ouvre un tunnel HTTPS vers l'API locale. L'API reste sur 127.0.0.1."""
+    state = tunnel_state()
+    proc = state.get("process")
+    if state.get("url") and proc is not None and proc.poll() is None:
+        print(format_dashboard_url(state["url"]))
+        return state["url"]
+    starters = (start_cloudflared_tunnel, start_localtunnel, start_ngrok_tunnel)
+    for starter in starters:
+        url, spawned = starter()
+        if url:
+            state["url"] = url
+            state["process"] = spawned
+            print(format_dashboard_url(url))
+            return url
+    print("Aucun tunnel HTTPS. L'API reste sur", f"http://{API_HOST}:{API_PORT}.")
+    print("Relancez la cellule : le tableau de bord a besoin de la ligne URL_DASHBOARD=https://…")
+    return None
+
+
 def prepare(root, check_only=False, embedding_model=None, llm_pair=None):
     root = Path(root)
     data_dir = root / "data"
@@ -581,11 +754,16 @@ def prepare(root, check_only=False, embedding_model=None, llm_pair=None):
     generate_answer = make_generate(tokenizer, llm)
     app = create_app(retrieve, generate_answer, int(index.ntotal))
     start_api(app)
-    run_demo()
-    print("API locale :", f"http://{API_HOST}:{API_PORT}")
-    print("Pas d'adresse publique. Le tableau de bord de cette machine peut utiliser")
-    print(f"VITE_RAG_API_URL=http://{API_HOST}:{API_PORT}")
-    print("seulement si Vite tourne sur le même ordinateur que cette API.")
+    public_url = open_public_tunnel()
+    try:
+        run_demo()
+    finally:
+        print("API locale :", f"http://{API_HOST}:{API_PORT}")
+        if public_url:
+            print("Copiez cette ligne dans le tableau de bord, champ « Adresse de l'API Colab ».")
+            print(format_dashboard_url(public_url))
+        else:
+            print("Pas de ligne URL_DASHBOARD : le tunnel public n'a pas démarré.")
     return 0
 
 

@@ -1983,6 +1983,131 @@ h1, h2, h3, h4 {
   color: #991b1b;
 }
 
+.rag-demo {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  min-width: 0;
+}
+
+.rag-demo-note,
+.rag-demo-caption {
+  margin: 0;
+  color: #172033;
+  font-size: 0.84rem;
+  line-height: 1.45;
+}
+
+.rag-demo-note {
+  background: #EFF6FF;
+  border: 1px solid #BFDBFE;
+  border-radius: var(--radius-sm);
+  padding: 12px;
+}
+
+.rag-demo-list {
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin: 0;
+  padding: 0;
+}
+
+.rag-demo-item {
+  background: #FFFFFF;
+  border: 1px solid #DBE7F5;
+  border-radius: var(--radius-sm);
+  padding: 10px;
+  min-width: 0;
+}
+
+.rag-demo-item.is-refusal {
+  border-color: #F59E0B;
+  background: #FFFBEB;
+}
+
+.rag-demo-q,
+.rag-demo-a,
+.rag-demo-source,
+.rag-demo-refusal {
+  margin: 0;
+}
+
+.rag-demo-q,
+.rag-demo-a {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  color: #172033;
+  font-size: 0.82rem;
+  line-height: 1.45;
+}
+
+.rag-demo-q span,
+.rag-demo-a span,
+.rag-demo-source span {
+  color: #64748B;
+  font-size: 0.68rem;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.rag-demo-a {
+  margin-top: 6px;
+}
+
+.rag-demo-refusal {
+  margin-top: 6px;
+  color: #92400E;
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.rag-demo-source {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 8px;
+  align-items: baseline;
+  margin-top: 8px;
+  color: #1D4ED8;
+  font-size: 0.75rem;
+}
+
+.rag-demo-source strong {
+  flex: 1 1 140px;
+  min-width: 0;
+  color: #172033;
+  font-weight: 600;
+  overflow-wrap: anywhere;
+}
+
+.rag-demo-source em {
+  font-style: normal;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  color: #1D4ED8;
+}
+
+.rag-demo-pick {
+  border: 0;
+  background: transparent;
+  padding: 0;
+  text-align: left;
+  color: #1D4ED8;
+  font: inherit;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.rag-demo-pick:hover,
+.rag-demo-pick[aria-pressed="true"] {
+  text-decoration: underline;
+}
+
 .rag-form {
   display: flex;
   flex-direction: column;

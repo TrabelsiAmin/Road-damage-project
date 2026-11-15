@@ -116,6 +116,17 @@ html[data-theme="dark"] .btn-primary:hover {
   color: #FFFFFF;
 }
 
+html[data-theme="dark"] .rag-demo-pick {
+  color: #93C5FD;
+}
+
+html[data-theme="dark"] .rag-demo-item,
+html[data-theme="dark"] .rag-demo-note {
+  background: #292524;
+  border-color: #44403C;
+  color: #F5F0E8;
+}
+
 html[data-theme="dark"] .kpi-card,
 html[data-theme="dark"] .executive-kpi-card,
 html[data-theme="dark"] .metric-card,

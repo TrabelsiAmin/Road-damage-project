@@ -1,7 +1,9 @@
 import { describe, it, expect } from 'vitest';
 import {
+  COLAB_DEMONSTRATION,
   RAG_ASK_PATH,
   RAG_HEALTH_PATH,
+  RAG_REMOTE_NOTE,
   askRag,
   checkRagHealth,
   buildMapRagPopupHtml,
@@ -12,6 +14,11 @@ import {
   observationForRecommendation,
   parseRagResponse,
   questionHasForbiddenContent,
+  shouldShowColabDemonstration,
+  checkThisMachineRag,
+  findColabDemonstration,
+  RAG_LOCAL_ASK_URL,
+  RAG_LOCAL_HEALTH_URL,
 } from './ragClient.js';
 import { ragDevProxy, ragProxyTarget } from '../../vite.ragProxy.js';
 
@@ -361,6 +368,88 @@ describe('RAG health', () => {
     });
     expect(down.ok).toBe(false);
     expect(down.error.code).toBe('unavailable');
+    expect(down.error.message).toBe(RAG_REMOTE_NOTE.fr);
+    expect(down.error.message).toMatch(/127\.0\.0\.1:8000/);
+    expect(down.error.message).not.toMatch(/Aucune réponse ne sera affichée/);
+    expect(down.answer).toBeUndefined();
+  });
+});
+
+describe('recorded Colab demonstration', () => {
+  it('keeps the five recorded answers, including the price refusal, off the live path', () => {
+    expect(COLAB_DEMONSTRATION).toHaveLength(5);
+    expect(COLAB_DEMONSTRATION.map((item) => item.score.toFixed(4))).toEqual([
+      '0.7111',
+      '0.6881',
+      '0.6133',
+      '0.7412',
+      '0.5284',
+    ]);
+    expect(COLAB_DEMONSTRATION[0].source).toContain('Cours_Pathologies_et_entretien');
+    expect(COLAB_DEMONSTRATION[1].source).toContain('MTQ_Manuel_identification');
+    expect(COLAB_DEMONSTRATION[4].question).toMatch(/prix d'une tonne/);
+    expect(COLAB_DEMONSTRATION[4].refusal).toBe(true);
+    expect(COLAB_DEMONSTRATION[4].answer).toBe(
+      'L\'information sur le prix d\'une tonne d\'enrobé bitumineux en dinars tunisiens n\'a pas été trouvée dans le contexte fourni.',
+    );
+    expect(COLAB_DEMONSTRATION[4].answer).not.toMatch(/\d/);
+    expect(COLAB_DEMONSTRATION.filter((item) => item.refusal)).toHaveLength(1);
+
+    expect(shouldShowColabDemonstration({ configured: true, backend: 'down' })).toBe(true);
+    expect(shouldShowColabDemonstration({ configured: true, backend: 'up' })).toBe(false);
+    expect(shouldShowColabDemonstration({ configured: true, backend: 'checking' })).toBe(false);
+    expect(shouldShowColabDemonstration({ configured: false, backend: 'down' })).toBe(false);
+    expect(RAG_REMOTE_NOTE.fr).toMatch(/autre ordinateur/);
+    expect(RAG_REMOTE_NOTE.en).toMatch(/another computer/);
+  });
+
+  it('fills a recorded question and does not invent one', () => {
+    const match = findColabDemonstration('  Quels sont les principaux types de dégradations des chaussées ?  ');
+    expect(match.score).toBeCloseTo(0.7111);
+    expect(match.source).toContain('Cours_Pathologies');
+    expect(match.answer).toMatch(/structurelles/);
+    expect(findColabDemonstration('Quel temps fait-il à Tunis ?')).toBeNull();
+    expect(findColabDemonstration('')).toBeNull();
+  });
+});
+
+describe('health on this machine', () => {
+  it('posts to the local API only after /health on this machine succeeds', async () => {
+    const calls = [];
+    const remote = await checkThisMachineRag({
+      env: { VITE_RAG_API_URL: 'https://session.ngrok-free.app' },
+      fetchImpl: async (url) => {
+        calls.push(url);
+        return { ok: false, status: 0, json: async () => ({}) };
+      },
+    });
+    expect(calls).toEqual([RAG_LOCAL_HEALTH_URL]);
+    expect(remote.ok).toBe(false);
+    expect(remote.error.message).toBe(RAG_REMOTE_NOTE.fr);
+
+    const ready = await checkThisMachineRag({
+      env: { VITE_RAG_API_URL: 'https://session.ngrok-free.app' },
+      fetchImpl: async (url) => {
+        expect(url).toBe(RAG_LOCAL_HEALTH_URL);
+        return { ok: true, status: 200, json: async () => ({ status: 'ok' }) };
+      },
+    });
+    expect(ready.ok).toBe(true);
+    expect(ready.path).toBe(RAG_LOCAL_ASK_URL);
+  });
+
+  it('uses the same-origin proxy when the configured API is this machine', async () => {
+    const calls = [];
+    const health = await checkThisMachineRag({
+      env: { VITE_RAG_API_URL: 'http://127.0.0.1:8000' },
+      fetchImpl: async (url) => {
+        calls.push(url);
+        return { ok: true, status: 200, json: async () => ({ status: 'ok' }) };
+      },
+    });
+    expect(health.ok).toBe(true);
+    expect(health.path).toBe(RAG_ASK_PATH);
+    expect(calls).toEqual([RAG_HEALTH_PATH]);
   });
 });
 

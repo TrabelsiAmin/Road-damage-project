@@ -10,6 +10,130 @@ export const RAG_K_MIN = 1;
 export const RAG_K_MAX = 8;
 export const RAG_K_DEFAULT = 5;
 
+/**
+ * Shown only when this dashboard cannot reach the configured RAG URL.
+ * The model answers in the Colab notebook on that machine. This computer
+ * cannot call 127.0.0.1:8000 there. These strings are not a live response.
+ */
+export const RAG_REMOTE_NOTE = {
+  fr: 'Le modèle répond dans le notebook Colab, sur la machine Colab. Ce tableau de bord est sur un autre ordinateur et ne peut pas appeler 127.0.0.1:8000 là-bas.',
+  en: 'The model answers in the Colab notebook, on the Colab machine. This dashboard is on another computer and cannot call 127.0.0.1:8000 there.',
+};
+
+/** Recorded Colab run. Not a live query from this dashboard. */
+export const COLAB_DEMONSTRATION = [
+  {
+    question: 'Quels sont les principaux types de dégradations des chaussées ?',
+    answer: 'Les principaux types de dégradations des chaussées se classent en deux grandes familles : les dégradations structurelles et les dégradations superficielles. Les dégradations structurelles apparaissent au sein de la structure de chaussée ou de son support et remettent en cause le patrimoine. Les dégradations superficielles naissent dans la couche de surface de la chaussée et affectent d\'abord ses qualités superficielles.',
+    source: 'Cours_Pathologies_et_entretien_des_routes_et_ouvrages_dart_4geniecivil (2).txt',
+    score: 0.7111,
+    refusal: false,
+  },
+  {
+    question: 'Comment identifier une dégradation de la chaussée à partir de son aspect visuel ?',
+    answer: 'Une dégradation de la chaussée peut être identifiée à partir de son aspect visuel en distinguant plusieurs niveaux de sévérité : Faible (premiers indices intermittents, difficile à percevoir à vitesse moyenne, confort de roulement non altéré) ; Moyen (dégradation continue, symptômes plus visibles, confort légèrement altéré) ; Majeur (aspect humide et luisant sur la majorité de la surface, texture du revêtement invisible, bruit similaire à celui sur un revêtement mouillé).',
+    source: 'MTQ_Manuel_identification_degradations_chaussees_flexibles_PROJET (2).txt',
+    score: 0.6881,
+    refusal: false,
+  },
+  {
+    question: 'Quels principes de réparation s\'appliquent à une fissure de chaussée ?',
+    answer: 'Les principes de réparation d\'une fissure de chaussée dépendent du type de chaussée et de la cause de la fissure. Pour les chaussées souples, la réparation peut impliquer le couverture générale d\'une nouvelle couche de revêtement pour résorber les fissures existantes et prévenir de nouvelles. Pour les chaussées en matériaux traités, la réparation peut nécessiter le traitement des couches affectées et la réparation des joints de raccordement. Dans certains cas, comme la présence de tranchées sous-jacentes, des travaux spécifiques peuvent être nécessaires pour corriger la cause sous-jacente avant de procéder à la réparation.',
+    source: 'Cours_Pathologies_et_entretien_des_routes_et_ouvrages_dart_4geniecivil (2).txt',
+    score: 0.6133,
+    refusal: false,
+  },
+  {
+    question: 'Quelles sont les principales causes des fissures de chaussée ?',
+    answer: 'Les principales causes des fissures de chaussée incluent le défaut de portance du sol support dans les chaussées souples ; des défauts de la structure dans les chaussées bitumineuses, comme la rupture par fatigue ; un défaut de collage de la couche de roulement sur la couche d\'enrobé sous-jacente ; la fatigue du revêtement due à des flexions alternées et des efforts de tension causés par les variations de température ; l\'eau ; le trafic lourd et répété ; la mauvaise qualité des matériaux et un compactage insuffisant ; le climat ; le drainage défectueux ; des fissures transversales liées aux assises traitées aux liants hydrauliques.',
+    source: 'Cours_Pathologies_et_entretien_des_routes_et_ouvrages_dart_4geniecivil (2).txt',
+    score: 0.7412,
+    refusal: false,
+  },
+  {
+    question: 'Quel est le prix d\'une tonne d\'enrobé bitumineux en dinars tunisiens ?',
+    answer: 'L\'information sur le prix d\'une tonne d\'enrobé bitumineux en dinars tunisiens n\'a pas été trouvée dans le contexte fourni.',
+    source: 'Benjelloun_Cours_Routes_EPA_Agadir_Chapitres_1-2 (2).txt',
+    score: 0.5284,
+    refusal: true,
+  },
+];
+
+export function shouldShowColabDemonstration({ configured, backend } = {}) {
+  return Boolean(configured) && backend === 'down';
+}
+
+export const RAG_LOCAL_ORIGIN = 'http://127.0.0.1:8000';
+export const RAG_LOCAL_ASK_URL = `${RAG_LOCAL_ORIGIN}/ask`;
+export const RAG_LOCAL_HEALTH_URL = `${RAG_LOCAL_ORIGIN}/health`;
+
+export function ragApiOrigin(env = import.meta.env) {
+  const value = String(env?.VITE_RAG_API_URL ?? '').trim();
+  if (!value) return RAG_LOCAL_ORIGIN;
+  try {
+    const url = new URL(value);
+    if (url.protocol !== 'http:' && url.protocol !== 'https:') return RAG_LOCAL_ORIGIN;
+    return url.origin;
+  } catch {
+    return RAG_LOCAL_ORIGIN;
+  }
+}
+
+export function isThisMachineOrigin(origin) {
+  try {
+    const host = new URL(origin).hostname;
+    return host === '127.0.0.1' || host === 'localhost' || host === '::1';
+  } catch {
+    return false;
+  }
+}
+
+export function findColabDemonstration(question) {
+  const key = String(question || '').replace(/\s+/g, ' ').trim().toLocaleLowerCase('fr');
+  if (!key) return null;
+  return COLAB_DEMONSTRATION.find((item) => (
+    item.question.replace(/\s+/g, ' ').trim().toLocaleLowerCase('fr') === key
+  )) || null;
+}
+
+/**
+ * Live path only when /health on this machine succeeds.
+ * A configured remote address is not this machine: Colab's API listens on
+ * Colab's own localhost, which this dashboard cannot call.
+ */
+export async function checkThisMachineRag({
+  env = import.meta.env,
+  fetchImpl = globalThis.fetch,
+  timeoutMs = RAG_HEALTH_TIMEOUT_MS,
+} = {}) {
+  const origin = ragApiOrigin(env);
+  if (isRagConfigured(env) && isThisMachineOrigin(origin)) {
+    const health = await checkRagHealth({ fetchImpl, configured: true, timeoutMs });
+    if (!health.ok) return health;
+    return { ...health, path: RAG_ASK_PATH };
+  }
+
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), timeoutMs);
+  try {
+    const response = await fetchImpl(RAG_LOCAL_HEALTH_URL, {
+      method: 'GET',
+      headers: { Accept: 'application/json' },
+      signal: controller.signal,
+    });
+    if (!response?.ok) return errorResult('unavailable', RAG_REMOTE_NOTE.fr);
+    const payload = await response.json();
+    if (payload && payload.status === 'ok') {
+      return { ok: true, payload, path: RAG_LOCAL_ASK_URL };
+    }
+    return errorResult('unavailable', RAG_REMOTE_NOTE.fr);
+  } catch {
+    return errorResult('unavailable', RAG_REMOTE_NOTE.fr);
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
 const PRIORITY_FR = {
   HIGH: 'élevée',
   MEDIUM: 'moyenne',
@@ -242,10 +366,7 @@ export async function checkRagHealth({
     const root = await probe(RAG_ROOT_PATH, fetchImpl, timeoutMs);
     if (root.ok) return { ok: true, payload: root.payload };
   }
-  return errorResult(
-    'unavailable',
-    'L\'assistant ne répond pas. La session Colab est arrêtée, ou le GPU n\'est pas disponible. Aucune réponse ne sera affichée.',
-  );
+  return errorResult('unavailable', RAG_REMOTE_NOTE.fr);
 }
 
 export async function askRag({

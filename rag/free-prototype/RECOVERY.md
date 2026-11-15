@@ -57,6 +57,8 @@ for folder in found:
 print("Aucun telechargement.")
 ```
 
+Le diagnostic du 15 novembre 2026, 20:18 heure de Tunis, a répondu `Drive monte : False` et `Aucun index.faiss sous /content`. Rien n’a été téléchargé. Le notebook ne copie pas `vector_db` vers Drive : une copie n’existe que si elle a été enregistrée à la main.
+
 Si cette cellule imprime `Aucun index.faiss` et `Drive monte : False`, la session n’a plus le dossier `/content`. Montez Drive seulement si une copie de `vector_db` y a déjà été enregistrée, puis relancez le diagnostic :
 
 ```python

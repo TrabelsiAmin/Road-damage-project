@@ -20,6 +20,7 @@ import {
 import { DAMAGE_CLASSES, STATUS_LABELS } from '../constants';
 import { displayClassCode, observationClassCode, statClassCode } from '../utils/classCodes';
 import { getSignedMediaUrl, getPublicMediaUrl } from '../supabase';
+import { observationCoordinates } from '../utils/records';
 import { approximateRoadNote, resolveTunisiaAdmin } from '../utils/tunisiaGeo';
 
 export function CaseDetailModal({
@@ -188,7 +189,11 @@ export function CaseDetailModal({
               <div className="detail-item">
                 <span className="detail-label">{lang === 'fr' ? 'Coordonnées GPS' : 'GPS Coordinates'}</span>
                 <span className="detail-value mono">
-                  {Number(observation.latitude || 0).toFixed(6)}, {Number(observation.longitude || 0).toFixed(6)}
+                  {(() => {
+                    const point = observationCoordinates(observation.latitude, observation.longitude);
+                    if (point.latitude == null) return lang === 'fr' ? 'Indisponible' : 'Unavailable';
+                    return `${point.latitude.toFixed(6)}, ${point.longitude.toFixed(6)}`;
+                  })()}
                 </span>
               </div>
               <div className="detail-item">

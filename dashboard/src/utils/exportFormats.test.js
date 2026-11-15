@@ -42,6 +42,14 @@ describe('exportFormats', () => {
     expect(csv).not.toContain('280');
   });
 
+  it('does not invent coordinates for a report that has no map point', () => {
+    const rows = buildExportRows([{ id: 'noloc', status: 'unconfirmed', anomaly_type: 'D40', is_demo: false }]);
+    expect(rows[0].latitude).toBe('');
+    expect(rows[0].longitude).toBe('');
+    expect(generateCsvString([{ id: 'noloc', status: 'unconfirmed', anomaly_type: 'D40', is_demo: false }])).not.toContain('0.000000');
+    expect(generateGeoJson([{ id: 'noloc', status: 'unconfirmed', anomaly_type: 'D40', is_demo: false }]).features).toEqual([]);
+  });
+
   it('generateGeoJson produces standard GeoJSON FeatureCollection', () => {
     const geoJson = generateGeoJson(mockObservations);
     expect(geoJson.type).toBe('FeatureCollection');

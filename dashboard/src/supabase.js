@@ -1,6 +1,11 @@
 import { createClient } from '@supabase/supabase-js';
 import { publicRequestError } from './utils/publicStats';
-import { OBSERVATION_PAGE_SIZE } from './utils/records';
+import {
+  assembleObservationRows,
+  mergeObservationPages,
+  OBSERVATION_PAGE_LIMIT,
+  OBSERVATION_PAGE_SIZE,
+} from './utils/records';
 
 // Public anon key only. A production Vite build does not use the debug
 // fallback. `vite` and vitest still do, so a local run without env starts.
@@ -215,85 +220,75 @@ export async function fetchServerClusters(epsMeters = 20, minPoints = 1) {
   return data || [];
 }
 
+const OBSERVATION_COLUMNS = 'id, capture_id, anomaly_type, priority_score, priority_label, status, is_demo, created_at, organization_id';
+
+function pageSizeOf(limit) {
+  return Math.min(Math.max(Number(limit) || OBSERVATION_PAGE_SIZE, 1), OBSERVATION_PAGE_SIZE);
+}
+
+async function fetchObservationPage({ before = null, offset = 0, limit = OBSERVATION_PAGE_SIZE } = {}) {
+  const pageSize = pageSizeOf(limit);
+  let query = supabase
+    .from('observations')
+    .select(OBSERVATION_COLUMNS, { count: 'exact' })
+    .order('created_at', { ascending: false })
+    .order('id', { ascending: false });
+  if (before) query = query.lt('created_at', before).limit(pageSize);
+  else query = query.range(offset, offset + pageSize - 1);
+
+  const { data: obsData, error: obsErr, count } = await query;
+  if (obsErr) throw obsErr;
+  const fetched = obsData?.length || 0;
+  const total = Number.isFinite(count) ? count : null;
+  if (fetched === 0) return { rows: [], truncated: false, fetched: 0, total };
+
+  const obsIds = obsData.map((row) => row.id);
+  const [locations, detections, media] = await Promise.all([
+    supabase.from('locations').select('observation_id, latitude, longitude, accuracy_meters').in('observation_id', obsIds),
+    supabase.from('detections').select('observation_id, class_code, confidence, box_x, box_y, box_w, box_h').in('observation_id', obsIds),
+    supabase.from('media_files').select('observation_id, public_url, storage_path, bucket, is_demo, media_type').in('observation_id', obsIds),
+  ]);
+  if (locations.error) console.warn('[Supabase] locations page warning:', locations.error.message);
+  if (detections.error) console.warn('[Supabase] detections page warning:', detections.error.message);
+  if (media.error) console.warn('[Supabase] media page warning:', media.error.message);
+
+  return {
+    rows: assembleObservationRows(obsData, locations.data, detections.data, media.data),
+    truncated: fetched === pageSize,
+    fetched,
+    total,
+  };
+}
+
 /**
  * Loads observations with locations, detections, and media files.
+ * The first call reads every visible page. A missing map point stays in the
+ * catalogue. `before` still returns a single older page for the manual control.
  */
 export async function fetchObservations({ before = null, limit = OBSERVATION_PAGE_SIZE } = {}) {
   try {
-    // 1. Fetch observations (device_id is omitted to comply with anon column privilege)
-    const pageSize = Math.min(Math.max(Number(limit) || OBSERVATION_PAGE_SIZE, 1), OBSERVATION_PAGE_SIZE);
-    let query = supabase
-      .from('observations')
-      .select('id, capture_id, anomaly_type, priority_score, priority_label, status, is_demo, created_at, organization_id')
-      .order('created_at', { ascending: false })
-      .limit(pageSize);
-    if (before) query = query.lt('created_at', before);
-    const { data: obsData, error: obsErr } = await query;
+    if (before) return await fetchObservationPage({ before, limit });
 
-    if (obsErr) throw obsErr;
-    if (!obsData || obsData.length === 0) return { rows: [], truncated: false };
-
-    const obsIds = obsData.map((o) => o.id);
-
-    // 2. Fetch locations
-    const { data: locData } = await supabase
-      .from('locations')
-      .select('observation_id, latitude, longitude, accuracy_meters')
-      .in('observation_id', obsIds);
-
-    // 3. Fetch detections
-    const { data: detData } = await supabase
-      .from('detections')
-      .select('observation_id, class_code, confidence, box_x, box_y, box_w, box_h')
-      .in('observation_id', obsIds);
-
-    // 4. Fetch media files
-    const { data: mediaData } = await supabase
-      .from('media_files')
-      .select('observation_id, public_url, storage_path, bucket, is_demo, media_type')
-      .in('observation_id', obsIds);
-
-    const locMap = new Map();
-    (locData || []).forEach((l) => locMap.set(l.observation_id, l));
-
-    const detMap = new Map();
-    (detData || []).forEach((d) => {
-      const arr = detMap.get(d.observation_id) || [];
-      arr.push(d);
-      detMap.set(d.observation_id, arr);
-    });
-
-    const mediaOriginalMap = new Map();
-    const mediaThumbMap = new Map();
-    (mediaData || []).forEach((m) => {
-      if (m.bucket === 'observation-images') {
-        mediaOriginalMap.set(m.observation_id, m);
-      } else if (m.bucket === 'public-photos') {
-        mediaThumbMap.set(m.observation_id, m);
+    const pageSize = pageSizeOf(limit);
+    let offset = 0;
+    let rows = [];
+    let total = null;
+    let truncated = false;
+    for (let page = 0; page < OBSERVATION_PAGE_LIMIT; page += 1) {
+      const next = await fetchObservationPage({ offset, limit: pageSize });
+      if (next.total != null) total = next.total;
+      const merged = mergeObservationPages(rows, next.rows);
+      const grew = merged.length > rows.length;
+      rows = merged;
+      if (!next.truncated || !grew) {
+        truncated = false;
+        break;
       }
-    });
-
-    const truncated = obsData.length === pageSize;
-    // Merge entities
-    const rows = obsData.map((obs) => {
-      const loc = locMap.get(obs.id) || { latitude: 0, longitude: 0, accuracy_meters: null };
-      const dets = detMap.get(obs.id) || [];
-      const orig = mediaOriginalMap.get(obs.id) || null;
-      const thumb = mediaThumbMap.get(obs.id) || null;
-
-      return {
-        ...obs,
-        latitude: Number(loc.latitude) || 0,
-        longitude: Number(loc.longitude) || 0,
-        accuracy_meters: loc.accuracy_meters,
-        detections: dets,
-        original_media: orig,
-        thumbnail_media: thumb,
-        storage_path: orig?.storage_path || thumb?.storage_path || null,
-        bucket: orig?.bucket || thumb?.bucket || 'observation-images',
-      };
-    }).filter((o) => o.latitude !== 0 && o.longitude !== 0);
-    return { rows, truncated };
+      offset += next.fetched;
+      truncated = true;
+    }
+    if (total != null && rows.length < total) truncated = true;
+    return { rows, truncated, total };
   } catch (err) {
     console.error('[Supabase] fetchObservations failed:', err);
     throw err;

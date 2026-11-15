@@ -1,7 +1,9 @@
 import { describe, it, expect } from 'vitest';
 import {
+  assembleObservationRows,
   eventTimeMs,
   mergeObservationPages,
+  observationCoordinates,
   OBSERVATION_PAGE_SIZE,
   uniqueObservations,
   utcDayKey,
@@ -33,5 +35,25 @@ describe('records', () => {
     expect(OBSERVATION_PAGE_SIZE).toBe(500);
     const merged = mergeObservationPages([{ id: 'a' }, { id: 'b' }], [{ id: 'b' }, { id: 'c' }]);
     expect(merged.map((row) => row.id)).toEqual(['a', 'b', 'c']);
+  });
+
+  it('keeps a report that has no map point in the catalogue', () => {
+    expect(observationCoordinates(undefined, undefined)).toEqual({ latitude: null, longitude: null });
+    expect(observationCoordinates(0, 0)).toEqual({ latitude: null, longitude: null });
+    const rows = assembleObservationRows(
+      [
+        { id: 'located', status: 'unconfirmed', is_demo: false, priority_label: 'LOW', priority_score: 10 },
+        { id: 'noloc', status: 'unconfirmed', is_demo: false, priority_label: 'CRITICAL', priority_score: 82 },
+      ],
+      [{ observation_id: 'located', latitude: 36.8, longitude: 10.18, accuracy_meters: 8 }],
+    );
+    expect(rows).toHaveLength(2);
+    expect(rows[1].latitude).toBeNull();
+    expect(rows[1].longitude).toBeNull();
+    const kpis = buildExecutiveKpis(rows, { demoFilter: 'exclude_demo' }, Date.parse('2026-11-15T00:00:00Z'));
+    expect(kpis.totalEvaluated).toBe(2);
+    expect(kpis.activeAnomalies).toBe(2);
+    expect(kpis.criticalAnomalies).toBe(1);
+    expect(kpis.unconfirmedReports).toBe(2);
   });
 });

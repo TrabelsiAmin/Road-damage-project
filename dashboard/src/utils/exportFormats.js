@@ -4,6 +4,7 @@
 
 import { STATUS_LABELS } from '../constants';
 import { displayClassCode, observationClassCode, statClassCode, UNKNOWN_CLASS_LABEL } from './classCodes';
+import { observationCoordinates } from './records';
 import { resolveTunisiaAdmin } from './tunisiaGeo';
 
 /**
@@ -11,7 +12,8 @@ import { resolveTunisiaAdmin } from './tunisiaGeo';
  */
 export function buildExportRows(observations) {
   return (observations || []).map((obs) => {
-    const geo = resolveTunisiaAdmin(obs.latitude, obs.longitude);
+    const point = observationCoordinates(obs.latitude, obs.longitude);
+    const geo = resolveTunisiaAdmin(point.latitude, point.longitude);
     const cls = statClassCode(observationClassCode(obs));
     const typeLabel = cls ? displayClassCode(cls) : UNKNOWN_CLASS_LABEL;
     const statusLabel = STATUS_LABELS[obs.status]?.fr || obs.status || 'Non confirmé';
@@ -29,8 +31,8 @@ export function buildExportRows(observations) {
       municipality: geo.municipality,
       roadSegment: geo.roadSegment,
       roadApproximate: geo.roadApproximate === true,
-      latitude: Number(obs.latitude).toFixed(6),
-      longitude: Number(obs.longitude).toFixed(6),
+      latitude: point.latitude == null ? '' : point.latitude.toFixed(6),
+      longitude: point.longitude == null ? '' : point.longitude.toFixed(6),
       accuracyMeters: obs.accuracy_meters ? Number(obs.accuracy_meters).toFixed(1) : 'N/A',
       estimatedCostTnd: cost,
       assignedTo: obs.assigned_to || 'Non assigné',
@@ -111,7 +113,7 @@ export function generateGeoJson(observations) {
   const rows = buildExportRows(observations);
 
   const features = rows
-    .filter((r) => Number.isFinite(Number(r.latitude)) && Number.isFinite(Number(r.longitude)))
+    .filter((r) => r.latitude !== '' && r.longitude !== '')
     .map((r) => ({
       type: 'Feature',
       geometry: {

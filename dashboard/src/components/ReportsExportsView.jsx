@@ -11,6 +11,7 @@ import {
 } from 'lucide-react';
 import { exportToCsv, exportToExcelTsv, exportToGeoJson, generatePublicAggregateCsv, downloadFile } from '../utils/exportFormats';
 import { repairCostText } from '../constants';
+import { publicDamageTotals } from '../utils/publicStats';
 
 export function ReportsExportsView({
   filteredObservations = [],
@@ -54,8 +55,9 @@ export function ReportsExportsView({
         'text/csv;charset=utf-8;'
       );
     };
-    const openCount = publicSummary.reduce((sum, row) => sum + (Number(row.open_count) || 0), 0);
-    const repairedCount = publicSummary.reduce((sum, row) => sum + (Number(row.repaired_count) || 0), 0);
+    const totals = publicDamageTotals(publicSummary) || { open: 0, repaired: 0 };
+    const openCount = totals.open;
+    const repairedCount = totals.repaired;
     return (
       <div className="reports-exports-container">
         <div className="section-intro">

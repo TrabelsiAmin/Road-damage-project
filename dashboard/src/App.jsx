@@ -59,7 +59,8 @@ import { TechnicalRecommendation } from './components/TechnicalRecommendation';
 import { displayClassCode } from './utils/classCodes';
 import { filterValidClusters } from './utils/mapValidation';
 import { mapLoadCopy, mapLoadState } from './utils/mapLoadState';
-import { catalogueMapNote } from './utils/publicMapCells';
+import { catalogueMapNote, catalogueReportCount, preferWiderCells } from './utils/publicMapCells';
+import { catalogueFloorFor } from './utils/overviewPresentation';
 import { authorityCountStatus, overviewCounters, visitorCountStatus } from './utils/overviewCounters';
 import { canDownloadPublicExport, publicCatalogueText, publicDamageTotals } from './utils/publicStats';
 import { usableOrganizations } from './utils/organizations';
@@ -365,6 +366,8 @@ export default function App() {
   const [publicCells, setPublicCells] = useState([]);
   const [publicCellSource, setPublicCellSource] = useState('idle');
   const [publicStatsStatus, setPublicStatsStatus] = useState('idle');
+  const [catalogueStats, setCatalogueStats] = useState(null);
+  const catalogueCountRef = useRef(0);
   const [organizations, setOrganizations] = useState([]);
   const [organizationsUnavailable, setOrganizationsUnavailable] = useState(false);
   const [organizationsLoaded, setOrganizationsLoaded] = useState(false);
@@ -524,9 +527,28 @@ export default function App() {
     if (!isBackground) setLoading(true);
     else setIsRefreshing(true);
     setError(null);
+    const acceptCatalogue = (visitor) => {
+      if (!visitor) return;
+      const nextCells = Array.isArray(visitor.cells) ? visitor.cells : [];
+      const nextCount = catalogueReportCount(nextCells) || 0;
+      if (nextCount >= catalogueCountRef.current) {
+        catalogueCountRef.current = nextCount;
+        setPublicCells((current) => preferWiderCells(current, nextCells));
+        setPublicCellSource(visitor.cellSource || 'unavailable');
+        setCatalogueStats(nextCount > 0 ? (visitor.catalogueStats || null) : null);
+      }
+      if (visitor.summaryStatus === 'ready') {
+        setPublicSummary(visitor.summary || []);
+        setPublicStatsStatus('ready');
+        return;
+      }
+      setPublicStatsStatus(visitor.summaryStatus || 'unavailable');
+      if (nextCount >= catalogueCountRef.current) setPublicSummary(visitor.summary || []);
+    };
     try {
+      const visitorPromise = loadVisitorPublicMap().catch(() => null);
       if (!isAuthorityUser) {
-        const visitor = await loadVisitorPublicMap();
+        const visitor = await visitorPromise;
         if (gen !== fetchGenRef.current) return;
         setObservations([]);
         setCatalogueTotal(null);
@@ -535,31 +557,42 @@ export default function App() {
         setMaintenanceCases({});
         setAuditEvents([]);
         setSelectedCluster(null);
-        setPublicSummary(visitor.summary || []);
-        setPublicCells(visitor.cells || []);
-        setPublicCellSource(visitor.cellSource || 'unavailable');
-        setPublicStatsStatus(visitor.summaryStatus || 'unavailable');
-        if (visitor.cellSource === 'unavailable') {
-          setError(visitor.failure || 'unavailable');
+        if (visitor) acceptCatalogue(visitor);
+        else if (catalogueCountRef.current === 0) {
+          setPublicSummary([]);
+          setPublicCells([]);
+          setPublicCellSource('unavailable');
+          setPublicStatsStatus('unavailable');
+          setCatalogueStats(null);
+        }
+        if ((visitor?.cellSource === 'unavailable' || !visitor) && catalogueCountRef.current === 0) {
+          setError(visitor?.failure || 'unavailable');
         }
         setLastUpdated(new Date());
         return;
       }
-      const [obsPage, clusterData, casesData, eventsData] = await Promise.all([
-        fetchObservations(),
-        fetchServerClusters(20, 1),
+      const [obsResult, clusterData, casesData, eventsData, visitor] = await Promise.all([
+        fetchObservations()
+          .then((value) => ({ ok: true, value }))
+          .catch((error) => ({ ok: false, error })),
+        fetchServerClusters(20, 1).catch(() => []),
         fetchMaintenanceCases().catch(() => ({})),
         fetchMaintenanceEvents(100).catch(() => []),
+        visitorPromise,
       ]);
       if (gen !== fetchGenRef.current) return;
-      setPublicSummary([]);
-      setPublicCells([]);
-      setPublicCellSource('idle');
-      setPublicStatsStatus('idle');
-      const loadedRows = obsPage?.rows || [];
+      if (visitor) acceptCatalogue(visitor);
+      if (!obsResult.ok) {
+        if (catalogueCountRef.current === 0) {
+          setError(obsResult.error?.message || 'Error fetching data from Supabase');
+        }
+        return;
+      }
+      setError(null);
+      const loadedRows = obsResult.value?.rows || [];
       setObservations(loadedRows);
-      setCatalogueTotal(Number.isFinite(obsPage?.total) ? obsPage.total : loadedRows.length);
-      setListTruncated(Boolean(obsPage?.truncated));
+      setCatalogueTotal(Number.isFinite(obsResult.value?.total) ? obsResult.value.total : loadedRows.length);
+      setListTruncated(Boolean(obsResult.value?.truncated));
       setServerClusters(clusterData || []);
       setMaintenanceCases(casesData || {});
       setAuditEvents(eventsData || []);
@@ -574,7 +607,7 @@ export default function App() {
       }
     } catch (err) {
       if (gen !== fetchGenRef.current) return;
-      if (!isAuthorityUser) {
+      if (!isAuthorityUser && catalogueCountRef.current === 0) {
         setObservations([]);
         setCatalogueTotal(null);
         setServerClusters([]);
@@ -582,8 +615,11 @@ export default function App() {
         setPublicCells([]);
         setPublicCellSource('unavailable');
         setPublicStatsStatus('unavailable');
+        setCatalogueStats(null);
       }
-      setError(err.message || 'Error fetching data from Supabase');
+      if (catalogueCountRef.current === 0) {
+        setError(err.message || 'Error fetching data from Supabase');
+      }
     } finally {
       if (gen === fetchGenRef.current) {
         setLoading(false);
@@ -839,7 +875,7 @@ export default function App() {
       .filter((cell) => Number.isFinite(cell.latitude) && Number.isFinite(cell.longitude));
   }, [isAuthorityUser, validClusters, publicCells]);
 
-  const catalogueNote = publicCellSource === 'catalogue'
+  const catalogueNote = !isAuthorityUser && publicCellSource === 'catalogue'
     ? catalogueMapNote({
       cells: publicCells.length,
       reports: publicCells.reduce((sum, cell) => sum + (Number(cell.report_count) || 0), 0),
@@ -1678,6 +1714,10 @@ export default function App() {
           authorityPriorityCounts={isAuthorityUser ? ministry?.priorityCounts : null}
           organizations={organizations}
           catalogueTotal={catalogueTotal}
+          catalogueStats={catalogueStats}
+          catalogueFloor={isAuthorityUser && !searchQuery.trim()
+            ? catalogueFloorFor(filters, publicCells)
+            : null}
           loadedCount={observations.length}
           listTruncated={listTruncated}
           note={!isAuthorityUser && publicStatsStatus === 'ready'

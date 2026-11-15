@@ -1,6 +1,6 @@
 import { supabase, fetchPublicDamageSummary, fetchPublicMapCells } from './supabase';
 import { classifyPublicError, publicRequestError } from './utils/publicStats';
-import { aggregatePublicMapCells } from './utils/publicMapCells';
+import { aggregatePublicMapCells, catalogueVisibleStats } from './utils/publicMapCells';
 
 const PAGE_SIZE = 500;
 const PAGE_LIMIT = 40;
@@ -9,7 +9,7 @@ const PAGE_LIMIT = 40;
  * Reads the catalogue the anon key can already see and returns only cell centers.
  * Used when public_map_cells is missing. Row ids and measured points are not returned.
  */
-export async function fetchCatalogueMapCells(cellDegrees = 0.01) {
+async function fetchCataloguePoints() {
   const [observations, locations] = await Promise.all([
     fetchPages('observations', 'id, status, is_demo, anomaly_type'),
     fetchPages('locations', 'observation_id, latitude, longitude'),
@@ -18,7 +18,7 @@ export async function fetchCatalogueMapCells(cellDegrees = 0.01) {
   locations.forEach((row) => {
     if (row?.observation_id) byObservation.set(row.observation_id, row);
   });
-  const points = observations.map((row) => {
+  return observations.map((row) => {
     const place = byObservation.get(row.id);
     return {
       status: row.status,
@@ -28,6 +28,10 @@ export async function fetchCatalogueMapCells(cellDegrees = 0.01) {
       longitude: place?.longitude,
     };
   });
+}
+
+export async function fetchCatalogueMapCells(cellDegrees = 0.01) {
+  const points = await fetchCataloguePoints();
   return aggregatePublicMapCells(points, cellDegrees);
 }
 
@@ -66,17 +70,45 @@ export async function loadVisitorPublicMap() {
 
   try {
     const cells = (await fetchPublicMapCells(0.01)) || [];
-    return { summary, summaryStatus, cells, cellSource: 'rpc', failure: null };
+    return {
+      summary,
+      summaryStatus,
+      cells,
+      catalogueStats: null,
+      cellSource: 'rpc',
+      failure: null,
+    };
   } catch (error) {
     const failure = error?.publicFailure || classifyPublicError(error);
     if (failure !== 'http_404') {
-      return { summary, summaryStatus, cells: [], cellSource: 'unavailable', failure };
+      return {
+        summary,
+        summaryStatus,
+        cells: [],
+        catalogueStats: null,
+        cellSource: 'unavailable',
+        failure,
+      };
     }
     try {
-      const cells = await fetchCatalogueMapCells(0.01);
-      return { summary, summaryStatus, cells, cellSource: 'catalogue', failure: null };
+      const points = await fetchCataloguePoints();
+      return {
+        summary,
+        summaryStatus,
+        cells: aggregatePublicMapCells(points, 0.01),
+        catalogueStats: catalogueVisibleStats(points),
+        cellSource: 'catalogue',
+        failure: null,
+      };
     } catch {
-      return { summary, summaryStatus, cells: [], cellSource: 'unavailable', failure: 'http_404' };
+      return {
+        summary,
+        summaryStatus,
+        cells: [],
+        catalogueStats: null,
+        cellSource: 'unavailable',
+        failure: 'http_404',
+      };
     }
   }
 }

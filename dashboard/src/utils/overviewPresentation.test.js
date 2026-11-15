@@ -1,5 +1,13 @@
 import { describe, expect, it } from 'vitest';
-import { buildOverviewPresentation, formatIncidentDate, periodDelta } from './overviewPresentation';
+import React from 'react';
+import { renderToString } from 'react-dom/server';
+import { OverviewBoard } from '../components/OverviewBoard';
+import {
+  buildOverviewPresentation,
+  catalogueFloorFor,
+  formatIncidentDate,
+  periodDelta,
+} from './overviewPresentation';
 
 const tunis = {
   id: 'obs-tunis',
@@ -97,6 +105,81 @@ describe('overview presentation', () => {
     expect(view.tableState).toBe('restricted');
   });
 
+  it('uses the visible catalogue when the official public total 404s', () => {
+    const view = buildOverviewPresentation({
+      canSeeRows: false,
+      figureStatus: 'unavailable',
+      publicSummary: [],
+      publicCells: [
+        { cell_lat: 36.8065, cell_lng: 10.1815, report_count: 12 },
+        { cell_lat: 35.8256, cell_lng: 10.6369, report_count: 9 },
+      ],
+      catalogueStats: {
+        reports: 21,
+        classes: [
+          { anomaly_type: 'D40', count: 14 },
+          { anomaly_type: 'D00', count: 7 },
+        ],
+      },
+      lang: 'fr',
+    });
+
+    expect(view.status).toBe('ready');
+    expect(view.total).toBe(21);
+    expect(view.zoneCount).toBe(2);
+    expect(view.routeCount).toBeGreaterThan(0);
+    expect(view.regions.map((region) => region.label).sort()).toEqual(['Sousse', 'Tunis']);
+    expect(view.regions.reduce((sum, region) => sum + region.value, 0)).toBe(21);
+    expect(view.chart.slices.reduce((sum, slice) => sum + slice.value, 0)).toBe(21);
+    expect(view.totalNote).toContain('Le total public officiel reste indisponible.');
+    expect(view.lastIncident).toBeNull();
+    expect(view.rows).toEqual([]);
+    expect(view.tableState).toBe('restricted');
+    expect(view.totalNote).not.toContain('128');
+  });
+
+  it('keeps the larger authority total and does not drop the public count', () => {
+    const cells = [{ cell_lat: 36.8065, cell_lng: 10.1815, report_count: 21 }];
+    const larger = buildOverviewPresentation({
+      canSeeRows: true,
+      figureStatus: 'ready',
+      observations: [tunis, sousse],
+      authorityTotal: 31,
+      catalogueFloor: 21,
+      publicCells: cells,
+      lang: 'fr',
+    });
+    expect(larger.total).toBe(31);
+    expect(larger.rows.map((row) => row.id)).toEqual(['obs-tunis', 'obs-sousse']);
+    expect(larger.totalNote).toBeNull();
+
+    const emptyAuthority = buildOverviewPresentation({
+      canSeeRows: true,
+      figureStatus: 'unavailable',
+      observations: [],
+      authorityTotal: 0,
+      catalogueFloor: 21,
+      publicCells: cells,
+      lang: 'fr',
+    });
+    expect(emptyAuthority.total).toBe(21);
+    expect(emptyAuthority.rows).toEqual([]);
+    expect(emptyAuthority.tableState).toBe('listMissing');
+    expect(emptyAuthority.zoneCount).toBe(1);
+    expect(emptyAuthority.totalNote).toContain('indisponible');
+
+    const filtered = buildOverviewPresentation({
+      canSeeRows: true,
+      figureStatus: 'ready',
+      observations: [tunis],
+      authorityTotal: 1,
+      catalogueFloor: catalogueFloorFor({ dateRange: '7d' }, cells),
+      publicCells: cells,
+      lang: 'fr',
+    });
+    expect(filtered.total).toBe(1);
+  });
+
   it('mentions the catalogue size only when the loaded page is truncated', () => {
     const view = buildOverviewPresentation({
       canSeeRows: true,
@@ -110,5 +193,32 @@ describe('overview presentation', () => {
     });
     expect(view.total).toBe(1);
     expect(view.totalNote).toBe('1 signalement chargé pour les totaux, 9 au catalogue.');
+  });
+
+  it('renders the catalogue total on the visitor card and hides the dossier', () => {
+    const html = renderToString(React.createElement(OverviewBoard, {
+      canSeeRows: false,
+      figureStatus: 'unavailable',
+      publicCells: [
+        { cell_lat: 36.8065, cell_lng: 10.1815, report_count: 12 },
+        { cell_lat: 35.8256, cell_lng: 10.6369, report_count: 9 },
+      ],
+      catalogueStats: {
+        classes: [
+          { anomaly_type: 'D40', count: 14 },
+          { anomaly_type: 'D00', count: 7 },
+        ],
+      },
+      lang: 'fr',
+    }));
+    expect(html).toContain('Total des incidents');
+    expect(html).toContain('ov-kpi-value">21');
+    expect(html).toContain('Le total public officiel reste indisponible.');
+    expect(html).toContain('Dossier individuel non visible');
+    expect(html).toContain('Tunis');
+    expect(html).toContain('Sousse');
+    expect(html).toContain('Dossiers individuels réservés');
+    expect(html).not.toContain('obs-tunis');
+    expect(html).not.toContain('128');
   });
 });

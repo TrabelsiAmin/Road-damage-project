@@ -8,6 +8,7 @@
 import { DAMAGE_CLASSES, STATUS_LABELS } from '../constants';
 import { displayClassCode, statClassCode } from './classCodes';
 import { observationClass, observationPriority, observationTime } from './ministryAnalytics';
+import { catalogueReportCount } from './publicMapCells';
 import { publicDamageTotals } from './publicStats';
 import { resolveTunisiaAdmin } from './tunisiaGeo';
 
@@ -225,12 +226,82 @@ export function periodDelta(comparison, total) {
   return { pct, previous };
 }
 
+export function officialPublicTotalNote(lang = 'fr') {
+  return lang === 'fr'
+    ? 'Signalements réels non rejetés du catalogue visible. Le total public officiel reste indisponible.'
+    : 'Non-rejected real reports in the visible catalogue. The official public total is still unavailable.';
+}
+
+/**
+ * The public cell count is a floor only while the authority view is unfiltered.
+ * A period, class, or search must be allowed to show a smaller slice.
+ */
+export function catalogueFloorFor(filters, cells) {
+  if (filters) {
+    const open = (filters.dateRange || 'all') === 'all'
+      && (filters.governorate || 'all') === 'all'
+      && (filters.municipality || 'all') === 'all'
+      && (filters.anomalyClass || 'all') === 'all'
+      && (filters.priority || 'all') === 'all'
+      && (filters.status || 'all') === 'all'
+      && (filters.organization || 'all') === 'all';
+    if (!open) return null;
+  }
+  return catalogueReportCount(cells);
+}
+
+function cellPlaces(publicCells) {
+  return collectPlaces((publicCells || []).map((cell) => ({
+    latitude: cell?.cell_lat,
+    longitude: cell?.cell_lng,
+    weight: Number(cell?.report_count) > 0 ? Number(cell.report_count) : 1,
+  })));
+}
+
+function catalogueClassBuckets(catalogueStats) {
+  if (!catalogueStats || !Array.isArray(catalogueStats.classes)) return null;
+  const classCounts = { D40: 0, D20: 0, D10: 0, D00: 0, other: 0 };
+  const priorityCounts = { HIGH: 0, MEDIUM: 0, LOW: 0, unknown: 0 };
+  catalogueStats.classes.forEach((row) => {
+    const count = Number(row?.count);
+    if (!Number.isFinite(count) || count <= 0) return;
+    const code = statClassCode(row?.anomaly_type);
+    classCounts[code || 'other'] += count;
+  });
+  return { classCounts, priorityCounts };
+}
+
+function catalogueOverview({
+  publicCells,
+  catalogueStats,
+  lang,
+  tableState,
+}) {
+  const places = cellPlaces(publicCells);
+  const buckets = catalogueClassBuckets(catalogueStats);
+  return {
+    status: 'ready',
+    total: catalogueReportCount(publicCells),
+    delta: null,
+    routeCount: places.routeCount,
+    zoneCount: places.zoneCount,
+    totalNote: officialPublicTotalNote(lang),
+    lastIncident: null,
+    chart: buckets ? chartFor(buckets.classCounts, buckets.priorityCounts, lang) : null,
+    regions: trimRegions(places.regions, lang),
+    rows: [],
+    tableState,
+  };
+}
+
 export function buildOverviewPresentation({
   observations = [],
   canSeeRows = false,
   figureStatus = 'unavailable',
   publicSummary = [],
   publicCells = [],
+  catalogueStats = null,
+  catalogueFloor = null,
   comparison = null,
   authorityTotal = null,
   authorityClassCounts = null,
@@ -241,6 +312,7 @@ export function buildOverviewPresentation({
   listTruncated = false,
   lang = 'fr',
 } = {}) {
+  const knownReports = catalogueReportCount(publicCells);
   const restricted = {
     status: figureStatus,
     total: null,
@@ -255,64 +327,92 @@ export function buildOverviewPresentation({
     tableState: canSeeRows ? (figureStatus === 'loading' ? 'loading' : 'unavailable') : 'restricted',
   };
 
-  if (figureStatus !== 'ready') return restricted;
-
   if (!canSeeRows) {
-    const totals = publicDamageTotals(publicSummary);
-    const buckets = publicBuckets(publicSummary);
-    const places = collectPlaces((publicCells || []).map((cell) => ({
-      latitude: cell?.cell_lat,
-      longitude: cell?.cell_lng,
-      weight: Number(cell?.report_count) > 0 ? Number(cell.report_count) : 1,
-    })));
-    return {
-      status: 'ready',
-      total: totals ? totals.total : 0,
-      delta: null,
-      routeCount: places.routeCount,
-      zoneCount: places.zoneCount,
-      totalNote: null,
-      lastIncident: null,
-      chart: chartFor(buckets.classCounts, buckets.priorityCounts, lang),
-      regions: trimRegions(places.regions, lang),
-      rows: [],
-      tableState: 'restricted',
-    };
+    if (figureStatus === 'ready') {
+      const totals = publicDamageTotals(publicSummary);
+      const buckets = publicBuckets(publicSummary);
+      const places = cellPlaces(publicCells);
+      return {
+        status: 'ready',
+        total: totals ? totals.total : 0,
+        delta: null,
+        routeCount: places.routeCount,
+        zoneCount: places.zoneCount,
+        totalNote: null,
+        lastIncident: null,
+        chart: chartFor(buckets.classCounts, buckets.priorityCounts, lang),
+        regions: trimRegions(places.regions, lang),
+        rows: [],
+        tableState: 'restricted',
+      };
+    }
+    if (knownReports != null) {
+      return catalogueOverview({
+        publicCells,
+        catalogueStats,
+        lang,
+        tableState: 'restricted',
+      });
+    }
+    return restricted;
+  }
+
+  if (figureStatus !== 'ready') {
+    if (knownReports != null) {
+      return catalogueOverview({
+        publicCells,
+        catalogueStats,
+        lang,
+        tableState: 'listMissing',
+      });
+    }
+    return restricted;
   }
 
   const rows = activeRows(observations);
   const counted = summarise(rows);
   const classCounts = authorityClassCounts || counted.classCounts;
   const priorityCounts = authorityPriorityCounts || counted.priorityCounts;
-  const total = Number.isFinite(Number(authorityTotal)) ? Number(authorityTotal) : counted.total;
-  const places = collectPlaces(rows.map((obs) => ({
+  const countedTotal = Number.isFinite(Number(authorityTotal)) ? Number(authorityTotal) : counted.total;
+  const floor = Number(catalogueFloor);
+  const floored = Number.isFinite(floor) && floor > 0 && floor > countedTotal;
+  const total = floored ? floor : countedTotal;
+  const authorityPlaces = collectPlaces(rows.map((obs) => ({
     latitude: obs.latitude,
     longitude: obs.longitude,
     weight: 1,
   })));
+  const knownPlaces = cellPlaces(publicCells);
+  const useKnownPlaces = (floored || (authorityPlaces.routeCount === 0 && authorityPlaces.zoneCount === 0))
+    && (knownPlaces.routeCount > 0 || knownPlaces.zoneCount > 0);
+  const places = useKnownPlaces ? knownPlaces : authorityPlaces;
   const tableRows = presentRows(rows, organizations, lang);
   const latest = tableRows.find((row) => row.dateLabel);
   const catalogue = Number(catalogueTotal);
   const loaded = Number(loadedCount);
-  const totalNote = listTruncated && Number.isFinite(catalogue) && Number.isFinite(loaded) && catalogue > loaded
+  const truncatedNote = listTruncated && Number.isFinite(catalogue) && Number.isFinite(loaded) && catalogue > loaded
     ? (lang === 'fr'
       ? `${loaded} signalement${loaded > 1 ? 's' : ''} chargé${loaded > 1 ? 's' : ''} pour les totaux, ${catalogue} au catalogue.`
       : `${loaded} loaded into the totals, ${catalogue} in the catalogue.`)
     : null;
+  const knownBuckets = floored ? catalogueClassBuckets(catalogueStats) : null;
+  const chart = knownBuckets
+    ? chartFor(knownBuckets.classCounts, knownBuckets.priorityCounts, lang)
+    : chartFor(classCounts, priorityCounts, lang);
 
   return {
     status: 'ready',
     total,
-    delta: periodDelta(comparison, total),
+    delta: floored ? null : periodDelta(comparison, total),
     routeCount: places.routeCount,
     zoneCount: places.zoneCount,
-    totalNote,
+    totalNote: floored ? officialPublicTotalNote(lang) : truncatedNote,
     lastIncident: latest
       ? { dateLabel: latest.dateLabel, place: latest.place }
       : null,
-    chart: chartFor(classCounts, priorityCounts, lang),
+    chart,
     regions: trimRegions(places.regions, lang),
     rows: tableRows,
-    tableState: tableRows.length > 0 ? 'rows' : 'empty',
+    tableState: tableRows.length > 0 ? 'rows' : (floored ? 'listMissing' : 'empty'),
   };
 }

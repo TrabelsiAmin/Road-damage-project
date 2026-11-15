@@ -1,5 +1,12 @@
 import { describe, expect, it } from 'vitest';
-import { aggregatePublicMapCells, catalogueMapNote, publicCellSize } from './publicMapCells';
+import {
+  aggregatePublicMapCells,
+  catalogueMapNote,
+  catalogueReportCount,
+  catalogueVisibleStats,
+  preferWiderCells,
+  publicCellSize,
+} from './publicMapCells';
 
 describe('public map cells', () => {
   it('keeps the cell at least about one kilometre', () => {
@@ -33,6 +40,32 @@ describe('public map cells', () => {
     ]);
     expect(cells[0].dominant_class).toBe('D20');
     expect(cells[0].report_count).toBe(3);
+  });
+
+  it('counts the same real reports the cells group, without ids', () => {
+    const points = [
+      { is_demo: false, status: 'unconfirmed', anomaly_type: 'D40', latitude: 37.2649983, longitude: 9.8778872, id: 'secret-1' },
+      { is_demo: false, status: 'confirmed', anomaly_type: 'D00', latitude: 37.2649779, longitude: 9.8778506, id: 'secret-2' },
+      { is_demo: false, status: 'unconfirmed', anomaly_type: 'D40', latitude: 37.2601, longitude: 9.8701 },
+      { is_demo: true, status: 'unconfirmed', anomaly_type: 'D20', latitude: 36.8, longitude: 10.18 },
+      { is_demo: false, status: 'rejected', anomaly_type: 'D20', latitude: 36.8, longitude: 10.18 },
+    ];
+    const stats = catalogueVisibleStats(points);
+    expect(stats.reports).toBe(3);
+    expect(stats.classes).toEqual([
+      { anomaly_type: 'D40', count: 2 },
+      { anomaly_type: 'D00', count: 1 },
+    ]);
+    expect(JSON.stringify(stats)).not.toContain('secret');
+    expect(catalogueReportCount(aggregatePublicMapCells(points))).toBe(3);
+  });
+
+  it('does not replace a known catalogue with a shorter one', () => {
+    const wider = [{ cell_lat: 36.8, cell_lng: 10.18, report_count: 21 }];
+    const shorter = [{ cell_lat: 36.8, cell_lng: 10.18, report_count: 4 }];
+    expect(preferWiderCells(wider, shorter)).toBe(wider);
+    expect(preferWiderCells(wider, [])).toBe(wider);
+    expect(catalogueReportCount(preferWiderCells(shorter, wider))).toBe(21);
   });
 
   it('says the official total is a 404, not a national total', () => {

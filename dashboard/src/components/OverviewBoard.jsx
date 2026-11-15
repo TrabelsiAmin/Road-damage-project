@@ -41,6 +41,8 @@ const COPY = {
     owner: 'Responsable',
     restrictedTitle: 'Dossiers individuels réservés',
     restrictedBody: 'Les lignes individuelles restent réservées aux comptes autorisés.',
+    listMissingTitle: 'Liste détaillée non chargée',
+    listMissingBody: 'Le total vient du catalogue visible. Les dossiers individuels ne sont pas dans la liste chargée.',
     emptyTitle: 'Aucun incident',
     emptyBody: 'Aucun signalement non rejeté dans cette période.',
     unavailableBody: 'Les totaux ne sont pas disponibles.',
@@ -77,6 +79,8 @@ const COPY = {
     owner: 'Organization',
     restrictedTitle: 'Individual cases are reserved',
     restrictedBody: 'Individual rows stay with authorized accounts.',
+    listMissingTitle: 'Detailed list not loaded',
+    listMissingBody: 'The total comes from the visible catalogue. Individual cases are not in the loaded list.',
     emptyTitle: 'No incidents',
     emptyBody: 'No non-rejected report in this period.',
     unavailableBody: 'The totals are not available.',
@@ -158,6 +162,8 @@ export function OverviewBoard({
   authorityPriorityCounts = null,
   organizations = [],
   catalogueTotal = null,
+  catalogueStats = null,
+  catalogueFloor = null,
   loadedCount = 0,
   listTruncated = false,
   note = null,
@@ -181,6 +187,8 @@ export function OverviewBoard({
     authorityPriorityCounts,
     organizations,
     catalogueTotal,
+    catalogueStats,
+    catalogueFloor,
     loadedCount,
     listTruncated,
     lang,
@@ -317,18 +325,22 @@ export function OverviewBoard({
             <strong>
               {view.tableState === 'restricted'
                 ? copy.restrictedTitle
-                : view.tableState === 'empty'
-                  ? copy.emptyTitle
-                  : copy.unavailable}
+                : view.tableState === 'listMissing'
+                  ? copy.listMissingTitle
+                  : view.tableState === 'empty'
+                    ? copy.emptyTitle
+                    : copy.unavailable}
             </strong>
             <p>
               {view.tableState === 'restricted'
                 ? copy.restrictedBody
-                : view.tableState === 'empty'
-                  ? copy.emptyBody
-                  : view.tableState === 'loading'
-                    ? copy.loading
-                    : copy.unavailableBody}
+                : view.tableState === 'listMissing'
+                  ? copy.listMissingBody
+                  : view.tableState === 'empty'
+                    ? copy.emptyBody
+                    : view.tableState === 'loading'
+                      ? copy.loading
+                      : copy.unavailableBody}
             </p>
           </div>
         )}

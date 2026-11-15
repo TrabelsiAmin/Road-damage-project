@@ -18,6 +18,58 @@ function cellCenter(value, size) {
   return Math.round((index + 0.5) * size * 1e6) / 1e6;
 }
 
+/**
+ * A catalogue point can sit on the public grid.
+ * Demonstrations, rejections, and missing coordinates stay out.
+ * The test is the same one that produces the map caption count.
+ */
+export function isCatalogueMapPoint(point) {
+  if (point?.is_demo !== false) return false;
+  if (point?.status === 'rejected') return false;
+  const latitude = Number(point?.latitude);
+  const longitude = Number(point?.longitude);
+  if (!Number.isFinite(latitude) || !Number.isFinite(longitude)) return false;
+  if (Math.abs(latitude) > 90 || Math.abs(longitude) > 180) return false;
+  if (latitude === 0 && longitude === 0) return false;
+  return true;
+}
+
+export function catalogueReportCount(cells) {
+  if (!Array.isArray(cells) || cells.length === 0) return null;
+  const total = cells.reduce((sum, cell) => sum + (Number(cell?.report_count) || 0), 0);
+  return total > 0 ? total : null;
+}
+
+/**
+ * Class totals for the same points that become cells.
+ * No observation id and no coordinate is returned.
+ */
+export function catalogueVisibleStats(points) {
+  const classCounts = new Map();
+  let reports = 0;
+  for (const point of points || []) {
+    if (!isCatalogueMapPoint(point)) continue;
+    reports += 1;
+    const code = point?.anomaly_type == null ? null : String(point.anomaly_type);
+    classCounts.set(code, (classCounts.get(code) || 0) + 1);
+  }
+  return {
+    reports,
+    classes: [...classCounts.entries()].map(([anomaly_type, count]) => ({ anomaly_type, count })),
+  };
+}
+
+/**
+ * Keeps the wider visible catalogue. A later empty or shorter fetch
+ * must not wipe a count the screen has already shown.
+ */
+export function preferWiderCells(currentCells, nextCells) {
+  const currentCount = catalogueReportCount(currentCells) || 0;
+  const nextCount = catalogueReportCount(nextCells) || 0;
+  if (nextCount < currentCount) return currentCells || [];
+  return nextCells || [];
+}
+
 function classRank(left, right) {
   const leftName = left[0] == null ? '\uffff' : String(left[0]);
   const rightName = right[0] == null ? '\uffff' : String(right[0]);
@@ -32,13 +84,9 @@ export function aggregatePublicMapCells(points, cellDegrees = MIN_CELL_DEGREES) 
   const size = publicCellSize(cellDegrees);
   const cells = new Map();
   for (const point of points || []) {
-    if (point?.is_demo !== false) continue;
-    if (point?.status === 'rejected') continue;
-    const latitude = Number(point?.latitude);
-    const longitude = Number(point?.longitude);
-    if (!Number.isFinite(latitude) || !Number.isFinite(longitude)) continue;
-    if (Math.abs(latitude) > 90 || Math.abs(longitude) > 180) continue;
-    if (latitude === 0 && longitude === 0) continue;
+    if (!isCatalogueMapPoint(point)) continue;
+    const latitude = Number(point.latitude);
+    const longitude = Number(point.longitude);
     const cellLat = cellCenter(latitude, size);
     const cellLng = cellCenter(longitude, size);
     const key = `${cellLat}|${cellLng}`;

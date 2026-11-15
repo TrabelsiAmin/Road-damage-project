@@ -2,12 +2,14 @@ import { describe, expect, it } from 'vitest';
 import React from 'react';
 import { renderToString } from 'react-dom/server';
 import { OverviewBoard } from '../components/OverviewBoard';
+import { PUBLIC_ROAD_REPORTS } from '../data/publicRoadReports';
 import {
   buildOverviewPresentation,
   catalogueFloorFor,
   formatIncidentDate,
   periodDelta,
 } from './overviewPresentation';
+import { publicReportListItems } from './publicRoadReports';
 
 const tunis = {
   id: 'obs-tunis',
@@ -212,7 +214,8 @@ describe('overview presentation', () => {
       lang: 'fr',
     }));
     expect(html).toContain('Total des incidents');
-    expect(html).toContain('ov-kpi-value">21');
+    expect(html).toContain('data-incident-total="21"');
+    expect(html).toContain('data-catalogue-total="21"');
     expect(html).toContain('Le total public officiel reste indisponible.');
     expect(html).toContain('Dossier individuel non visible');
     expect(html).toContain('Tunis');
@@ -220,5 +223,45 @@ describe('overview presentation', () => {
     expect(html).toContain('Dossiers individuels réservés');
     expect(html).not.toContain('obs-tunis');
     expect(html).not.toContain('128');
+  });
+
+  it('shows the summed incident total and keeps the catalogue count visible', () => {
+    const reports = publicReportListItems(PUBLIC_ROAD_REPORTS, 'fr');
+    const visitor = renderToString(React.createElement(OverviewBoard, {
+      canSeeRows: false,
+      figureStatus: 'unavailable',
+      publicCells: [
+        { cell_lat: 36.8065, cell_lng: 10.1815, report_count: 12 },
+        { cell_lat: 35.8256, cell_lng: 10.6369, report_count: 9 },
+      ],
+      catalogueStats: {
+        classes: [
+          { anomaly_type: 'D40', count: 14 },
+          { anomaly_type: 'D00', count: 7 },
+        ],
+      },
+      publicReports: reports,
+      lang: 'fr',
+    }));
+    expect(visitor).toContain('data-incident-total="27"');
+    expect(visitor).toContain('data-catalogue-total="21"');
+    expect(visitor).toContain('21 signalements TariqMap + 6 rapports publics');
+    expect(visitor).toContain('>21<');
+    expect(visitor).toContain('Le total public officiel reste indisponible.');
+    const breakdown = visitor.match(/data-incident-breakdown="true">([^<]+)/);
+    expect(breakdown?.[1]).toBe('21 signalements TariqMap + 6 rapports publics');
+    expect(breakdown?.[1]).not.toMatch(/D00|D10|D20|D40/);
+
+    const signedIn = renderToString(React.createElement(OverviewBoard, {
+      canSeeRows: true,
+      figureStatus: 'ready',
+      observations: [tunis, sousse],
+      authorityTotal: 31,
+      publicReports: reports,
+      lang: 'fr',
+    }));
+    expect(signedIn).toContain('data-incident-total="37"');
+    expect(signedIn).toContain('31 signalements TariqMap + 6 rapports publics');
+    expect(signedIn).toContain('data-catalogue-total="31"');
   });
 });

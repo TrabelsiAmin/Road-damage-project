@@ -2,11 +2,14 @@ import { describe, expect, it } from 'vitest';
 import { PUBLIC_ROAD_REPORTS } from '../data/publicRoadReports';
 import {
   escapeHtml,
+  incidentTotalBreakdown,
   isCitedPublicReport,
   publicReportListItems,
   publicReportMapMarkers,
   publicReportPopupHtml,
   PUBLIC_REPORT_ZOOM,
+  storedPublicReportCount,
+  sumIncidentTotal,
 } from './publicRoadReports';
 
 const CLASS_CODE = /\bD(?:00|10|20|40)\b/;
@@ -121,6 +124,33 @@ describe('public road reports', () => {
     ])).toEqual([]);
     const hidden = publicReportListItems([{ ...base, classCode: 'D00' }]);
     expect(hidden).toEqual([]);
+  });
+
+  it('adds each stored public report once to the incident total', () => {
+    expect(storedPublicReportCount(PUBLIC_ROAD_REPORTS)).toBe(PUBLIC_ROAD_REPORTS.length);
+    expect(storedPublicReportCount(publicReportListItems(PUBLIC_ROAD_REPORTS, 'fr'))).toBe(6);
+    const manyStreets = PUBLIC_ROAD_REPORTS.find((report) => report.id === 'sfax-rues-2026-06');
+    const doubled = {
+      ...manyStreets,
+      locations: [
+        manyStreets.locations[0],
+        { ...manyStreets.locations[0], id: 'autre-rue' },
+        { ...manyStreets.locations[0], id: 'encore-une-rue' },
+      ],
+    };
+    expect(storedPublicReportCount([doubled])).toBe(1);
+    expect(publicReportMapMarkers([doubled])).toHaveLength(3);
+    expect(sumIncidentTotal(21, storedPublicReportCount(PUBLIC_ROAD_REPORTS))).toBe(27);
+    expect(sumIncidentTotal(31, 6)).toBe(37);
+    expect(sumIncidentTotal(0, 6)).toBe(6);
+    expect(sumIncidentTotal(null, 6)).toBeNull();
+    expect(sumIncidentTotal(undefined, 6)).toBeNull();
+    expect(sumIncidentTotal(-1, 6)).toBeNull();
+    expect(incidentTotalBreakdown(21, 6, 'fr')).toBe('21 signalements TariqMap + 6 rapports publics');
+    expect(incidentTotalBreakdown(1, 1, 'fr')).toBe('1 signalement TariqMap + 1 rapport public');
+    expect(incidentTotalBreakdown(21, 6, 'en')).toBe('21 TariqMap reports + 6 public reports');
+    expect(incidentTotalBreakdown(null, 6, 'fr')).toBeNull();
+    expect(storedPublicReportCount([{ id: 'x', title: 'Sans source' }])).toBe(0);
   });
 
   it('builds a popup that quotes the source and states the position is approximate', () => {

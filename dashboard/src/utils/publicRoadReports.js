@@ -1,5 +1,6 @@
 /**
- * Cited public road reports stay outside the catalogue counts.
+ * Cited public road reports stay outside the catalogue class counts and the map cells.
+ * Each stored record can be added once to the incident total.
  * A marker exists only for a labeled approximate centroid or for coordinates
  * the source itself published.
  */
@@ -84,6 +85,49 @@ export function isCitedPublicReport(report) {
   if (report.classCode != null && text(report.classCode)) return false;
   if (CLASS_CODE.test(reportBlob(report))) return false;
   return true;
+}
+
+/**
+ * One stored report record, even when the article names several streets
+ * or carries several approximate locations.
+ */
+export function storedPublicReportCount(reports) {
+  const seen = new Set();
+  for (const report of Array.isArray(reports) ? reports : []) {
+    if (!isCitedPublicReport(report)) continue;
+    const id = text(report.id);
+    if (id) seen.add(id);
+  }
+  return seen.size;
+}
+
+/**
+ * Honest catalogue count plus cited public reports.
+ * A missing catalogue count stays missing. Extra locations do not add incidents.
+ */
+export function sumIncidentTotal(catalogueCount, publicReportCount) {
+  if (catalogueCount == null || catalogueCount === '') return null;
+  const catalogue = Number(catalogueCount);
+  const reports = Number(publicReportCount);
+  if (!Number.isFinite(catalogue) || catalogue < 0) return null;
+  const extra = Number.isFinite(reports) && reports > 0 ? Math.trunc(reports) : 0;
+  return catalogue + extra;
+}
+
+export function incidentTotalBreakdown(catalogueCount, publicReportCount, lang = 'fr') {
+  const total = sumIncidentTotal(catalogueCount, publicReportCount);
+  const reports = Number(publicReportCount);
+  if (total == null || !Number.isFinite(reports) || reports < 0) return null;
+  const catalogue = Number(catalogueCount);
+  const publicCount = Math.trunc(reports);
+  if (lang === 'en') {
+    const signalWord = catalogue === 1 ? 'TariqMap report' : 'TariqMap reports';
+    const publicWord = publicCount === 1 ? 'public report' : 'public reports';
+    return `${catalogue} ${signalWord} + ${publicCount} ${publicWord}`;
+  }
+  const signalWord = catalogue === 1 ? 'signalement TariqMap' : 'signalements TariqMap';
+  const publicWord = publicCount === 1 ? 'rapport public' : 'rapports publics';
+  return `${catalogue} ${signalWord} + ${publicCount} ${publicWord}`;
 }
 
 function acceptedLocation(report, location) {

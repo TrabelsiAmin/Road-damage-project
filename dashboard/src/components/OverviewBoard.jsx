@@ -7,6 +7,7 @@ import {
   Route,
 } from 'lucide-react';
 import { buildOverviewPresentation } from '../utils/overviewPresentation';
+import { incidentTotalBreakdown, storedPublicReportCount, sumIncidentTotal } from '../utils/publicRoadReports';
 import { approximateRoadNote } from '../utils/tunisiaGeo';
 
 const COPY = {
@@ -24,6 +25,7 @@ const COPY = {
     unavailable: 'Indisponible',
     loading: 'Chargement…',
     hole: 'incidents',
+    catalogueHole: 'signalements',
     regionTitle: 'Incidents par gouvernorat',
     regionHelp: 'Déduit du point le plus proche. Le gouvernorat n’est pas un champ enregistré.',
     regionEmpty: 'Aucun point localisé dans cette vue.',
@@ -48,7 +50,7 @@ const COPY = {
     unavailableBody: 'Les totaux ne sont pas disponibles.',
     roadNote: approximateRoadNote('fr'),
     publicTitle: 'Signalements publics',
-    publicHelp: 'Articles et communiqués ouverts sur le web. Ils restent séparés du catalogue TariqMap et ne changent pas les totaux.',
+    publicHelp: 'Articles et communiqués ouverts sur le web. Chaque rapport compte une fois dans le total des incidents et reste hors du catalogue TariqMap.',
     publicEmpty: 'Aucun signalement public cité.',
     publicSource: 'Source',
     publicShow: 'Voir sur la carte',
@@ -67,6 +69,7 @@ const COPY = {
     unavailable: 'Unavailable',
     loading: 'Loading…',
     hole: 'incidents',
+    catalogueHole: 'reports',
     regionTitle: 'Incidents by governorate',
     regionHelp: 'Derived from the nearest point. Governorate is not a stored field.',
     regionEmpty: 'No located point in this view.',
@@ -91,7 +94,7 @@ const COPY = {
     unavailableBody: 'The totals are not available.',
     roadNote: approximateRoadNote('en'),
     publicTitle: 'Public reports',
-    publicHelp: 'News and notices opened on the web. They stay separate from the TariqMap catalogue and do not change the totals.',
+    publicHelp: 'News and notices opened on the web. Each report counts once in the incident total and stays outside the TariqMap catalogue.',
     publicEmpty: 'No cited public report.',
     publicSource: 'Source',
     publicShow: 'Show on map',
@@ -206,6 +209,14 @@ export function OverviewBoard({
     lang,
   });
   const ready = view.status === 'ready';
+  const publicCount = storedPublicReportCount(publicReports);
+  const combinedTotal = ready && view.total != null
+    ? sumIncidentTotal(view.total, publicCount)
+    : null;
+  const breakdown = publicCount > 0 && combinedTotal != null
+    ? incidentTotalBreakdown(view.total, publicCount, lang)
+    : null;
+  const headlineTotal = combinedTotal != null ? combinedTotal : view.total;
   const latestValue = !canSeeRows
     ? copy.unavailable
     : figureText(view.status, view.lastIncident ? view.lastIncident.dateLabel : null, copy);
@@ -220,8 +231,16 @@ export function OverviewBoard({
           <article className="ov-kpi">
             <span className="ov-kpi-icon ov-kpi-icon-alert"><AlertTriangle size={16} /></span>
             <p className="ov-kpi-label">{copy.total}</p>
-            <p className="ov-kpi-value">{figureText(view.status, view.total, copy)}</p>
-            {view.delta && (
+            <p
+              className="ov-kpi-value"
+              data-incident-total={headlineTotal == null ? '' : String(headlineTotal)}
+              data-catalogue-total={view.total == null ? '' : String(view.total)}
+              data-public-reports={String(publicCount)}
+            >
+              {figureText(view.status, headlineTotal, copy)}
+            </p>
+            {breakdown && <p className="ov-kpi-breakdown" data-incident-breakdown="true">{breakdown}</p>}
+            {view.delta && !breakdown && (
               <p className={`ov-kpi-delta ${view.delta.pct >= 0 ? 'is-up' : 'is-down'}`}>
                 {formatPct(view.delta.pct)}
                 <span>{copy.vs}</span>
@@ -255,7 +274,7 @@ export function OverviewBoard({
         <article className="ov-card">
           <h2>{view.chart?.title || (lang === 'fr' ? 'Répartition par classe' : 'Split by class')}</h2>
           {view.chart ? (
-            <Donut chart={view.chart} hole={view.total} caption={copy.hole} />
+            <Donut chart={view.chart} hole={view.total} caption={breakdown ? copy.catalogueHole : copy.hole} />
           ) : (
             <p className="ov-empty">{ready ? copy.chartEmpty : figureText(view.status, null, copy)}</p>
           )}

@@ -244,8 +244,18 @@
 .ov-kpi-delta span { color: #64748B; }
 
 .ov-kpi-sub,
-.ov-public-note {
+.ov-public-note,
+.ov-kpi-breakdown {
   margin-top: 6px;
+}
+
+.ov-kpi-breakdown {
+  margin-bottom: 0;
+  color: #334155;
+  font-size: 0.78rem;
+  font-weight: 600;
+  line-height: 1.35;
+  overflow-wrap: anywhere;
 }
 
 .ov-public-note {
@@ -734,6 +744,11 @@ html[data-theme="dark"] .ov-donut-hole,
 html[data-theme="dark"] .tm-period-select {
   background: #292524;
   border-color: #44403C;
+  color: #F5F0E8;
+}
+
+html[data-theme="dark"] .ov-kpi-breakdown,
+html[data-theme="dark"] .ov-kpi-value[data-incident-total] {
   color: #F5F0E8;
 }
 

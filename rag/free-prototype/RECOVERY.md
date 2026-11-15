@@ -1,6 +1,68 @@
 # Récupération de l’index de 479 vecteurs
 
-À coller dans une cellule temporaire de Colab. Ne pas l’enregistrer dans `RDDRAG.ipynb`. La cellule lit les fichiers et peut les télécharger. Elle ne recalcule pas les embeddings et n’écrit rien dans `vector_db`.
+À coller dans une cellule temporaire de Colab. Ne pas l’enregistrer dans `RDDRAG.ipynb`. Le diagnostic ne télécharge rien. La cellule suivante ne télécharge que si un index de 479 vecteurs est reconnu. Aucune des deux ne recalcule les embeddings ni n’écrit dans `vector_db`.
+
+La première exécution s’est arrêtée sur `SystemExit: Aucun index de 479 vecteurs`. Ce message veut dire qu’aucun dossier ne remplissait toutes les conditions. Il ne télécharge pas l’index de 431 vecteurs. Colab affiche cette sortie volontaire comme une erreur rouge.
+
+Lancez d’abord cette cellule. Elle ne télécharge rien et ne s’arrête pas par une exception.
+
+```python
+import json, os, pickle
+
+print("Drive monte :", os.path.isdir("/content/drive"))
+roots = ["/content"]
+if os.path.isdir("/content/drive"):
+    roots.append("/content/drive")
+found = []
+for root in roots:
+    for dirpath, _dirnames, filenames in os.walk(root):
+        if "index.faiss" in filenames:
+            found.append(dirpath)
+if not found:
+    print("Aucun index.faiss sous", ", ".join(roots))
+for folder in found:
+    print("=" * 60)
+    print(folder)
+    for name in ("index.faiss", "chunks.pkl", "config.json"):
+        path = os.path.join(folder, name)
+        print(f"  {name}:", f"{os.path.getsize(path)} octets" if os.path.isfile(path) else "absent")
+    index_path = os.path.join(folder, "index.faiss")
+    if not os.path.isfile(index_path):
+        continue
+    import faiss, numpy as np
+    index = faiss.read_index(index_path)
+    vectors = np.vstack([index.reconstruct(i) for i in range(index.ntotal)])
+    print("  type:", type(index).__name__)
+    print("  vecteurs:", index.ntotal)
+    print("  dimension:", index.d)
+    print("  ecart max a la norme 1:", float(np.max(np.abs(np.linalg.norm(vectors, axis=1) - 1))))
+    chunks_path = os.path.join(folder, "chunks.pkl")
+    if os.path.isfile(chunks_path):
+        with open(chunks_path, "rb") as handle:
+            chunks = pickle.load(handle)
+        if isinstance(chunks, dict) and "chunks" in chunks:
+            chunks = chunks["chunks"]
+        counts = {}
+        if isinstance(chunks, list):
+            for item in chunks:
+                name = item.get("source") if isinstance(item, dict) else None
+                counts[name] = counts.get(name, 0) + 1
+        print("  enregistrements:", len(chunks))
+        for name, count in sorted(counts.items(), key=lambda pair: str(pair[0])):
+            print(f"    {count}  {name}")
+    config_path = os.path.join(folder, "config.json")
+    if os.path.isfile(config_path):
+        config = json.load(open(config_path, encoding="utf-8"))
+        print("  config:", config.get("num_chunks"), config.get("embedding_dimension"), config.get("embedding_model"))
+print("Aucun telechargement.")
+```
+
+Si cette cellule imprime `Aucun index.faiss` et `Drive monte : False`, la session n’a plus le dossier `/content`. Montez Drive seulement si une copie de `vector_db` y a déjà été enregistrée, puis relancez le diagnostic :
+
+```python
+from google.colab import drive
+drive.mount("/content/drive")
+```
 
 L’index retenu a 479 vecteurs, la dimension 1024, le type `IndexFlatIP`, des normes proches de 1, et les six noms `*_contenu_organise.txt`. L’index de 431 vecteurs, celui d’environ 1,68 Mo, est refusé et n’est pas téléchargé.
 
@@ -73,11 +135,12 @@ for root in roots:
 
 kept = next((folder for folder in candidates if describe(folder)), None)
 if not kept:
-    raise SystemExit("Aucun index de 479 vecteurs. Ne telechargez pas celui de 431.")
+    print("Aucun index de 479 vecteurs. Rien n'a ete telecharge.")
+else:
+    from google.colab import files
+    for name in ("index.faiss", "chunks.pkl", "config.json"):
+        files.download(os.path.join(kept, name))
 
-from google.colab import files
-for name in ("index.faiss", "chunks.pkl", "config.json"):
-    files.download(os.path.join(kept, name))
 ```
 
 Si `/content/road_damage_rag/vector_db` n’existe plus, la session Colab a été recyclée. Monter Drive dans une autre cellule temporaire, puis relancer la cellule ci-dessus :

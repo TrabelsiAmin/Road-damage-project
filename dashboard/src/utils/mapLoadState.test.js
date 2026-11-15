@@ -8,6 +8,11 @@ describe('map load state', () => {
     expect(mapLoadCopy('error', 'fr')).toContain('erreur technique');
     expect(mapLoadCopy('error', 'fr')).not.toContain('Aucune anomalie');
     expect(mapLoadCopy('empty', 'fr')).toContain('Aucune anomalie');
+    expect(mapLoadCopy('error', 'fr', 'http_404')).toContain('HTTP 404');
+    expect(mapLoadCopy('error', 'fr', 'http_404')).toContain('pas un total de zéro');
+    expect(mapLoadCopy('error', 'fr', 'http_404')).not.toContain('Aucune anomalie');
+    expect(mapLoadCopy('empty', 'fr', 'catalogue')).toContain('HTTP 404');
+    expect(mapLoadCopy('empty', 'fr', 'catalogue')).not.toContain('filtres');
   });
 
   it('shows markers as ready even while a background refresh runs', () => {

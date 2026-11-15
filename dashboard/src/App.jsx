@@ -25,11 +25,10 @@ import {
   fetchMaintenanceEvents,
   recordMaintenanceEvent,
   subscribeToCommandCenterUpdates,
-  fetchPublicDamageSummary,
-  fetchPublicMapCells,
   fetchOrganizations,
   supabase,
 } from './supabase';
+import { loadVisitorPublicMap } from './catalogueMap';
 import { mergeObservationPages, OBSERVATION_PAGE_SIZE } from './utils/records';
 import { downloadFile, generatePublicAggregateCsv } from './utils/exportFormats';
 import { GlobalFilterBar } from './components/GlobalFilterBar';
@@ -60,6 +59,7 @@ import { TechnicalRecommendation } from './components/TechnicalRecommendation';
 import { displayClassCode } from './utils/classCodes';
 import { filterValidClusters } from './utils/mapValidation';
 import { mapLoadCopy, mapLoadState } from './utils/mapLoadState';
+import { catalogueMapNote } from './utils/publicMapCells';
 import { authorityCountStatus, overviewCounters, visitorCountStatus } from './utils/overviewCounters';
 import { canDownloadPublicExport, publicCatalogueText, publicDamageTotals } from './utils/publicStats';
 import { usableOrganizations } from './utils/organizations';
@@ -363,6 +363,7 @@ export default function App() {
   const [authReady, setAuthReady] = useState(false);
   const [publicSummary, setPublicSummary] = useState([]);
   const [publicCells, setPublicCells] = useState([]);
+  const [publicCellSource, setPublicCellSource] = useState('idle');
   const [publicStatsStatus, setPublicStatsStatus] = useState('idle');
   const [organizations, setOrganizations] = useState([]);
   const [organizationsUnavailable, setOrganizationsUnavailable] = useState(false);
@@ -527,10 +528,7 @@ export default function App() {
     setError(null);
     try {
       if (!isAuthorityUser) {
-        const [summary, cells] = await Promise.all([
-          fetchPublicDamageSummary(),
-          fetchPublicMapCells(0.01),
-        ]);
+        const visitor = await loadVisitorPublicMap();
         if (gen !== fetchGenRef.current) return;
         setObservations([]);
         setCatalogueTotal(null);
@@ -539,9 +537,13 @@ export default function App() {
         setMaintenanceCases({});
         setAuditEvents([]);
         setSelectedCluster(null);
-        setPublicSummary(summary || []);
-        setPublicCells(cells || []);
-        setPublicStatsStatus('ready');
+        setPublicSummary(visitor.summary || []);
+        setPublicCells(visitor.cells || []);
+        setPublicCellSource(visitor.cellSource || 'unavailable');
+        setPublicStatsStatus(visitor.summaryStatus || 'unavailable');
+        if (visitor.cellSource === 'unavailable') {
+          setError(visitor.failure || 'unavailable');
+        }
         setLastUpdated(new Date());
         return;
       }
@@ -554,6 +556,7 @@ export default function App() {
       if (gen !== fetchGenRef.current) return;
       setPublicSummary([]);
       setPublicCells([]);
+      setPublicCellSource('idle');
       setPublicStatsStatus('idle');
       const loadedRows = obsPage?.rows || [];
       setObservations(loadedRows);
@@ -579,6 +582,7 @@ export default function App() {
         setServerClusters([]);
         setPublicSummary([]);
         setPublicCells([]);
+        setPublicCellSource('unavailable');
         setPublicStatsStatus('unavailable');
       }
       setError(err.message || 'Error fetching data from Supabase');
@@ -836,6 +840,17 @@ export default function App() {
       }))
       .filter((cell) => Number.isFinite(cell.latitude) && Number.isFinite(cell.longitude));
   }, [isAuthorityUser, validClusters, publicCells]);
+
+  const catalogueNote = publicCellSource === 'catalogue'
+    ? catalogueMapNote({
+      cells: publicCells.length,
+      reports: publicCells.reduce((sum, cell) => sum + (Number(cell.report_count) || 0), 0),
+      lang,
+    })
+    : '';
+  const mapReason = error === 'http_404'
+    ? 'http_404'
+    : (publicCellSource === 'catalogue' ? 'catalogue' : null);
 
   const publicTotals = useMemo(
     () => (publicStatsStatus === 'ready' ? publicDamageTotals(publicSummary) : null),
@@ -1776,9 +1791,9 @@ export default function App() {
               ? (lang === 'fr'
                 ? 'Agrégats serveur à 20 m. La couleur suit le score de priorité le plus élevé, la taille le nombre de signalements.'
                 : 'Server clusters at 20 m. Colour follows the highest priority score. Size is the number of reports.')
-              : (lang === 'fr'
+              : (catalogueNote || (lang === 'fr'
                 ? 'Mailles d\'environ 1 km. Le point affiché est le centre de la maille, pas la position mesurée.'
-                : 'Cells of roughly 1 km. The shown point is the cell center, not the measured position.')}
+                : 'Cells of roughly 1 km. The shown point is the cell center, not the measured position.'))}
           </p>
         </div>
       )}
@@ -1790,6 +1805,7 @@ export default function App() {
         {activeNavTab === 'overview' && (
           <div className="ov-map-card-title">
             <h2>{lang === 'fr' ? 'Carte des incidents' : 'Incident map'}</h2>
+            {catalogueNote && <p>{catalogueNote}</p>}
           </div>
         )}
         {/* Left Map View */}
@@ -1817,7 +1833,7 @@ export default function App() {
             {mapLoadState({ loading, error, markerCount: mapMarkers.length }) === 'empty' && (
               <div className="map-overlay-banner map-empty-state" role="status">
                 <MapPinOff size={15} />
-                <span>{mapLoadCopy('empty', lang)}</span>
+                <span>{mapLoadCopy('empty', lang, mapReason)}</span>
               </div>
             )}
 
@@ -1847,7 +1863,7 @@ export default function App() {
 
             {mapLoadState({ loading, error, markerCount: mapMarkers.length }) === 'error' && (
               <div className="map-overlay-banner map-error-state" role="alert">
-                <span>{mapLoadCopy('error', lang)}</span>
+                <span>{mapLoadCopy('error', lang, mapReason)}</span>
                 <button type="button" className="btn btn-secondary btn-sm" onClick={loadData}>
                   {lang === 'fr' ? 'Réessayer' : 'Retry'}
                 </button>

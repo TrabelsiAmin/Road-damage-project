@@ -279,6 +279,14 @@
   letter-spacing: -0.01em;
 }
 
+.ov-map-card-title p {
+  margin: 4px 0 0;
+  max-width: 68ch;
+  color: #64748B;
+  font-size: 0.75rem;
+  line-height: 1.4;
+}
+
 .ov-card-help {
   margin: 4px 0 10px;
 }
@@ -667,6 +675,10 @@ html[data-theme="dark"] .ov-kpi-value,
 html[data-theme="dark"] .ov-card h2,
 html[data-theme="dark"] .ov-table-head h2,
 html[data-theme="dark"] .ov-assist-head h2,
+html[data-theme="dark"] .ov-map-card-title p {
+  color: #A8A29E;
+}
+
 html[data-theme="dark"] .ov-map-card-title h2,
 html[data-theme="dark"] .ov-donut-hole strong,
 html[data-theme="dark"] .ov-table td,

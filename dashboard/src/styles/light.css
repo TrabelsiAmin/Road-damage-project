@@ -1,28 +1,34 @@
-/* Light application shell. Loaded after index.css so page surfaces share one palette. */
+/* Light application shell. Loaded after index.css so page surfaces share one blue-and-white palette. */
 
 :root {
-  --tm-sidebar: #EFEAE1;
-  --tm-canvas: #F4F0E8;
+  --tm-sidebar: #FFFFFF;
+  --tm-canvas: #F4F8FF;
+  --tm-page-bg: #F4F8FF;
+  --tm-sidebar-hover: #EFF6FF;
+  --tm-sidebar-active: #EFF6FF;
+  --tm-border: #DBE7F5;
+  --bg-primary: #F4F8FF;
+  --border-subtle: #DBE7F5;
 }
 
 html,
 body,
 #root {
-  background: #F4F0E8;
-  color: #1C1917;
+  background: #F4F8FF;
+  color: #172033;
   color-scheme: light;
 }
 
 .tm-shell,
 .tm-main-viewport,
 .tm-content-area {
-  background: #F4F0E8;
+  background: #F4F8FF;
 }
 
 .tm-topbar {
   height: 60px;
   background: #FFFFFF;
-  border-bottom: 1px solid #E5EAF1;
+  border-bottom: 1px solid #DBE7F5;
   backdrop-filter: none;
 }
 
@@ -49,7 +55,7 @@ select,
 textarea {
   background: #FFFFFF;
   color: #172033;
-  border-color: #E5EAF1;
+  border-color: #DBE7F5;
 }
 
 .tm-content-area {
@@ -93,7 +99,7 @@ textarea {
 .stat-card,
 .tm-stat-card {
   background: #FFFFFF;
-  border: 1px solid #E5EAF1;
+  border: 1px solid #DBE7F5;
   box-shadow: none;
   border-radius: 6px;
 }
@@ -107,26 +113,26 @@ textarea {
 
 .action-table th,
 th {
-  background: #F7F9FC;
+  background: #F8FAFF;
   color: #64748B;
   font-size: 0.75rem;
   font-weight: 600;
-  border-bottom: 1px solid #E5EAF1;
+  border-bottom: 1px solid #DBE7F5;
 }
 
 td {
-  border-bottom: 1px solid #E5EAF1;
+  border-bottom: 1px solid #DBE7F5;
   color: #172033;
 }
 
 tbody tr:hover {
-  background: #F7F9FC;
+  background: #F8FAFF;
 }
 
 .action-queue-btn {
   background: #FFFFFF;
   color: #172033;
-  border: 1px solid #E5EAF1;
+  border: 1px solid #DBE7F5;
   border-radius: 4px;
 }
 
@@ -138,7 +144,7 @@ tbody tr:hover {
 
 .main-layout {
   background: #FFFFFF;
-  border: 1px solid #E5EAF1;
+  border: 1px solid #DBE7F5;
   border-radius: 6px;
   min-height: 640px;
 }
@@ -149,14 +155,14 @@ tbody tr:hover {
 .sidebar-expand-btn {
   background: #FFFFFF;
   color: #172033;
-  border: 1px solid #E5EAF1;
+  border: 1px solid #DBE7F5;
   box-shadow: none;
   border-radius: 4px;
 }
 
 .leaflet-container,
 .leaflet-map-host .leaflet-container {
-  background: #F7F9FC !important;
+  background: #F8FAFF !important;
 }
 
 .leaflet-popup-content-wrapper,
@@ -164,7 +170,7 @@ tbody tr:hover {
   background: #FFFFFF;
   color: #172033;
   box-shadow: none;
-  border: 1px solid #E5EAF1;
+  border: 1px solid #DBE7F5;
 }
 
 .rag-panel,
@@ -192,7 +198,7 @@ tbody tr:hover {
 .case-detail-header,
 .case-detail-section {
   background: #FFFFFF;
-  border-color: #E5EAF1;
+  border-color: #DBE7F5;
   color: #172033;
 }
 
@@ -233,7 +239,7 @@ tbody tr:hover {
   grid-template-columns: minmax(180px, 280px) minmax(0, 1fr);
   gap: 28px 40px;
   padding: 8px 4px 12px;
-  color: #1C1917;
+  color: #172033;
 }
 
 .road-brief-lead {
@@ -247,7 +253,7 @@ tbody tr:hover {
   font-weight: 600;
   letter-spacing: 0.14em;
   text-transform: uppercase;
-  color: #78716C;
+  color: #64748B;
 }
 
 .road-brief-value {
@@ -262,7 +268,7 @@ tbody tr:hover {
 .road-brief-caption {
   margin-top: 14px;
   max-width: 16rem;
-  color: #57534E;
+  color: #64748B;
   font-size: 0.95rem;
   line-height: 1.45;
 }
@@ -272,7 +278,7 @@ tbody tr:hover {
   padding: 0;
   border: 0;
   background: none;
-  color: #1C1917;
+  color: #2563EB;
   font-size: 0.84rem;
   text-decoration: underline;
   text-underline-offset: 3px;
@@ -283,8 +289,8 @@ tbody tr:hover {
   display: grid;
   grid-template-columns: repeat(4, minmax(0, 1fr));
   gap: 0;
-  border-top: 1px solid #D6D0C6;
-  border-bottom: 1px solid #D6D0C6;
+  border-top: 1px solid #DBE7F5;
+  border-bottom: 1px solid #DBE7F5;
 }
 
 .road-brief-action {
@@ -295,7 +301,7 @@ tbody tr:hover {
   min-width: 0;
   padding: 16px 18px 18px 0;
   border: 0;
-  border-right: 1px solid #E7E1D6;
+  border-right: 1px solid #DBE7F5;
   background: transparent;
   color: inherit;
   text-align: left;
@@ -314,7 +320,7 @@ tbody tr:hover {
 
 .road-brief-action span,
 .road-brief-facts dt {
-  color: #78716C;
+  color: #64748B;
   font-size: 0.75rem;
   font-weight: 600;
   letter-spacing: 0.04em;
@@ -330,7 +336,7 @@ tbody tr:hover {
 }
 
 .road-brief-action em {
-  color: #57534E;
+  color: #64748B;
   font-style: normal;
   font-size: 0.78rem;
   line-height: 1.35;
@@ -357,7 +363,7 @@ tbody tr:hover {
 .road-brief-facts dd span {
   display: block;
   margin-top: 4px;
-  color: #78716C;
+  color: #64748B;
   font-family: Inter, sans-serif;
   font-size: 0.75rem;
   letter-spacing: 0;
@@ -378,7 +384,7 @@ tbody tr:hover {
 
 .filter-count-badge {
   background: transparent;
-  color: #78716C;
+  color: #64748B;
   padding: 0;
 }
 
@@ -386,7 +392,7 @@ tbody tr:hover {
   border: 0;
   border-radius: 0;
   background: transparent;
-  color: #78716C;
+  color: #64748B;
   padding: 4px 0;
   margin-right: 14px;
   font-weight: 500;
@@ -394,8 +400,8 @@ tbody tr:hover {
 
 .date-pill.active {
   background: transparent;
-  color: #1C1917;
-  box-shadow: inset 0 -1px 0 #1C1917;
+  color: #2563EB;
+  box-shadow: inset 0 -1px 0 #2563EB;
 }
 
 .filter-inputs-grid {
@@ -406,7 +412,7 @@ tbody tr:hover {
 .ministry-period select {
   height: auto;
   border: 0;
-  border-bottom: 1px solid #D6D0C6;
+  border-bottom: 1px solid #DBE7F5;
   border-radius: 0;
   background: transparent;
   padding: 6px 0;
@@ -440,7 +446,7 @@ tbody tr:hover {
 .ministry-kpi-grid {
   gap: 28px;
   padding-top: 8px;
-  border-top: 1px solid #D6D0C6;
+  border-top: 1px solid #DBE7F5;
 }
 
 .ministry-kpi-value {
@@ -465,8 +471,8 @@ tbody tr:hover {
 
 .tm-sidebar,
 .sidebar {
-  background: #EFEAE1;
-  border-right: 1px solid #E4DDD2;
+  background: #FFFFFF;
+  border-right: 1px solid #DBE7F5;
 }
 
 .tm-sidebar-item-label,

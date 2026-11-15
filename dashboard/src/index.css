@@ -3,13 +3,13 @@
    ========================================================================== */
 
 :root {
-  --bg-primary: #F7F9FC;
+  --bg-primary: #F4F8FF;
   --bg-secondary: #FFFFFF;
   --bg-card: #FFFFFF;
-  --bg-card-hover: #F7F9FC;
+  --bg-card-hover: #EFF6FF;
   --bg-glass: #FFFFFF;
 
-  --border-subtle: #E5EAF1;
+  --border-subtle: #DBE7F5;
   --border-accent: rgba(37, 99, 235, 0.35);
 
   --text-main: #172033;
@@ -40,12 +40,13 @@
   --font-mono: 'JetBrains Mono', monospace;
 
   --tm-sidebar: #FFFFFF;
-  --tm-sidebar-hover: #F7F9FC;
+  --tm-sidebar-hover: #EFF6FF;
   --tm-sidebar-active: #EFF6FF;
-  --tm-page-bg: #F7F9FC;
+  --tm-page-bg: #F4F8FF;
   --tm-card: #FFFFFF;
-  --tm-card-muted: #F7F9FC;
-  --tm-border: #E5EAF1;
+  --tm-card-muted: #F8FAFF;
+  --tm-border: #DBE7F5;
+  --tm-canvas: #F4F8FF;
   --tm-text: #172033;
   --tm-text-muted: #64748B;
   --tm-primary: #2563EB;

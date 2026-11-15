@@ -698,6 +698,47 @@ h1, h2, h3, h4 {
   background: #dbeafe;
 }
 
+.leaflet-div-icon.public-report-pin {
+  background: transparent;
+  border: none;
+}
+
+.public-report-diamond {
+  width: 14px;
+  height: 14px;
+  margin: 4px;
+  background: #FFFBEB;
+  border: 2px solid #B45309;
+  box-shadow: 0 0 0 3px rgba(217, 119, 6, 0.35);
+  transform: rotate(45deg);
+}
+
+.public-report-legend-swatch {
+  width: 10px;
+  height: 10px;
+  display: inline-block;
+  background: #FFFBEB;
+  border: 2px solid #B45309;
+  transform: rotate(45deg);
+}
+
+.public-report-popup .leaflet-popup-content-wrapper {
+  border-left: 4px solid #D97706;
+}
+
+.public-report-popup .public-report-kicker {
+  margin: 0 0 4px;
+  color: #B45309;
+  font-size: 0.68rem;
+  font-weight: 800;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.public-report-popup a {
+  color: #1D4ED8;
+}
+
 .leaflet-container img.leaflet-tile {
   max-width: none !important;
   max-height: none !important;

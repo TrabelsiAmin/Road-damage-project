@@ -139,6 +139,7 @@
   grid-template-areas:
     "kpis kpis kpis"
     "map charts assist"
+    "public public public"
     "table table table";
   gap: 14px;
   align-items: stretch;
@@ -150,6 +151,7 @@
 .is-overview .ov-charts { grid-area: charts; }
 .is-overview .ov-assist { grid-area: assist; }
 .is-overview .ov-table-card { grid-area: table; }
+.is-overview .ov-public-reports { grid-area: public; }
 .is-overview #ministry-map { grid-area: map; min-width: 0; }
 
 .ov-kpi-grid {
@@ -553,6 +555,64 @@
   color: #0F172A;
 }
 
+.ov-public-list {
+  list-style: none;
+  margin: 12px 0 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.ov-public-list li {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(140px, 220px);
+  gap: 12px;
+  padding-top: 10px;
+  border-top: 1px solid #E2E8F0;
+}
+
+.ov-public-main,
+.ov-public-side {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
+}
+
+.ov-public-main strong {
+  color: #0F172A;
+  font-size: 0.92rem;
+}
+
+.ov-public-main span,
+.ov-public-main q,
+.ov-public-meta {
+  color: #475569;
+  font-size: 0.78rem;
+  line-height: 1.4;
+}
+
+.ov-public-main q {
+  quotes: "«\00a0" "\00a0»";
+}
+
+.ov-public-side a,
+.ov-public-side .ov-text-btn {
+  color: #1D4ED8;
+  font-size: 0.78rem;
+  font-weight: 600;
+  text-align: left;
+}
+
+.ov-public-source {
+  color: #64748B;
+  font-size: 0.7rem;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
 .main-layout.overview-embed {
   display: flex;
   flex-direction: column;
@@ -593,6 +653,7 @@
       "map"
       "charts"
       "assist"
+      "public"
       "table";
   }
 
@@ -631,7 +692,8 @@
 
 @media (max-width: 640px) {
   .ov-kpi-grid,
-  .ov-donut-wrap {
+  .ov-donut-wrap,
+  .ov-public-list li {
     grid-template-columns: 1fr;
     display: grid;
   }
@@ -687,8 +749,25 @@ html[data-theme="dark"] .ov-map-card-title h2,
 html[data-theme="dark"] .ov-donut-hole strong,
 html[data-theme="dark"] .ov-table td,
 html[data-theme="dark"] .ov-bar-row,
-html[data-theme="dark"] .ov-table-empty strong {
+html[data-theme="dark"] .ov-table-empty strong,
+html[data-theme="dark"] .ov-public-main strong {
   color: #F5F0E8;
+}
+
+html[data-theme="dark"] .ov-public-list li {
+  border-color: #44403C;
+}
+
+html[data-theme="dark"] .ov-public-main span,
+html[data-theme="dark"] .ov-public-main q,
+html[data-theme="dark"] .ov-public-meta,
+html[data-theme="dark"] .ov-public-source {
+  color: #A8A29E;
+}
+
+html[data-theme="dark"] .ov-public-side a,
+html[data-theme="dark"] .ov-public-side .ov-text-btn {
+  color: #93C5FD;
 }
 
 html[data-theme="dark"] .ov-table th,

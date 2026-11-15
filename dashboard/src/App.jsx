@@ -77,6 +77,8 @@ import {
   observationForRecommendation,
 } from './utils/ragClient';
 import { retainedObservationFrom } from './utils/retainedObservation';
+import { PUBLIC_ROAD_REPORTS } from './data/publicRoadReports';
+import { publicReportListItems, publicReportMapMarkers, publicReportPopupHtml } from './utils/publicRoadReports';
 import {
   MapPin,
   AlertTriangle,
@@ -453,6 +455,7 @@ export default function App() {
   const mapRef = useRef(null);
   const mapInstanceRef = useRef(null);
   const markersLayerRef = useRef(null);
+  const publicReportMarkerRefs = useRef(new Map());
   const focusMarkerRef = useRef(null);
   const resizeObserverRef = useRef(null);
   const [mapFocus, setMapFocus] = useState(null);
@@ -858,6 +861,15 @@ export default function App() {
   const validClusters = useMemo(() => {
     return filterValidClusters(filteredClusters);
   }, [filteredClusters]);
+
+  const publicReportMarkers = useMemo(
+    () => publicReportMapMarkers(PUBLIC_ROAD_REPORTS, lang),
+    [lang],
+  );
+  const publicReportItems = useMemo(
+    () => publicReportListItems(PUBLIC_ROAD_REPORTS, lang),
+    [lang],
+  );
 
   const mapMarkers = useMemo(() => {
     if (isAuthorityUser) return validClusters;
@@ -1341,15 +1353,38 @@ export default function App() {
       });
     }
 
-    if (mapMarkers.length > 0 && mapInstanceRef.current) {
-      const bounds = L.latLngBounds(
-        mapMarkers.map((c) => [Number(c.latitude), Number(c.longitude)])
-      );
+    publicReportMarkerRefs.current = new Map();
+    publicReportMarkers.forEach((point) => {
+      const pinSize = 22;
+      const marker = L.marker([point.lat, point.lng], {
+        icon: L.divIcon({
+          className: 'public-report-pin',
+          html: '<div class="public-report-diamond"></div>',
+          iconSize: [pinSize, pinSize],
+          iconAnchor: [pinSize / 2, pinSize / 2],
+        }),
+        zIndexOffset: 400,
+      });
+      const popup = L.popup({ maxWidth: 340, minWidth: 240, className: 'rag-leaflet-popup public-report-popup' });
+      const paint = () => popup.setContent(publicReportPopupHtml(point, langRef.current));
+      paint();
+      marker.bindPopup(popup);
+      marker.on('popupopen', paint);
+      marker.addTo(markersGroup);
+      publicReportMarkerRefs.current.set(point.id, marker);
+    });
+
+    const boundsPoints = [
+      ...mapMarkers.map((cluster) => [Number(cluster.latitude), Number(cluster.longitude)]),
+      ...publicReportMarkers.map((point) => [point.lat, point.lng]),
+    ].filter((pair) => pair.every((value) => Number.isFinite(value)));
+    if (boundsPoints.length > 0 && mapInstanceRef.current) {
+      const bounds = L.latLngBounds(boundsPoints);
       if (bounds.isValid()) {
         mapInstanceRef.current.fitBounds(bounds, { padding: [40, 40], maxZoom: isAuthorityUser ? 15 : 12 });
       }
     }
-  }, [mapReady, mapMarkers, mapLayers.roadSegments, isAuthorityUser]);
+  }, [mapReady, mapMarkers, publicReportMarkers, mapLayers.roadSegments, isAuthorityUser]);
 
   // ── 5d. Map Focus Marker & Camera Navigation ────────────────────────────────
   useEffect(() => {
@@ -1369,7 +1404,9 @@ export default function App() {
       interactive: false,
     }).addTo(map);
     focusMarkerRef.current = marker;
-    map.flyTo([mapFocus.lat, mapFocus.lng], Math.max(map.getZoom(), 15), { duration: 0.45 });
+    const requestedZoom = Number(mapFocus.zoom);
+    const nextZoom = Number.isFinite(requestedZoom) ? requestedZoom : Math.max(map.getZoom(), 15);
+    map.flyTo([mapFocus.lat, mapFocus.lng], nextZoom, { duration: 0.45 });
     return () => {
       marker.remove();
       if (focusMarkerRef.current === marker) focusMarkerRef.current = null;
@@ -1731,6 +1768,13 @@ export default function App() {
             const observation = observations.find((item) => item.id === id);
             if (observation) retainObservationRef.current(observation);
           }}
+          publicReports={publicReportItems}
+          onFocusPublicReport={(point) => {
+            if (!point) return;
+            setMapFocus({ id: point.id, lat: point.lat, lng: point.lng, zoom: point.zoom });
+            publicReportMarkerRefs.current.get(point.id)?.openPopup();
+            document.getElementById('ministry-map')?.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+          }}
           assistant={(
             <TechnicalRecommendation
               lang={lang}
@@ -2047,6 +2091,10 @@ export default function App() {
               <div style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '0.75rem' }}>
                 <span style={{ width: '12px', height: '12px', borderRadius: '50%', background: PRIORITY_PIN_COLORS.LOW, display: 'inline-block' }} />
                 <span>LOW (&lt;35)</span>
+              </div>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '0.75rem' }}>
+                <span className="public-report-legend-swatch" />
+                <span>{lang === 'fr' ? 'Signalement public (position approximative)' : 'Public report (approximate position)'}</span>
               </div>
             </div>
             {overviewCount.accuracyLine && (

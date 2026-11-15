@@ -47,6 +47,11 @@ const COPY = {
     emptyBody: 'Aucun signalement non rejeté dans cette période.',
     unavailableBody: 'Les totaux ne sont pas disponibles.',
     roadNote: approximateRoadNote('fr'),
+    publicTitle: 'Signalements publics',
+    publicHelp: 'Articles et communiqués ouverts sur le web. Ils restent séparés du catalogue TariqMap et ne changent pas les totaux.',
+    publicEmpty: 'Aucun signalement public cité.',
+    publicSource: 'Source',
+    publicShow: 'Voir sur la carte',
   },
   en: {
     total: 'Total incidents',
@@ -85,6 +90,11 @@ const COPY = {
     emptyBody: 'No non-rejected report in this period.',
     unavailableBody: 'The totals are not available.',
     roadNote: approximateRoadNote('en'),
+    publicTitle: 'Public reports',
+    publicHelp: 'News and notices opened on the web. They stay separate from the TariqMap catalogue and do not change the totals.',
+    publicEmpty: 'No cited public report.',
+    publicSource: 'Source',
+    publicShow: 'Show on map',
   },
 };
 
@@ -173,6 +183,8 @@ export function OverviewBoard({
   onOpenObservation,
   onRetainObservation,
   assistant = null,
+  publicReports = [],
+  onFocusPublicReport,
 }) {
   const copy = COPY[lang] || COPY.fr;
   const view = buildOverviewPresentation({
@@ -269,6 +281,45 @@ export function OverviewBoard({
           <span>{copy.moreHelp}</span>
         </button>
       </aside>
+
+      <section className="ov-public-reports ov-card" data-public-reports="true" aria-labelledby="public-reports-title">
+        <h2 id="public-reports-title">{copy.publicTitle}</h2>
+        <p className="ov-card-help">{copy.publicHelp}</p>
+        {publicReports.length === 0 ? (
+          <p className="ov-empty">{copy.publicEmpty}</p>
+        ) : (
+          <ul className="ov-public-list">
+            {publicReports.map((item) => (
+              <li key={item.id}>
+                <div className="ov-public-main">
+                  <strong>{item.title}</strong>
+                  <span>{item.place}</span>
+                  <q>{item.quote}</q>
+                  <span className="ov-public-meta">
+                    {item.dateLabel || '—'}
+                    {item.dateNote ? ` — ${item.dateNote}` : ''}
+                  </span>
+                  <span className="ov-public-meta">{item.publicNote}</span>
+                  <span className="ov-public-meta">{item.placementNote}</span>
+                </div>
+                <div className="ov-public-side">
+                  <span className="ov-public-source">{copy.publicSource}</span>
+                  {item.sources.map((source) => (
+                    <a key={source.url} href={source.url} target="_blank" rel="noopener noreferrer">
+                      {source.name}
+                    </a>
+                  ))}
+                  {item.onMap && item.focus && (
+                    <button type="button" className="ov-text-btn" onClick={() => onFocusPublicReport?.(item.focus)}>
+                      {copy.publicShow}
+                    </button>
+                  )}
+                </div>
+              </li>
+            ))}
+          </ul>
+        )}
+      </section>
 
       <section className="ov-table-card ov-card">
         <div className="ov-table-head">

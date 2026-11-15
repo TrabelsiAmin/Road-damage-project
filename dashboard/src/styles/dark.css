@@ -209,6 +209,24 @@ html[data-theme="dark"] .leaflet-bar a:focus {
   color: #F5F0E8;
 }
 
+html[data-theme="dark"] .public-report-diamond,
+html[data-theme="dark"] .public-report-legend-swatch {
+  background: #1C1917;
+  border-color: #FBBF24;
+}
+
+html[data-theme="dark"] .public-report-popup .leaflet-popup-content-wrapper {
+  border-left-color: #FBBF24;
+}
+
+html[data-theme="dark"] .public-report-popup .public-report-kicker {
+  color: #FBBF24;
+}
+
+html[data-theme="dark"] .public-report-popup a {
+  color: #93C5FD;
+}
+
 html[data-theme="dark"] .rag-panel,
 html[data-theme="dark"] .rag-source,
 html[data-theme="dark"] .rag-selected,

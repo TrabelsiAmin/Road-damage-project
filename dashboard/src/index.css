@@ -1985,6 +1985,18 @@ h1, h2, h3, h4 {
   font-size: 0.84rem;
 }
 
+.rag-steps {
+  margin: 8px 0 0;
+  padding-left: 1.2rem;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.rag-steps li {
+  line-height: 1.4;
+}
+
 .rag-kicker {
   font-size: 0.72rem;
   font-weight: 700;

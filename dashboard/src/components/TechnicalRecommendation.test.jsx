@@ -3,8 +3,6 @@ import { describe, expect, it } from 'vitest';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { TechnicalRecommendation } from './TechnicalRecommendation.jsx';
 
-const QWEN_UNAVAILABLE = '8,4 Go de RAM libre ne suffisent pas pour les accueillir.';
-
 const CANNED = [
   'Démonstration Colab',
   'Colab demonstration',
@@ -50,12 +48,18 @@ describe('assistant chat panel', () => {
     expect(html).not.toContain('data-colab-demonstration');
   });
 
-  it('states that Qwen could not be loaded and does not send questions to the excerpt server', () => {
+  it('uses the local Qwen when Colab is down and tells how to start the notebook', () => {
     const source = fs.readFileSync(new URL('./TechnicalRecommendation.jsx', import.meta.url), 'utf8');
-    expect(source).toContain('Qwen2.5-7B-Instruct en 4 bits');
-    expect(source).toContain(QWEN_UNAVAILABLE);
+    expect(source).toContain('LOCAL_QWEN_BASE');
+    expect(source).toContain('assistant_colab.ipynb');
+    expect(source).toContain('URL_DASHBOARD=https://');
+    expect(source).toContain('GPU T4');
+    expect(source).toContain('/content/road_damage_rag/data');
+    expect(source).toContain('Enregistrer');
     expect(source).not.toContain('4721');
     expect(source).not.toContain('LOCAL_EXTRACT_BASE');
+    expect(source).not.toContain('8,4 Go de RAM');
+    expect(source).not.toContain('Qwen2.5-7B');
     expect(source).not.toContain('extraits des manuels');
     expect(source).not.toContain('sans le modèle Qwen');
   });

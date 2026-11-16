@@ -2,6 +2,7 @@ import React, { useEffect, useRef, useState } from 'react';
 import { BookOpen } from 'lucide-react';
 import { DAMAGE_CLASSES, STATUS_LABELS } from '../constants';
 import {
+  LOCAL_QWEN_BASE,
   RAG_K_DEFAULT,
   askRag,
   buildTechnicalQuestion,
@@ -16,13 +17,24 @@ import { recommendationForRetained } from '../utils/retainedObservation';
 const COPY = {
   fr: {
     title: 'Recommandation technique',
-    intro: 'Posez une question. L\'assistant répond à partir des manuels indexés, à l\'adresse enregistrée.',
+    intro: 'Posez une question. Une adresse Colab qui répond est utilisée. Sinon, la question part vers le modèle local qui a répondu à /health.',
     urlLabel: 'Adresse de l\'API Colab',
     urlPlaceholder: 'https://….ngrok-free.app',
     saveUrl: 'Enregistrer',
     badUrl: 'Cette adresse n\'est pas une URL http(s).',
     apiDown: 'l\'API ne répond pas',
-    qwenUnavailable: 'Qwen2.5-7B-Instruct en 4 bits n\'a pas pu être chargé : cette machine n\'a pas de GPU, les poids ne sont pas en cache, et les 8,4 Go de RAM libre ne suffisent pas pour les accueillir.',
+    askWhileDown: 'Aucun assistant ne répond. Suivez les étapes ci-dessus, collez la ligne URL_DASHBOARD, puis cliquez Enregistrer.',
+    colabLead: 'Pour lancer l\'assistant sur Colab :',
+    colabSteps: [
+      'Ouvrez le fichier rag/soutenance/assistant_colab.ipynb dans Google Colab.',
+      'Exécution → Modifier le type d\'exécution → GPU T4.',
+      'Lancez la cellule de code (la seule du notebook).',
+      'Si les six manuels ne sont pas déjà dans /content/road_damage_rag/data, envoyez-les quand le sélecteur s\'ouvre.',
+      'Copiez la ligne imprimée URL_DASHBOARD=https://…',
+      'Collez-la dans le champ « Adresse de l\'API Colab », puis cliquez Enregistrer.',
+    ],
+    readyModel: 'L\'assistant répond avec {model}.',
+    colabDownLocal: 'L\'adresse Colab enregistrée ne répond pas. L\'assistant répond avec {model}.',
     httpError: 'Erreur HTTP',
     selected: 'Observation retenue',
     none: 'Choisissez une observation dans la file prioritaire ou dans l\'infobulle d\'un agrégat sur la carte.',
@@ -46,13 +58,24 @@ const COPY = {
   },
   en: {
     title: 'Technical recommendation',
-    intro: 'Ask a question. The assistant answers from the indexed manuals at the saved address.',
+    intro: 'Ask a question. A Colab address that answers is used. Otherwise the question goes to the local model that answered /health.',
     urlLabel: 'Colab API address',
     urlPlaceholder: 'https://….ngrok-free.app',
     saveUrl: 'Save',
     badUrl: 'This is not an http(s) URL.',
     apiDown: 'The API is not responding',
-    qwenUnavailable: 'Qwen2.5-7B-Instruct in 4-bit could not be loaded: this machine has no GPU, the weights are not cached, and 8.4 GB of free RAM is not enough to hold them.',
+    askWhileDown: 'No assistant is answering. Follow the steps above, paste the URL_DASHBOARD line, then click Save.',
+    colabLead: 'To start the assistant on Colab:',
+    colabSteps: [
+      'Open rag/soutenance/assistant_colab.ipynb in Google Colab.',
+      'Runtime → Change runtime type → T4 GPU.',
+      'Run the code cell (the only one in the notebook).',
+      'If the six manuals are not already in /content/road_damage_rag/data, upload them when the picker opens.',
+      'Copy the printed line URL_DASHBOARD=https://…',
+      'Paste it into « Colab API address », then click Save.',
+    ],
+    readyModel: 'The assistant answers with {model}.',
+    colabDownLocal: 'The saved Colab address is not responding. The assistant answers with {model}.',
     httpError: 'HTTP error',
     selected: 'Selected observation',
     none: 'Choose an observation in the priority list or in a map cluster popup.',
@@ -94,6 +117,26 @@ function failureText(error, copy) {
   return copy.apiDown;
 }
 
+function modelIdFrom(payload) {
+  const llm = typeof payload?.llm === 'string' ? payload.llm.trim() : '';
+  return llm;
+}
+
+function statusText(copy, { route, modelName, savedDown }) {
+  if (route === 'local' && savedDown && modelName) {
+    return copy.colabDownLocal.replace('{model}', modelName);
+  }
+  if ((route === 'local' || route === 'saved') && modelName) {
+    return copy.readyModel.replace('{model}', modelName);
+  }
+  if (route === 'local' || route === 'saved') return copy.ready;
+  return '';
+}
+
+function probeAssistant(base) {
+  return chooseAssistantBase({ base, localBase: LOCAL_QWEN_BASE });
+}
+
 export function TechnicalRecommendation({ lang = 'fr', selection = null, request = null }) {
   const copy = COPY[lang] || COPY.fr;
   const [urlDraft, setUrlDraft] = useState(() => readStoredRagBase());
@@ -103,7 +146,8 @@ export function TechnicalRecommendation({ lang = 'fr', selection = null, request
   const [messages, setMessages] = useState([]);
   const [urlError, setUrlError] = useState('');
   const [route, setRoute] = useState('checking');
-  const [routeNote, setRouteNote] = useState('');
+  const [modelName, setModelName] = useState('');
+  const [savedDown, setSavedDown] = useState(false);
   const runId = useRef(0);
   const abortRef = useRef(null);
   const cardRun = useRef(0);
@@ -114,26 +158,27 @@ export function TechnicalRecommendation({ lang = 'fr', selection = null, request
   baseRef.current = base;
 
   const applyChoice = (choice) => {
+    const llm = modelIdFrom(choice.payload);
+    setModelName(llm);
+    setSavedDown(Boolean(choice.savedDown));
     if (choice.ok) {
-      setRoute('saved');
-      setRouteNote('');
+      setRoute(choice.via === 'local' ? 'local' : 'saved');
       return;
     }
     setRoute('down');
-    setRouteNote(copy.qwenUnavailable);
   };
 
   useEffect(() => {
     let cancelled = false;
     setRoute('checking');
-    chooseAssistantBase({ base }).then((choice) => {
+    probeAssistant(base).then((choice) => {
       if (cancelled) return;
       applyChoice(choice);
     });
     return () => {
       cancelled = true;
     };
-  }, [base, copy.qwenUnavailable]);
+  }, [base]);
 
   function saveUrl(event) {
     event?.preventDefault();
@@ -164,7 +209,7 @@ export function TechnicalRecommendation({ lang = 'fr', selection = null, request
 
   async function resolveTarget() {
     const saved = baseRef.current;
-    const choice = await chooseAssistantBase({ base: saved });
+    const choice = await probeAssistant(saved);
     applyChoice(choice);
     return choice;
   }
@@ -181,7 +226,7 @@ export function TechnicalRecommendation({ lang = 'fr', selection = null, request
     const choice = await resolveTarget();
     if (id !== runId.current) return null;
     if (!choice.ok) {
-      const message = copy.qwenUnavailable;
+      const message = copy.askWhileDown;
       appendExchange(id, trimmed, { error: message });
       setPhase('error');
       return { ok: false, error: { code: 'unavailable', message } };
@@ -206,10 +251,6 @@ export function TechnicalRecommendation({ lang = 'fr', selection = null, request
       return response;
     }
     appendExchange(id, trimmed, { error: failureText(response.error, copy) });
-    if (response.error?.code === 'network' || response.error?.code === 'timeout' || response.error?.code === 'unavailable') {
-      setRoute('down');
-      setRouteNote(failureText(response.error, copy));
-    }
     setPhase('error');
     return response;
   }
@@ -233,10 +274,10 @@ export function TechnicalRecommendation({ lang = 'fr', selection = null, request
     setCardNote('');
     setPhase('loading');
     const saved = baseRef.current || readStoredRagBase();
-    const choice = await chooseAssistantBase({ base: saved });
+    const choice = await probeAssistant(saved);
     applyChoice(choice);
     if (!choice.ok) {
-      const sentence = copy.qwenUnavailable;
+      const sentence = copy.askWhileDown;
       appendExchange(exchangeId, buildTechnicalQuestion(selection, lang), { error: sentence });
       setCardNote(sentence);
       setCardPhase('error');
@@ -271,8 +312,6 @@ export function TechnicalRecommendation({ lang = 'fr', selection = null, request
     setCardNote(sentence);
     setCardPhase('error');
     setPhase('error');
-    setRoute('down');
-    setRouteNote(sentence);
   }
 
   useEffect(() => {
@@ -290,6 +329,7 @@ export function TechnicalRecommendation({ lang = 'fr', selection = null, request
 
   const summary = selectionLine(selection, lang, copy);
   const busy = phase === 'loading' || cardPhase === 'loading';
+  const assistantStatus = statusText(copy, { route, modelName, savedDown });
 
   return (
     <section id="recommandation-technique" className="rag-panel" aria-labelledby="rag-title" data-assistant-panel="true">
@@ -326,11 +366,18 @@ export function TechnicalRecommendation({ lang = 'fr', selection = null, request
       {route === 'checking' && (
         <p className="rag-loading" role="status">{copy.checking}</p>
       )}
-      {route === 'saved' && (
-        <p className="rag-loading" role="status">{copy.ready}</p>
+      {(route === 'saved' || route === 'local') && assistantStatus && (
+        <p className="rag-loading" role="status" data-assistant-model="true">{assistantStatus}</p>
       )}
-      {route === 'down' && routeNote && (
-        <p className="rag-error" role="status" data-assistant-error="true">{routeNote}</p>
+      {route === 'down' && (
+        <div className="rag-help" data-colab-steps="true">
+          <p>{copy.colabLead}</p>
+          <ol className="rag-steps">
+            {copy.colabSteps.map((step) => (
+              <li key={step}>{step}</li>
+            ))}
+          </ol>
+        </div>
       )}
 
       <div className="rag-transcript" data-assistant-transcript="live" aria-live="polite">
@@ -347,7 +394,7 @@ export function TechnicalRecommendation({ lang = 'fr', selection = null, request
             {message.error ? (
               <p className="rag-error" role="alert" data-assistant-error="true">{message.error}</p>
             ) : (
-              <p className="rag-answer" data-assistant-answer="true">{message.text}</p>
+              <p className="rag-answer" data-assistant-answer={message.role === 'assistant' ? 'true' : undefined}>{message.text}</p>
             )}
             {message.source && (
               <p className="rag-top-source" data-assistant-source="true">
@@ -382,7 +429,9 @@ export function TechnicalRecommendation({ lang = 'fr', selection = null, request
       </form>
       {phase === 'loading' && <p className="rag-loading" role="status">{copy.loading}</p>}
       {messages.some((message) => message.role === 'assistant' && message.text) && (
-        <p className="rag-disclaimer">{copy.disclaimer}</p>
+        <p className="rag-disclaimer">
+          {modelName ? copy.readyModel.replace('{model}', modelName) : copy.disclaimer}
+        </p>
       )}
 
       <div className="rag-selected" data-retained-observation="true">

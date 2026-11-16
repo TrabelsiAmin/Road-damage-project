@@ -22,9 +22,15 @@ export const RAG_TUNNEL_CLOSED_MESSAGE =
 
 /**
  * Extractive manuals on this machine. The chat does not call this address:
- * that process does not run Qwen, and this machine could not load the model.
+ * that process does not run Qwen.
  */
 export const LOCAL_EXTRACT_BASE = 'http://127.0.0.1:4721';
+
+/**
+ * Small Qwen Instruct on this CPU. Used only when the saved Colab address
+ * does not answer /health. A live Colab URL still wins.
+ */
+export const LOCAL_QWEN_BASE = 'http://127.0.0.1:4733';
 
 export function isPublicTunnel(base) {
   const root = normalizeRagBase(base);
@@ -442,9 +448,9 @@ export async function askRag({
 }
 
 /**
- * Saved Colab address when it answers. A local base is used only when the
- * caller passes one and that process answers /health. The chat does not
- * pass the excerpt server, and never a recorded paragraph.
+ * Saved Colab address when it answers. localBase is used only when that
+ * address does not answer /health. A live Colab URL still wins. The chat
+ * does not pass the excerpt server, and never a recorded paragraph.
  */
 export async function chooseAssistantBase({
   base = '',
@@ -455,13 +461,19 @@ export async function chooseAssistantBase({
   const root = normalizeRagBase(base);
   if (root) {
     const health = await checkRagHealth({ base: root, fetchImpl, timeoutMs });
-    if (health.ok) return { ok: true, base: root, via: 'saved' };
+    if (health.ok) return { ok: true, base: root, via: 'saved', payload: health.payload };
   }
   const local = normalizeRagBase(localBase);
   if (local && local !== root) {
     const localHealth = await checkRagHealth({ base: local, fetchImpl, timeoutMs });
     if (localHealth.ok) {
-      return { ok: true, base: local, via: 'local', savedDown: Boolean(root) };
+      return {
+        ok: true,
+        base: local,
+        via: 'local',
+        savedDown: Boolean(root),
+        payload: localHealth.payload,
+      };
     }
   }
   return {

@@ -2,6 +2,7 @@ import fs from 'fs';
 import { describe, it, expect } from 'vitest';
 import {
   LOCAL_EXTRACT_BASE,
+  LOCAL_QWEN_BASE,
   RAG_DOWN_MESSAGE,
   RAG_TUNNEL_CLOSED_MESSAGE,
   RAG_URL_STORAGE_KEY,
@@ -432,6 +433,9 @@ describe('closed Colab tunnel', () => {
     expect(isPublicTunnel('https://appraisal-handle-example.ngrok-free.dev')).toBe(true);
     expect(isPublicTunnel('https://session.trycloudflare.com')).toBe(true);
     expect(isPublicTunnel(LOCAL_EXTRACT_BASE)).toBe(false);
+    expect(isPublicTunnel(LOCAL_QWEN_BASE)).toBe(false);
+    expect(LOCAL_QWEN_BASE).toBe('http://127.0.0.1:4733');
+    expect(LOCAL_QWEN_BASE).not.toContain('4721');
     expect(explainRagFailure(BASE, 'network')).toBe(RAG_TUNNEL_CLOSED_MESSAGE);
     expect(explainRagFailure(LOCAL_EXTRACT_BASE, 'network')).toBe(RAG_DOWN_MESSAGE);
     expect(RAG_TUNNEL_CLOSED_MESSAGE).not.toMatch(/dinars|nid-de-poule|fissure longitudinale/i);
@@ -447,7 +451,7 @@ describe('closed Colab tunnel', () => {
         return { ok: true, status: 200, json: async () => ({ status: 'ok' }) };
       },
     });
-    expect(saved).toEqual({ ok: true, base: BASE, via: 'saved' });
+    expect(saved).toEqual({ ok: true, base: BASE, via: 'saved', payload: { status: 'ok' } });
     expect(savedCalls).toEqual([`${BASE}/health`]);
     expect(savedCalls.some((url) => url.includes('127.0.0.1'))).toBe(false);
 

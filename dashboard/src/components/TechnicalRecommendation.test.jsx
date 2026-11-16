@@ -1,6 +1,9 @@
+import fs from 'fs';
 import { describe, expect, it } from 'vitest';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { TechnicalRecommendation } from './TechnicalRecommendation.jsx';
+
+const QWEN_UNAVAILABLE = '8,4 Go de RAM libre ne suffisent pas pour les accueillir.';
 
 const CANNED = [
   'Démonstration Colab',
@@ -45,5 +48,15 @@ describe('assistant chat panel', () => {
     expect(html).toContain('data-assistant-url="true"');
     expect(html).toContain('https://….ngrok-free.app');
     expect(html).not.toContain('data-colab-demonstration');
+  });
+
+  it('states that Qwen could not be loaded and does not send questions to the excerpt server', () => {
+    const source = fs.readFileSync(new URL('./TechnicalRecommendation.jsx', import.meta.url), 'utf8');
+    expect(source).toContain('Qwen2.5-7B-Instruct en 4 bits');
+    expect(source).toContain(QWEN_UNAVAILABLE);
+    expect(source).not.toContain('4721');
+    expect(source).not.toContain('LOCAL_EXTRACT_BASE');
+    expect(source).not.toContain('extraits des manuels');
+    expect(source).not.toContain('sans le modèle Qwen');
   });
 });

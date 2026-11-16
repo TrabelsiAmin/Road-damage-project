@@ -21,8 +21,8 @@ export const RAG_TUNNEL_CLOSED_MESSAGE =
   "La session Colab est arrêtée : le tunnel est fermé.";
 
 /**
- * Extractive manuals on this machine. The chat uses this only when the
- * saved Colab address is missing or does not answer. A pasted live URL wins.
+ * Extractive manuals on this machine. The chat does not call this address:
+ * that process does not run Qwen, and this machine could not load the model.
  */
 export const LOCAL_EXTRACT_BASE = 'http://127.0.0.1:4721';
 
@@ -442,8 +442,9 @@ export async function askRag({
 }
 
 /**
- * Saved Colab address when it answers. Otherwise the local manual excerpts,
- * and only when that process answers /health. Never a recorded paragraph.
+ * Saved Colab address when it answers. A local base is used only when the
+ * caller passes one and that process answers /health. The chat does not
+ * pass the excerpt server, and never a recorded paragraph.
  */
 export async function chooseAssistantBase({
   base = '',

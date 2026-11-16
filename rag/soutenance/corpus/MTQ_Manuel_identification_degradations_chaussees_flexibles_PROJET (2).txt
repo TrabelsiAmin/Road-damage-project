@@ -1,0 +1,701 @@
+# DOC_ID: MTQ-2002-chaussees-flexibles
+# SOURCE: Manuel-d-identification-des-degradations-des-chaussees-flexibles.pdf
+# TITRE: Manuel d'identification des dégradations des chaussées flexibles (version marquée « PROJET »)
+# AUTEUR: groupe de travail réunissant le ministère des Transports du Québec (MTQ), l'AQTR et d'autres organismes (voir pages liminaires)
+# EDITEUR: Gouvernement du Québec, ministère des Transports
+# DATE: 2002 (dépôt légal 2002) ; ISBN 2-551-21654-0
+# LANGUE: fr
+# TYPE: manuel officiel (version projet)
+# CONTEXTE: Québec ; certaines dégradations (soulèvements différentiels été/hiver) sont propres au climat froid
+# LICENCE: © Gouvernement du Québec ; conditions de réutilisation à vérifier
+# FIABILITE: haute pour le contenu (source officielle) mais version « PROJET » : à confronter à la version finale si elle existe
+# ROLE_RAG: référence principale (FR) : une fiche par dégradation (Description / Causes probables / Niveau de sévérité / Mesure de l'étendue)
+# PERIMETRE: chaussées flexibles : fiches de dégradations (fissuration, déformation, défauts de surface, milieu urbain), procédures de mesurage, annexes (profil transversal, tableau synoptique)
+# RELATION: adaptation partielle du Distress Identification Manual (FHWA LTPP) et de « Quantifying cracks in asphalt pavement surface » : redondant avec FHWA, utile pour la terminologie française
+# PAGES: 50 pages conservées (marqueurs [p. 3] à [p. 58]) sur 58 avant nettoyage ; numérotation propre à cette extraction, décalée par rapport à l'extraction précédente (ancienne p.10 = nouvelle p.4) : ne pas réutiliser d'anciennes références de pages
+# FORMAT_PAGES: marqueur [p. N] = numéro de page attribué par l'extraction (identique au numéro de page PDF pour FHWA, Cours, Benjelloun et Arya ; à vérifier pour le MTQ) ; les numéros manquants correspondent à des pages retirées (vides ou hors contenu)
+# EXTRACTION: PyMuPDF page par page, OCR Tesseract si couche texte illisible ; nettoyage Unicode, recollage des lignes, pages vides retirées
+# NETTOYAGE: pages vides, table des matières et pages sans contenu retirées ; lignes recollées
+# NOTE: tableaux/figures non reconstruits ; texte non reformulé
+# A_FAIRE: fusionner une quinzaine de pages-séparateurs de moins de 100 caractères ; retirer la page ISBN/catalogage ; 31 lignes répétées (descriptions de sévérité) ; en-tête « 2.1 Fissuration » répété 8 fois
+
+[p. 3]
+MANUEL D'IDENTIFICATION
+DES DEGRADATIONS
+DES CHAUSSEES FLEXIBLES
+
+Québec
+
+[p. 4]
+Catalogage avant publication de la Bibliothèque nationale du Canada Vedette principale au titre :
+Adaptation partielle de: Distress identification manual for the long-term pavement performance program; et de Quantifying cracks in asphalt pavement surface.
+ISBN 2-551-21654-0
+1. Chaussées souples – Évaluation. 2. Chaussées – Dégradations – Évaluation.
+3. Chaussées – Fissuration – Évaluation. 4. Chaussées souples – Entretien et
+réparations. I. Québec (Province). Ministère des transports.
+TE270.M36 2002 625.8'5'0288 C2002-94l901-8
+
+[p. 5]
+MANUEL D'IDENTIFICATION
+DES DEGRADATIONS
+DES CHAUSSEES FLEXIBLES
+
+Québec
+
+[p. 6]
+Le présent manuel a été produit par un groupe de travail composé de personnes du ministère des Transports du Québec (MTQ), de l'Association québécoise du transport et des routes (AQTR), du Centre d'expertise et de recherche en infrastructures urbaines (CERIU), de l'Association des ingénieurs municipaux du Québec (AIMQ) et de quatre firmes de consultants de la province de Québec (GIE Technologies, CRCAC, LVM- Fondatec, SETRA). Les photographies ont été fournies par le MTQ et le CERIU.
+Réalisation :
+Service de la qualité et des normes
+Édition et révision linguistique :
+Direction des communications
+Conception graphique et mise en page :
+Richard Murray
+Mireille Savard
+Responsables de la rédaction :
+Michel Brodeur, ing., Ville de Saint-Hyacinthe
+Jean Carrier, ing. M. Ing., CRCAC
+Jean-Marie Durand, ing, MTQ
+Éric Fauteux, ing., CERIU
+Avec la collaboration de :
+France Bernard, ing. M.Sc.A., Ville de Verdun
+Martin Boucher, ing., MTQ
+Mathieu Grondin, ing., MTQ
+Stéphane Lavoie, ing., LVM-Fondatec
+Pierre-Paul Légaré, ing., Ville de Montréal
+Nicolas Martel, ing., SETRA inc.
+Organismes participants :
+© Gouvernement du Québec
+Dépot légal - 2002
+Bibliothèque nationale du Québec
+Bibliothèque nationale du Canada
+ISBN 2-551-21654-0
+
+[p. 3]
+Liste des figures
+
+Détails des bandes d'auscultation pour la fissuration 7
+Figur e 3–1
+Fissure franche 44
+Figur e 3–2
+Fissure érodée 44
+Figur e 3–3
+Fissures multiples 45
+Figur e 3–4
+Règle de 1,8 m 45
+Figur e 3–5
+Règle de 3 m 45
+Figur e 3–6
+Soulèvements différentiels 46
+Figur e 3–7
+Dénivellations des regards et des puisards 46
+
+[p. 4]
+Introduction
+
+L'évaluation des chaussées repose sur une série de mesures et d'observations visuelles qui permettent d'établir la condition de la structure, de diagnostiquer les causes des dégradations apparentes et de cibler les solutions de réhabilitation les plus appropriées. Lorsqu'il s'agit de mesures telles que les caractéristiques géométriques ou physiques de la chaussée, il est plus facile de fixer des critères qui servent de base à l'évaluation et à la réhabilitation. Lorsqu'il s'agit d'observations visant à caractériser des dégradations de surface et l'état de la chaussée, l'établissement de tels critères devient plus difficile.
+Afin de réduire cette difficulté, il est nécessaire de formaliser la caractérisation des défauts de surface des chaussées et d'en faire la synthèse dans un guide accessible au personnel concerné par cette activité : ce guide, basé notamment sur une série de photos et de croquis, permet de catégoriser les dégradations de surface sur des chaussées souples et d'obtenir une façon d'en mesurer l'étendue et la sévérité de manière objective, cohérente et harmonisée aux procédures actuelles les plus courantes en Amérique du Nord.
+Le tout vise à améliorer les communications et à faciliter les comparaisons en uniformisant les dénominations et les types de mesures des dégradations. Chacune des dégradations est décrite de façon générale et fait l'objet d'une fiche présentant la liste des causes les plus probables de la dégradation, la description des trois niveaux de sévérité (faible, moyen et majeur) et une proposition d'unités de mesure pour les relevés en mode réseau et en mode projet.
+Afin que le guide soit aussi complet que possible, les dégradations en milieu rural et urbain ont été partagées en deux blocs. Le premier bloc comprend les dégradations similaires en milieu rural et urbain et fait état des nuances particulières au milieu urbain. Le deuxième bloc, plus restreint, est composé de dégradations propres au milieu urbain.
+Ce document est en partie une adaptation du manuel produit par le Strategic Highway Research Program (SHRP) intitulé Distress Identification Manual for the Long-Term Pavement Performance Program et de la nouvelle norme provisoire pour la fissuration de l'AASHTO, Quantifying Cracks in Asphalt Pavement Surface, numéro PP44-01.
+Ce document vise à uniformiser à l'échelle du Québec la terminologie utilisée pour évaluer les dégradations des chaussées flexibles. Il revient cependant aux gestionnaires des réseaux routiers de déterminer les éléments de ce manuel à inclure dans le relevé des chaussées placées sous leur responsabilité en fonction de leurs besoins, du budget disponible et des particularités inhérentes aux chaussées composant leur réseau routier.
+
+[p. 5]
+1. Définitions
+
+1.1 Éléments des fiches descriptives
+Chaque dégradation fait l'objet d'une fiche descriptive qui comprend les éléments qui suivent, en plus d'une photo par niveau de sévérité.
+Description :
+Caractérisation succincte de la dégradation.
+Causes probables :
+Sans constituer une liste exhaustive, les causes indiquées sont les plus plausibles et les plus fréquentes que l'on peut associer à la dégradation.
+Niveau de sévérité :
+De façon générale, pour chaque dégradation, les trois niveaux de sévérité incluent les notions suivantes :
+Faible :
+Ce niveau correspond au stade initial de la dégradation : les premiers indices apparaissent parfois de façon intermittente sur un segment de route et l'évaluateur doit être attentif pour y déceler les symptômes de détérioration. Ce niveau est souvent difficile à percevoir pour un observateur se déplaçant en véhicule à une vitesse de l'ordre de 50 km/h. À la vitesse maximale permise, le confort au roulement n'est pas altéré ou l'est très peu.
+Moyen :
+Ce niveau désigne une dégradation continue et facilement perceptible pour un observateur se déplaçant à une vitesse de l'ordre de 50 km/h. À la vitesse maximale permise, le confort au roulement est sensiblement diminué par la plupart des dégradations.
+Majeur :
+Ce niveau indique que la dégradation est accentuée et évidente, même pour un observateur se déplaçant à la vitesse maximale permise. Le confort au roulement est généralement diminué et, dans certains cas, la sécurité à la vitesse maximale permise peut être compromise. Une intervention de réfection ou de correction devrait être envisagée dans les meilleurs délais possibles lorsque ce niveau est atteint.
+Mesure de l'étendue :
+Les unités de mesure mentionnées dans ce manuel reflètent les pratiques du ministère des Transports du Québec. On doit y voir une proposition sur la façon de faire les mesures plutôt qu'une obligation de s'y conformer absolument. Par exemple, la longueur de segmentation constante de 100 m est pratique courante et intéressante pour le ministère des Transports; cependant, la longueur de ces segments peut être différente et même variable pour répondre aux besoins d'une ville.
+
+[p. 6]
+1. Définitions
+
+1.1 Éléments des fiches descriptives
+réseau :
+relevé de l'ensemble des dégradations de surface permettant de délimiter les secteurs dont l'état est homogène afin de dresser un bilan et de définir les orientations stratégiques touchant les interventions futures.
+Mode projet :
+relevé détaillé des dégradations de surface d'un segment de chaussée permettant de poser un diagnostic final et d'orienter le choix de l'intervention.
+Bandes d'auscultation par voie pour les relevés de fissuration :
+La norme PP44-01 de l'AASHTO, Quantifying Cracks in Asphalt Pavement Surface, vise à simplifier la classification des fissures et ainsi à assurer des résultats plus cohérents de mesures dans le temps et plus fiables pour les besoins de gestion des chaussées. La base de cette norme a été retenue pour une partie du bloc portant sur la fissuration.
+Le concept consiste à diviser chaque voie auscultée en 5 bandes, soit 2 bandes pour les pistes de roues et 3 bandes hors pistes de roues. En tenant compte de la direction du trafic, la bande numéro 1 est du côté gauche et la bande numéro 5 est du côté droit de la voie auscultée.
+Sur cette base, un taux de fissuration pour chaque bande peut être établi à partir des fissures détectées en longueur et en largeur. Les fissures en piste de roues sont principalement associées aux sollicitations du trafic et aux dégradations par fatigue alors que les fissures dans les autres bandes sont attribuables à des causes plus variées, comme le gel et le vieillissement, ou à des défauts de construction.
+On doit cependant noter que souvent en milieu urbain ou dans le cas de géométries particulières présentant des voies larges, le principe des bandes d'auscultation par voie pour la fissuration peut s'avérer difficile d'application et même inapproprié.
+
+[p. 7]
+1. Définitions
+
+1.2 Bandes d'auscultation par voie
+pour les relevés de fissuration
+Figur e 1–1
+Détails des bandes d'auscultation pour la fissuration
+
+[p. 9]
+2.1 Fissuration
+Fissures transversales
+Description
+Rupture du revêtement relativement perpendiculaire à la direction de la route, généralement sur toute la largeur de la chaussée.
+Causes probables
+- Retrait thermique.
+- Vieillissement et fragilisation du bitume.
+- Remontée de fissures après des travaux de resurfaçage.
+- Joint de construction mal exécuté (arrêt et reprise des travaux de pose d'enrobé).
+- Diminution de la section du revêtement (ex. : vis-à-vis des regards ou des puisards).
+Niveau de sévérité
+Faible : Fissures simples et intermittentes dont les ouvertures sont inférieures à
+5 mm. Les bords sont en général francs et bien définis. Les fissures avec
+scellement en place en bonne condition sont incluses dans ce niveau de sévérité ou elles peuvent aussi être comptabilisées à part selon l'usage qui sera fait de l'information.
+Moyen : Fissures simples ou fissures multiples le long d'une fissure principale, celle-ci étant ouverte de 5 à 20 mm. Les bords sont parfois érodés et un peu affaissés. Sans être inconfortable, la fissure est perceptible par l'usager.
+Majeur : Fissures simples ou fissures multiples le long d'une fissure principale, celle-ci étant ouverte de plus de 20 mm. Les bords sont souvent érodés et il y a affaissement ou soulèvement au gel au voisinage de la fissure. Le confort au roulement est diminué par les déformations de surface.
+Mesure de l'étendue
+Réseau ou projet : Nombre total de fissures, par secteurs successifs de 100 m et par niveau de sévérité.
+
+[p. 10]
+2.1 Fissuration
+Fissures en piste de roues
+
+[p. 11]
+2.1 Fissuration
+Fissures en piste de roues
+Description
+Rupture du revêtement parallèle à la direction de la route et située dans les pistes de roues, soit dans les bandes numéros 2 et 4 (voir figure 1–1).
+Causes probables
+- Fatigue du revêtement (trafic lourd).
+- Capacité structurale insuffisante de la chaussée.
+- Mauvais drainage des couches granulaires de la chaussée (ex. : pendant le dégel).
+Niveau de sévérité
+Faible : Fissures simples et intermittentes dont les ouvertures sont inférieures à 5 mm. Les bords sont en général francs et bien définis. Les fissures avec scellement en place en bonne condition sont incluses dans ce niveau de sévérité ou elles peuvent aussi être comptabilisées à part selon l'usage qui sera fait de l'information.
+Moyen : Fissures simples ou fissures multiples le long d'une fissure principale, celle-ci étant ouverte de 5 à 20 mm. Les bords sont parfois érodés et un peu affaissés. Sans être inconfortable, la fissure est perceptible par l'usager.
+Majeur : Fissures simples ou fissures multiples le long d'une fissure principale, celle-ci étant ouverte de plus de 20 mm. Les bords sont souvent érodés et il y a affaissement ou soulèvement au gel au voisinage de la fissure. On note la présence de fissures en carrelage. Le confort au roulement est diminué par les déformations de surface.
+Mesure de l'étendue
+Réseau : Longueur totale de bande touchée par la dégradation, en mètres, par secteurs successifs de 100 m et par niveau de sévérité.
+Projet : Longueur totale de fissures, en mètres, par secteurs successifs de 100 m et par niveau de sévérité.
+
+[p. 12]
+2.1 Fissuration
+Fissures longitudinales (hors piste de roues)
+
+[p. 13]
+2.1 Fissuration
+Fissures longitudinales (hors piste de roues)
+Description
+Rupture du revêtement relativement parallèle à la direction de la route, excluant les fissures de gel, en dehors des pistes de roues, soit dans les bandes numéros 1, 3 et 5 (voir figure 1–1).
+Causes probables
+- Joint de construction mal exécuté le long de la travée adjacente.
+- Ségrégation de l'enrobé à la pose (ex. : centre de l'épandeur).
+- Vieillissement du revêtement.
+Niveau de sévérité
+Faible : Fissures simples et intermittentes dont les ouvertures sont inférieures à
+5 mm. Les bords sont en général francs et bien définis. Les fissures avec
+scellement en place en bonne condition sont incluses dans ce niveau de sévérité ou elles peuvent aussi être comptabilisées à part selon l'usage qui sera fait de l'information.
+Moyen : Fissures simples ou fissures multiples le long d'une fissure principale, celle-ci étant ouverte de 5 à 20 mm. Les bords sont parfois érodés et un peu affaissés.
+Majeur : Fissures simples ou fissures multiples le long d'une fissure principale, celle-ci étant ouverte de plus de 20 mm. Les bords sont souvent érodés et il y a affaissement ou soulèvement au gel au voisinage de la fissure.
+Mesure de l'étendue
+Réseau : Longueur totale de bande touchée par la dégradation, en mètres, par secteurs successifs de 100 m et par niveau de sévérité.
+Projet : Longueur de fissures, en mètres, par secteurs successifs de 100 m et par niveau de sévérité.
+
+[p. 15]
+2.1 Fissuration
+Fissures de gel
+Description
+Rupture du revêtement générant une fissure active sous l'effet du gel, soit rectiligne et localisée au centre de la voie ou de la chaussée, soit d'apparence lézardée sans localisation précise sur la chaussée.
+Causes probables
+- Infrastructure gélive et soulèvements différentiels.
+- Comportement gélif différentiel (ex. : transition aux coupes de roc).
+- Remblai instable.
+- Drainage inadéquat.
+Niveau de sévérité
+Faible : Fissures simples et intermittentes dont les ouvertures sont inférieures à 10mm. Les bords sont en général francs et bien définis. Les fissures avec scellement en place en bonne condition sont incluses dans ce niveau de sévérité ou elles peuvent aussi être comptabilisées à part selon l'usage qui sera fait de l'information.
+Moyen : Fissures simples ou fissures multiples le long d'une fissure principale, celle-ci étant ouverte de 10 à 25 mm. Les bords sont parfois érodés et un peu affaissés. Sans être inconfortable, la fissure est perceptible par l'usager.
+Majeur : Fissures généralement simples ou fissures multiples le long d'une fissure principale, celle-ci étant ouverte de plus de 25 mm. Les bords sont souvent érodés et il y a affaissement ou soulèvement au gel au voisinage de la fissure. Le confort au roulement est diminué par les déformations de surface.
+Mesure de l'étendue
+Réseau : Longueur totale de voie touchée par la dégradation, en mètres, par secteurs successifs de 100 m et par niveau de sévérité.
+Projet : Longueur de fissures, en mètres, par secteurs successifs de 100 m et par niveau de sévérité.
+
+[p. 17]
+2.1 Fissuration
+Fissures en carrelage
+Description
+Rupture du revêtement sur des superficies plus ou moins étendues, formant un patron de fissuration à petites mailles polygonales dont la dimension moyenne est de l'ordre de 300 mm ou moins.
+Causes probables
+- Fatigue (ex. : épaisseur de revêtement insuffisante).
+- Vieillissement de la chaussée (oxydation et fragilisation du bitume dans l'enrobé).
+- Capacité portante insuffisante.
+Niveau de sévérité
+Faible : Maillage composé de fissures simples aux bords francs.
+Moyen : Maillage composé de fissures simples aux bords faiblement détériorés.
+Majeur : Maillage composé de fissures simples aux bords détériorés.
+Mesure de l'étendue
+Réseau : Longueur totale de voie touchée par la dégradation, en mètres, par secteurs successifs de 100 m et par niveau de sévérité.
+Projet : Superficie touchée, en mètres carrés, par secteurs successifs de 100 m et par niveau de sévérité.
+
+[p. 19]
+2.1 Fissuration
+Fissures en rive
+Description
+Rupture en ligne droite ou en arc de cercle, le long de l'accotement ou de la bordure, ou décollement du revêtement le long de la bordure.
+Causes probables
+- Manque de support latéral (ex. : accotement étroit et pente de talus abrupte).
+- Discontinuité dans la structure (ex. : élargissement).
+- Apport latéral d'eau de ruissellement dans la structure de la chaussée (milieu urbain).
+- Assèchement du sol support (milieu urbain).
+Niveau de sévérité
+Faible : Fissures simples et intermittentes dont les ouvertures sont inférieures à
+5 mm. Les bords sont en général francs et bien définis. Les fissures avec
+scellement en place en bonne condition sont incluses dans ce niveau de sévérité ou elles peuvent aussi être comptabilisées à part selon l'usage qui sera fait de l'information.
+Moyen : Fissures simples ou fissures multiples le long d'une fissure principale, celle-ci étant ouverte de 5 à 20 mm. Les bords sont parfois érodés et un peu affaissés.
+Majeur : Fissures simples ou fissures multiples le long d'une fissure principale, celle-ci étant ouverte de plus de 20 mm. Les bords sont souvent érodés et il y a affaissement ou soulèvement au gel au voisinage de la fissure.
+Mesure de l'étendue
+Réseau : Longueur totale de voie touchée par la dégradation, en mètres, par secteurs successifs de 100 m et par niveau de sévérité.
+Projet : Longueur de fissures, en mètres, par secteurs successifs de 100 m et par niveau de sévérité.
+
+[p. 20]
+2.2 Déformation de la surface
+Ornière à faible rayon
+
+[p. 21]
+2.2 Déformations de la surface
+Ornière à faible rayon
+Description
+Dépression longitudinale simple, double et parfois triple, de l'ordre de 250 mm de largeur, située dans les pistes de roues (bandes 2 et 4). Le profil transversal de ces dépressions est souvent similaire à des traces de pneus simples ou jumelés.
+Causes probables
+- Enrobé à stabilité réduite par temps chaud (ex. : bitume trop mou ou surdosage).
+- Enrobé trop faible pour bien résister au trafic lourd (ex. : fluage).
+- Compactage insuffisant de l'enrobé lors de la mise en place (postcompactage).
+- Usure de l'enrobé en surface (abrasion).
+Niveau de sévérité
+Faible : Profondeur de l'ornière inférieure à 10 mm.
+Moyen : Profondeur de l'ornière de 10 à 20 mm.
+Majeur : Profondeur de l'ornière supérieure à 20 mm.
+Mesure de l'étendue
+Réseau et projet : Profondeur moyenne des ornières des 2 pistes de roues, en millimètres, par secteurs successifs de 100 m.
+
+[p. 22]
+2.2 Déformation de la surface
+Ornière à grand rayon
+
+[p. 23]
+2.2 Déformations de la surface
+Ornière à grand rayon
+Description
+Dépression longitudinale simple située dans les pistes de roues (bandes 2 et 4). La forme transversale de la dépression correspond à celle d'une courbe parabolique très évasée.
+Causes probables
+- Vieillissement (accumulation des déformations permanentes).
+- Compactage insuffisant dans les couches de granulaire à la construction.
+- Capacité structurale insuffisante de la chaussée.
+- Mauvais drainage des matériaux granulaires de la chaussée (ex. : période de dégel).
+- Usure (milieu urbain ou secteur avec circulation peu canalisée).
+Niveau de sévérité
+Faible : Profondeur de l'ornière inférieure à 10 mm.
+Moyen : Profondeur de l'ornière de 10 à 20 mm.
+Majeur : Profondeur de l'ornière supérieure à 20 mm.
+Mesure de l'étendue
+Réseau et projet : Profondeur moyenne des ornières des 2 pistes de roues, en millimètres, par secteurs successifs de 100 m.
+
+[p. 24]
+2.2 Déformation de la surface
+Affaissement
+
+[p. 25]
+2.2 Défor mations de la surface
+Affaissement
+Description
+Distorsion du profil en bordure de la chaussée ou au voisinage de conduites souterraines.
+Causes probables
+- Manque de support latéral et instabilité du remblai.
+- Présence de matériaux inadéquats ou mal compactés.
+- Zone de déblai argileux ou secteurs marécageux.
+- Affouillement ou assèchement du sol support (milieu urbain).
+- Mauvais état des réseaux souterrains (milieu urbain).
+Niveau de sévérité
+Faible : Dénivellation dont la profondeur est inférieure à 20 mm sous la règle de
+3 m. À la vitesse maximale permise, la sécurité n'est pas compromise et
+l'effet sur le confort au roulement est négligeable.
+Moyen : Dénivellation dont la profondeur se situe entre 20 et 40 mm sous la règle de 3 m. À la vitesse maximale permise, la sécurité est peu compromise et le confort au roulement est modérément diminué.
+Majeur : Dénivellation dont la profondeur est supérieure à 40 mm sous la règle de 3 m. À la vitesse maximale permise, la sécurité est compromise et le conducteur doit ralentir. Le confort au roulement est fortement diminué.
+Mesure de l'étendue
+Réseau : Longueur totale de route touchée par la dégradation, en mètres, par secteurs successifs de 100 m et par niveau de sévérité.
+Projet : Nombre d'affaissements ou superficie touchée, en mètres carrés, par secteurs successifs de 100 m et par niveau de sévérité.
+
+[p. 26]
+2.2 Déformation de la surface
+Soulèvement différentiel
+
+[p. 27]
+2.2 Défor mations de la surface
+Soulèvement différentiel
+Description
+Gonflement localisé de la chaussée en période de gel, aussi bien parallèle que perpendiculaire à l'axe de la chaussée.
+Causes probables
+- Infrastructure gélive, phénomène hivernal récurrent.
+- Matériaux sensibles à l'humidité, phénomène permanent.
+- Nappe phréatique élevée et présence d'eau aux abords de la chaussée.
+- Hétérogénéité des matériaux ou transition inadéquate dans la chaussée.
+- Conduites souterraines à faible profondeur (milieu urbain).
+Niveau de sévérité
+Faible : Dénivellation progressive dont la hauteur est inférieure à 50 mm. À la vitesse maximale permise, la sécurité n'est pas compromise et l'effet sur le confort au roulement est négligeable.
+Moyen : Dénivellation progressive dont la hauteur se situe entre 50 et 100 mm. À la vitesse maximale permise, la sécurité est peu compromise et le confort au roulement est modérément diminué.
+Majeur : Dénivellation progressive dont la hauteur est supérieure à 100 mm ou dénivellation brusque quelle que soit sa hauteur. À la vitesse maximale permise, la sécurité est compromise et le conducteur doit ralentir. Le confort au roulement est fortement diminué.
+Mesure de l'étendue
+Réseau : Longueur totale de route touchée par la dégradation, en mètres, par secteurs successifs de 100 m et par niveau de sévérité.
+Projet : Nombre de soulèvements ou superficie touchée, en mètres carrés, par secteurs successifs de 100 m et par niveau de sévérité.
+
+[p. 28]
+2.2 Déformation de la surface
+Désordre du profil
+
+[p. 29]
+2.2 Déformations de la surface
+Désordre du profil
+Description
+Pentes et géométrie inappropriées favorisant l'accumulation des eaux de ruissellement en flaques sur la surface de la chaussée.
+Causes probables
+- Points bas non drainés.
+- Affaissement le long des bordures (milieu urbain).
+Niveau de sévérité
+Faible : Accumulation d'eau sur une profondeur de moins de 20 mm.
+Moyen : Accumulation d'eau sur une profondeur de 20 à 40 mm.
+Majeur : Accumulation d'eau sur une profondeur de plus de 40 mm.
+Mesure de l'étendue
+Réseau : Longueur totale de chaussée touchée par la dégradation, en mètres, par secteurs successifs de 100 m et par niveau de sévérité.
+Projet : Superficie de chaussée touchée, en mètres carrés, par secteurs successifs de 100 m et par niveau de sévérité.
+
+[p. 30]
+2.3 Défauts de l'enrobé et perte du revêtement
+Désenrobage et arrachement
+
+[p. 31]
+2.3 Défauts de l'enrobé et perte du revêtement
+Désenrobage et arrachement
+Description
+Érosion du mastic et perte des gros granulats en surface produisant une détérioration progressive du revêtement.
+Causes probables
+- Usure par trafic intense.
+- Sous-dosage du bitume ou mauvais enrobage.
+- Utilisation d'agrégats hydrophiles ou bitumophobes.
+- Compactage insuffisant.
+- Surchauffe ou vieillissement de l'enrobé (oxydation et fragilisation).
+- Sollicitations accrues en zone de virage et de freinage (milieu urbain).
+Niveau de sévérité
+Faible : Perte tout juste observable du mastic ou des gros granulats, principalement dans les pistes de roues.
+Moyen : Perte facilement observable du mastic laissant les gros granulats très apparents ou perte des gros granulats laissant un patron régulier de petites cavités généralisées à toute la surface.
+Majeur : Surface entièrement érodée et dégradation accentuée dans les pistes de roues (début d'orniérage par usure).
+Mesure de l'étendue
+Réseau : Longueur totale de voie touchée par la dégradation, en mètres, par secteurs successifs de 100 m et par niveau de sévérité.
+Projet : Superficie touchée, en mètres carrés, par secteurs successifs de 100 m et par niveau de sévérité.
+
+[p. 32]
+2.3 Défauts de l'enrobé et perte du revêtement
+Ressuage
+
+[p. 33]
+2.3 Défauts de l'enrobé et perte du revêtement
+Ressuage
+Description
+Remontée de bitume à la surface du revêtement, accentuée dans les pistes de roues.
+Causes probables
+- Surdosage du bitume.
+- Effet combiné de la température élevée du revêtement et des sollicitations du trafic.
+- Excès de liant d'accrochage.
+- Formulation d'enrobé inadaptée aux sollicitations.
+Niveau de sévérité
+Faible : Le ressuage est surtout détectable dans les pistes de roues par l'apparition d'une bande de revêtement plus foncée et lorsque moins de 25 % de la surface de la chaussée est affectée. On distingue encore bien les gros granulats.
+Moyen : Les pistes de roues sont bien délimitées par la couleur noire du bitume et moins de 50 % de la surface de la chaussée est affectée. Les gros granulats sont difficilement visibles.
+Majeur : Aspect humide et luisant de la plus grande partie de la surface. La texture de l'enrobé est impossible à discerner. Le bruit des pneus est similaire à celui produit sur un revêtement mouillé. La plus grande partie de la surface est affectée.
+Mesure de l'étendue
+Réseau : Longueur totale de voie touchée par la dégradation, en mètres, par secteurs successifs de 100 m et par niveau de sévérité.
+Projet : Superficie touchée, en mètres carrés, par secteurs successifs de 100 m et par niveau de sévérité.
+
+[p. 34]
+2.3 Défauts de l'enrobé et perte du revêtement
+
+[p. 35]
+2.3 Défauts de l'enrobé et perte du revêtement
+Description
+Arrachement par plaques de l'enrobé de la couche de surface.
+Causes probables
+- Mauvaise adhérence de la couche de surface (ex. : manque de liant d'accrochage, incompatibilité chimique, saleté entre les couches).
+- Épaisseur insuffisante de la couche de surface.
+- Chaussée fortement sollicitée par le trafic.
+Niveau de sévérité
+Faible : Pelade dont la surface d'arrachement est inférieure à 0,5 m carré.
+Moyen : Pelade dont la surface d'arrachement est de 0,5 à 1,0 m carré.
+Majeur : Pelade dont la surface d'arrachement est supérieure à 1,0 m carré.
+Mesure de l'étendue
+Réseau : Longueur totale de voie en mètres touchée par la dégradation, par secteurs successifs de 100 m et par niveau de sévérité.
+Projet : Superficie touchée, en mètres carrés, par secteurs successifs de 100 m et par niveau de sévérité.
+
+[p. 36]
+2.3 Défauts de l'enrobé et perte du revêtement
+Nid-de-poule
+
+[p. 37]
+2.3 Défauts de l'enrobé et perte du revêtement
+Nid-de-poule
+Description
+Désagrégation localisée du revêtement sur toute son épaisseur formant des trous de forme généralement arrondie, au contour bien défini, de taille et de profondeur variables. Les trous peuvent être comblés par du rapiéçage temporaire.
+Causes probables
+- Faiblesse ponctuelle de la fondation.
+- Épaisseur insuffisante du revêtement.
+- Chaussée fortement sollicitée par le trafic lourd.
+Note :
+Le nid-de-poule est la manifestation finale d'une combinaison de différents problèmes.
+Niveau de sévérité
+Faible : Nid-de-poule de diamètre de moins de 200 mm.
+Moyen : Nid-de-poule de diamètre de 200 à 300 mm.
+Majeur : Nid-de-poule de diamètre de plus de 300 mm.
+Mesure de l'étendue
+Réseau et projet : Nombre de nids-de-poule par secteurs successifs de 100 m et par niveau de sévérité.
+
+[p. 38]
+2.4 Dégradations et défauts en milieu urbain
+Fissuration autour des regards et des puisards
+
+[p. 39]
+2.4 Dégradations et défauts en milieu urbain
+Fissuration autour des regards et des puisards
+Description
+Rupture du revêtement suivant un tracé circulaire et/ou radial.
+Causes probables
+- Consolidation ou tassement de la chaussée.
+- Cycles de gel et de dégel.
+- Désagrégation de la cheminée par la saumure.
+- Impacts dynamiques.
+- Perte de matériaux autour de la structure.
+Niveau de sévérité
+Faible : Fissures simples et intermittentes dont les ouvertures sont inférieures à
+5 mm. Les bords sont en général francs et bien définis. Les fissures avec
+scellement en place en bonne condition sont incluses dans ce niveau de sévérité ou elles peuvent aussi être comptabilisées à part selon l'usage qui sera fait de l'information.
+Moyen : Fissures simples ou fissures multiples le long d'une fissure principale, celle-ci étant ouverte de 5 à 20 mm. Les bords sont parfois érodés et un peu affaissés. Sans être inconfortable, la fissure est perceptible par l'usager.
+Majeur : Fissures simples ou fissures multiples le long d'une fissure principale, celle-ci étant ouverte de plus de 20 mm. Les bords sont souvent érodés et il y a affaissement ou soulèvement au gel au voisinage de la fissure. Le confort au roulement est diminué par les déformations de surface.
+Mesure de l'étendue
+Réseau et projet : Nombre total de regards et de puisards, par secteurs successifs de 100 m et par niveau de sévérité.
+
+[p. 40]
+2.4 Dégradations et défauts en milieu urbain
+tranchée
+
+[p. 41]
+2.4 Dégradations et défauts en milieu urbain
+tranchée
+Description
+Fissuration ou affaissement dans la tranchée ou dans son voisinage.
+Causes probables
+- Compactage insuffisant des matériaux de remblayage de la tranchée.
+- Hétérogénéité des matériaux (tranchées/chaussées existantes).
+- Relâchement des contraintes (perte de support latéral dans la tranchée).
+- Remblayage incomplet sous les bords du revêtement.
+- Manque d'étanchéité du joint de coupe.
+Niveau de sévérité
+Faible : Dénivellation inférieure à 20 mm et/ou fissure simple dont l'ouverture est inférieure à 5 mm et dont les bords sont en général francs et bien définis.
+Coupes ou tranchées en bonne condition.
+Moyen : Dénivellation de 20 à 40 mm et/ou fissure simple ou fissures multiples le long d'une fissure principale, celle-ci étant ouverte de 5 à 20 mm. Les bords sont parfois érodés et un peu affaissés.
+Majeur : Dénivellation de plus de 40 mm et/ou fissure simple ou fissures multiples le long d'une fissure principale, celle-ci étant ouverte de plus de 20 mm.
+Les bords sont souvent érodés.
+Mesure de l'étendue
+Réseau : Longueur totale de route touchée par la dégradation, en mètres, par secteurs successifs de 100 m et par niveau de sévérité.
+Projet : Superficie touchée, en mètres carrés, par secteurs successifs de 100 m et par niveau de sévérité.
+
+[p. 42]
+2.4 Dégradations et défauts en milieu urbain
+Dénivellation des regards et des puisards
+
+[p. 43]
+2.4 Dégradations et défauts en milieu urbain
+Dénivellation des regards et des puisards
+Description
+Inégalité entre la surface du revêtement et le dessus d'un puisard ou d'un regard.
+Causes probables
+- Consolidation ou tassement de la chaussée.
+- Cycles de gel et de dégel engendrant des déformations permanentes.
+- Désagrégation de la cheminée en présence de saumure.
+- Impacts dynamiques cumulant des déformations permanentes.
+- Perte de matériaux autour de la structure.
+Niveau de sévérité
+Faible : Dénivellation de moins de 20 mm.
+Moyen : Dénivellation de 20 à 40 mm.
+Majeur : Dénivellation de plus de 40 mm.
+Mesure de l'étendue
+Réseau ou projet : Nombre total de regards et de puisards, par secteurs successifs de 100 m et par niveau de sévérité.
+
+[p. 44]
+3. Procédures de mesurage
+
+Cette section vise à préciser les modalités de mesurage des dégradations.
+Fissuration
+Une des difficultés dans l'évaluation de la fissuration est de bien définir l'ouverture et la sévérité de chaque fissure. Idéalement, dans un relevé détaillé, on doit enregistrer le type, la position, la longueur ainsi que la sévérité de chaque fissure.
+Les croquis qui suivent visent à uniformiser la compréhension de la mesure d'ouverture des fissures et de leur niveau de sévérité.
+L'ouverture d'une fissure franche est simple à évaluer en un point donné.
+Figur e 3–1
+Fissure franche
+L'évaluation de l'ouverture d'une fissure aux bordures érodées doit prendre en compte l'érosion et l'affaissement local pour en arriver à une valeur représentative.
+Figur e 3–2
+Fissure érodée
+Dans le cas de fissures multiples comprenant une fissure principale et des fissures secondaires, la sévérité de la fissuration détectée est égale à la sévérité de la fissure principale.
+
+[p. 45]
+3. Procédure de mesurage
+
+Figur e 3–3
+Fissures multiples
+Orniérage
+Chaque mesure d'orniérage correspond à la hauteur maximale en millimètres mesurée entre une règle de 1,8 m et la surface du revêtement. Pour les relevés en mode réseau, ces mesures se font généralement à l'aide d'outils à grand rendement et sont équivalentes aux mesures manuelles avec une règle de 1,8 m. Les mesures ponctuelles sont prises par exemple à tous les 10 m dans chaque piste de roue.
+Figur e 3–4
+Règle de 1,8 m
+Affaissement
+La règle de 3 m simule le prolongement théorique du profil existant. Le H mesuré donne le niveau de sévérité.
+Figur e 3–5
+Règle de 3 m
+
+[p. 46]
+3. Procédures de mesurage
+
+Soulèvements différentiels
+Pour chaque segment successif de 20 m et dans chaque sentier de roue, on détermine d'abord la valeur du soulèvement de chacun des points à l'aide des élévations estivales et hivernales d'une série de points espacés d'un mètre. Par sentier de roue on retient ensuite l'écart maximal et l'écart minimal entre les élévations estivales et hivernales de chacun de ces points. Le soulèvement différentiel est égal à la différence entre l'écart maximal et l'écart minimal. La hauteur du soulèvement différentiel est exprimée en millimètres.
+Soulèvement différentiel = ∆Hmax - ∆Hmin en mm
+Figur e 3–6
+Soulèvements différentiels
+Dénivellations des regards et des puisards
+À au moins 4 points également répartis autour du regard ou du puisard, on mesure la hauteur maximale sous la règle ou la hauteur maximale sur un des côtés du regard.
+Figur e 3–7
+Dénivellations des regards et des puisards
+
+[p. 47]
+3. Procédure de mesurage
+
+La valeur retenue peut être positive ou négative pour mieux caractériser chaque cas.
+Coupes et tranchées
+Perpendiculairement à la tranchée ou à la coupe, on mesure la hauteur entre la règle de 3 m et le point le plus bas de l'affaissement (ligne théorique du profil moyen adjacent).
+Désenrobage et arrachement
+Surface en mètres carrés.
+Ressuage
+Surface en mètres carrés.
+Pelade
+Surface en mètres carrés.
+Nids-de-poule
+Nombre et surface en mètres carrés.
+
+[p. 48]
+4. Caractéristiques des chaussées
+
+dégradations, d'autres caractéristiques de la route servent à la gestion complète du volet chaussée d'un réseau routier. La liste suivante, sans être exhaustive, énumère et détaille brièvement les plus importantes.
+Uni été/hiver :
+Appréciation du confort de la chaussée selon l'indice IRI (International Roughness Index) exprimé en m/km. L'échelle IRI pour les revêtements à l'enrobé varie généralement de 1,0 (neuf et très bon) à 7,0 et plus (très mauvais).
+Trafic :
+L'intensité de la circulation peut s'exprimer par le débit journalier moyen annuel (DJMA)
+et l'intensité du trafic lourd peut s'exprimer par le nombre équivalent de passages d'essieux simples de 8160 kg (ECAS).
+Âge du revêtement :
+Période écoulée depuis l'année de pose de la dernière couche de surface ou du remplacement complet du revêtement.
+Épaisseur du revêtement :
+Épaisseur totale des couches d'enrobé en place, en centimètres.
+Déflexion :
+Fléchissement de la chaussée sous une charge connue mesurée en mode statique ou dynamique.
+dhérence :
+Qualité d'un revêtement de chaussée, évaluée par la mesure du coefficient de frottement transversal ou longitudinal. L'adhérence, par opposition à la glissance, contribue à une bonne tenue de route du véhicule et à l'efficacité du freinage.
+Bruit :
+Nuisance sonore engendrée par la circulation des véhicules, dont la source principale est le contact entre le pneu et le revêtement de la chaussée et le son des moteurs.
+Vibration :
+Mouvement d'oscillations rapides de faible amplitude généré par les véhicules lourds dans la chaussée, les sols et les structures environnantes.
+
+[p. 49]
+Annexe 1 Profil transversal de la chaussée
+
+transversal de la chaussée
+Revêtement
+Couche(s) finale(s) d'une chaussée permettant d'assurer un uni acceptable, de contrôler l'érosion et de bien répartir les charges.
+Structure
+Revêtement et couches granulaires de la fondation et de la sous-fondation.
+Infrastructure
+Sol support sur lequel repose la sous-fondation.
+Drainage
+Système de canaux le long des chaussées pour évacuer les eaux de ruissellement, drainer la structure granulaire et intercepter les eaux souterraines.
+
+[p. 50]
+Annexe 2 Tableau synoptique des dégradations
+
+NIVEAU DE SÉVÉRITÉ
+DÉGRADATION Faible Moyen Majeur
+Fissure transversale Bords francs, fissure Bords érodés, fissure Bords érodés et affaissés, fissure simple et intermittente, continue simple ou multiple ou ouverture totale ouverture < 5 mm multiple, ouverture > 20 mm totale de 5 à 20 mm
+
+Fissure en piste de roue Bords francs, fissure Bords érodés, fissure Bords érodés et affaissés, fissure simple et intermittente, continue simple ou multiple ou ouverture totale ouverture < 5 mm multiples, ouverture > 20 mm totale de 5 à 20 mm
+
+Fissure longitudinale Bords francs, fissure Bords érodés, fissure Bords érodés et affaissés, fissure hors piste de roue simple et intermittente, continue simple ou multiple ou ouverture totale ouverture < 5 mm multiple, ouverture > 20 mm totale de 5 à 20 mm
+
+Fissure de gel (lézarde) Bords francs, fissure Bords érodés, fissure Bords érodés et affaissés, fissure simple et intermittente, continue simple ou multiple ou ouverture totale ouverture < 10 mm multiple, ouverture > 25 mm totale de 10 à 25 mm
+
+Fissure en carrelage Maillage en formation, Maillage bien formé de Maillage serré et bien formé de fissures simples aux fissures simples aux fissures simples aux bords bords francs bords un peu érodés érodés
+
+Fissure en rive Bords francs, fissure Bords érodés, fissure Bords érodés et affaissés, fissure simple et intermittente, continue simple ou multiple ou ouverture totale ouverture < 5 mm multiple, ouverture > 20 mm totale de 5 à 20 mm
+
+Ornière à faible rayon h < 10 mm 10 < h < 20 mm h > 20 mm
+
+Ornière à grand rayon h < 10 mm 10 < h < 20 mm h > 20 mm
+
+Affaissement h < 20 mm 20 < h < 40 mm h > 40 mm
+
+Soulèvement h < 50 mm 50 < h < 100 mm h > 100 mm différentiel
+
+Désordre du profil h < 20 mm 20 < h < 40 mm h > 40 mm
+
+Désenrobage et Peu apparent, 25 % de la Apparent, 50 % de la Très apparent, la majorité de la arrachement surface affectée surface affectée surface affectée
+
+Ressuage Intermittent et moins de Continu et moins de Continu, 100 % de la surface
+25 % de la surface 50 % de la surface dans les pistes de roues est
+dans les pistes de dans les pistes de affectée roues est affectée roues est affectée
+
+Pelade De moins de 0,5 m2 De 0,5 à 1,0 m2 De plus de 1,0 m2 ou plus
+
+Nid-de-poule Diamètre de moins de Diamètre de 200 à Diamètre de plus de 300 mm
+200 mm 300 mm
+
+Dénivellation des h < 20 mm 20 < h < 40 mm h > 40 mm regards et des puisards
+
+Fissuration autour Bords francs, fissure Bords érodés, fissure Bords érodés et affaissés, fissure des regards et des simple et intermittente, continue simple ou multiple ou ouverture totale puisards ouverture < 5 mm multiple, ouverture > 20 mm totale < 20 mm
+
+Coupe et tranchée h < 20 mm 20 < h < 40 mm h > 40 mm
+
+[p. 51]
+Annexe 3 Équivalence des termes
+
+Manuel SHRP1 C-SHRP2 ATC OCDE4 dégradations (USA) (Canada) (Canada)
+Fissure transversale Transverse cracking Transverse cracking Transverse cracking Fissure de retrait transversale rectiligne (Transverse crack)
+Fissure en piste de roue Longitudinal cracking Longitudinal wheel Longitudinal wheel Fissure dans la trace de roue track cracking track cracking (Wheel track cracking)
+Fissure longitudinale N/A Center line cracking Center Line cracking Fissure rectiligne, parallèle à (hors piste de roue) and midlane cracking and midlane cracking l'axe (Center line crack)
+Fissure de gel N/A Meander cracking Meander cracking Fissure en dents de scie (Meandering crack)
+Carrelage Alligator cracking Longitudinal wheel Longitudinal wheel Faïençage à mailles fines track, alligator track, alligator (Alligator or chicken cracking cracking wire cracking)
+Fissure de rive Edge cracking Pavement edge Pavement edge cracking Fissure en rive (Pavement cracking edge cracking)
+Ornière à faible rayon Rutting Wheel track rutting Wheel track rutting Orniérage (Rutting)
+Ornière à grand rayon Rutting Wheel track rutting Wheel track rutting Orniérage (Rutting)
+Affaissement N/A Distortion Distortion Distorsion (Distortion)
+Soulèvement différentiel N/A Distortion Distortion Bosse (Bump)
+Distorsion (Distortion)
+Désordre du profil N/A N/A N/A N/A
+Désenrobage et Raveling Raveling Raveling Désintégration arrachement Weathering coarse Coarse aggregates loss Coarse aggregate loss (Raveling/wheathering)
+Coarse aggregate loss
+Ressuage Bleeding Flushing Flushing Ressuage (Bleeding/flushing)
+Pelade N/A N/A N/A Pelade (Peeling)
+Nids-de-poule Potholes Potholes N/A Nids-de-poule, trou(Potholes, chuckhole)
+1. Document de référence, Distress Identification, Manual for Long Term Pavement Performance Studies, édition d'octobre 1990, réalisé par le Strategic Highway Research Program (SHRP)
+2. Document de référence, Surface Distress Monitoring Guidelines, réalisé par le Canadian Strategic Highway Research Program (C-SHRP)
+3. Document de référence, Pavement Surface Condition Rating System, édition 1987, réalisé par l'Association des routes et transports du Canada (ATC)
+4. Document de référence, Catalogue des dégradations de surface des chaussées, édition d'octobre 1978, réalisé par l'Organisation de coopération et de développement économique (OCDE)
+
+[p. 58]
+Ce document a pour but d'uniformiser la dénomination et le niveau de sévérité des diverses dégradations. Chaque dégradation est décrite et associée a un degré de sévérité, soit faible, moyen
+
+ou majeur. La comptabilisation de ces dégradations se fait selon I'unité de mesure retenue. Des schémas et des photos aident a comprendre les définitions et facilitent l'association avec les dégradations réelles de la route.
+
+Transports
+
+Québec

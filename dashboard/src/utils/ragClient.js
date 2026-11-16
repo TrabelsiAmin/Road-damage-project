@@ -16,6 +16,45 @@ export const RAG_URL_STORAGE_KEY = 'tariqmap_rag_url';
 /** Shown when the live API cannot be reached. Not a substitute answer. */
 export const RAG_DOWN_MESSAGE = "l'API ne répond pas";
 
+/** Dead ngrok / Cloudflare / localtunnel address. Not a substitute answer. */
+export const RAG_TUNNEL_CLOSED_MESSAGE =
+  "La session Colab est arrêtée : le tunnel est fermé.";
+
+/**
+ * Extractive manuals on this machine. The chat uses this only when the
+ * saved Colab address is missing or does not answer. A pasted live URL wins.
+ */
+export const LOCAL_EXTRACT_BASE = 'http://127.0.0.1:4721';
+
+export function isPublicTunnel(base) {
+  const root = normalizeRagBase(base);
+  if (!root) return false;
+  let host = '';
+  try {
+    host = new URL(root).hostname.toLowerCase();
+  } catch {
+    return false;
+  }
+  return (
+    host.endsWith('.ngrok-free.app')
+    || host.endsWith('.ngrok-free.dev')
+    || host.endsWith('.ngrok.app')
+    || host.endsWith('.ngrok.io')
+    || host.endsWith('.trycloudflare.com')
+    || host.endsWith('.loca.lt')
+  );
+}
+
+export function explainRagFailure(base, kind) {
+  if (
+    isPublicTunnel(base)
+    && (kind === 'network' || kind === 'timeout' || kind === 'unavailable')
+  ) {
+    return RAG_TUNNEL_CLOSED_MESSAGE;
+  }
+  return RAG_DOWN_MESSAGE;
+}
+
 export function ragHttpErrorMessage(status) {
   return `Erreur HTTP ${Number(status) || 0}`;
 }
@@ -315,9 +354,9 @@ export async function checkRagHealth({
     return errorResult('http_error', ragHttpErrorMessage(health.status), { status: health.status });
   }
   if (health.code === 'timeout') {
-    return errorResult('timeout', RAG_DOWN_MESSAGE);
+    return errorResult('timeout', explainRagFailure(root, 'timeout'));
   }
-  return errorResult('unavailable', RAG_DOWN_MESSAGE);
+  return errorResult('unavailable', explainRagFailure(root, 'unavailable'));
 }
 
 export async function askRag({
@@ -393,11 +432,44 @@ export async function askRag({
   } catch (err) {
     if (err?.name === 'AbortError') {
       if (signal?.aborted) return errorResult('aborted', 'Question annulée.');
-      return errorResult('timeout', RAG_DOWN_MESSAGE);
+      return errorResult('timeout', explainRagFailure(root, 'timeout'));
     }
-    return errorResult('network', RAG_DOWN_MESSAGE);
+    return errorResult('network', explainRagFailure(root, 'network'));
   } finally {
     clearTimeout(timer);
     signal?.removeEventListener('abort', onExternalAbort);
   }
+}
+
+/**
+ * Saved Colab address when it answers. Otherwise the local manual excerpts,
+ * and only when that process answers /health. Never a recorded paragraph.
+ */
+export async function chooseAssistantBase({
+  base = '',
+  localBase = '',
+  fetchImpl = globalThis.fetch,
+  timeoutMs = RAG_HEALTH_TIMEOUT_MS,
+} = {}) {
+  const root = normalizeRagBase(base);
+  if (root) {
+    const health = await checkRagHealth({ base: root, fetchImpl, timeoutMs });
+    if (health.ok) return { ok: true, base: root, via: 'saved' };
+  }
+  const local = normalizeRagBase(localBase);
+  if (local && local !== root) {
+    const localHealth = await checkRagHealth({ base: local, fetchImpl, timeoutMs });
+    if (localHealth.ok) {
+      return { ok: true, base: local, via: 'local', savedDown: Boolean(root) };
+    }
+  }
+  return {
+    ok: false,
+    base: root,
+    via: 'down',
+    error: {
+      code: root ? 'unavailable' : 'not_configured',
+      message: root ? explainRagFailure(root, 'unavailable') : RAG_DOWN_MESSAGE,
+    },
+  };
 }

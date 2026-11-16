@@ -1,0 +1,610 @@
+# DOC_ID: COURS-4GC-pathologies
+# SOURCE: 702047763-Co___urs-de-Path__ol__ogies-Et-Entr___etien-De__s-Rou__tes-Et-Ouvr__ages-D-073115_watermark.pdf
+# TITRE: Pathologies et entretien des routes et ouvrages d'art (cours, copie 4geniecivil.com)
+# AUTEUR: inconnu (non indiqué dans le document)
+# EDITEUR: diffusé via 4geniecivil.com (copie avec filigrane)
+# DATE: inconnue
+# LANGUE: fr
+# TYPE: cours universitaire
+# CONTEXTE: non précisé
+# LICENCE: inconnue ; copie issue d'un site de partage : droits à vérifier avant tout usage
+# FIABILITE: moyenne (auteur et date inconnus ; contenu technique structuré)
+# ROLE_RAG: référence FR : causes, évolution et remèdes des dégradations, chaussées revêtues et non revêtues, entretien
+# PERIMETRE: pathologies et entretien des chaussées ; malgré le titre, le contenu sur les ouvrages d'art est quasi absent (2 mentions de ponts)
+# RELATION: Pathologie_des_routes_clean semble en dériver (hypothèse non vérifiée)
+# PAGES: 64 pages conservées (marqueurs [p. 1] à [p. 72]) sur 73 avant nettoyage
+# FORMAT_PAGES: marqueur [p. N] = numéro de page attribué par l'extraction (identique au numéro de page PDF pour FHWA, Cours, Benjelloun et Arya ; à vérifier pour le MTQ) ; les numéros manquants correspondent à des pages retirées (vides ou hors contenu)
+# EXTRACTION: PyMuPDF page par page, OCR Tesseract si couche texte illisible ; nettoyage Unicode, recollage des lignes, pages vides retirées
+# NETTOYAGE: 8 pages vides et table des matières vide retirées ; puces corrompues normalisées en « - » ; lignes recollées
+# NOTE: tableaux/figures non reconstruits ; texte non reformulé
+# A_FAIRE: coquilles (« CHAUSSES » x4, « RECAPITILATIF ») ; page « REMERCIEMENT » ; 11 pages de moins de 200 caractères (titres de chapitre)
+
+[p. 1]
+Pathologies et entretien des routes et ouvrages d'art
+
+[p. 2]
+REMERCIEMENT
+La mise au point de ce document a été intégralement financée par l' Université Nous remercions sincèrement, tout son personnel pour leur contribution à la mise au point.
+
+[p. 4]
+PARTIE 1
+RAPPEL SUR LES COMPOSANTES DE LA ROUTE
+
+[p. 5]
+Chapitre 1
+RAPPEL SUR LES COMPOSANTES
+DE LA ROUTE
+
+[p. 6]
+CHAPITRE 1
+RAPPEL SUR LES COMPOSANTES DE LA ROUTE
+1-
+TERMINOLOGIE GENERALE
+La route est toute voie de circulation créée et aménagée pour supporter le trafic des véhicules hors des centres urbains. Elle a pour fonction d'assurer l'écoulement de la circulation et de supporter les contraintes dues aux charges sur essieux. Il est évident que sa conception doit tenir compte des caractéristiques des véhicules afin de pouvoir assurer une circulation facile et sûre.
+Une route comporte principalement la chaussée sur laquelle circulent les véhicules et ses dépendances (dispositifs de drainage des eaux, dispositifs de signalisation, etc.).
+Une étude routière s'intéresse à deux aspects complémentaires qui obéissent à des concepts complètement différentes à s'avoir:
+- un aspect géométrique (règles du tracé de la route avec des notions de virages, de pentes, de déclivité et de signalisations) qui permettent d'assurer un écoulement facile et sécuritaire de la circulation ;
+- un aspect structurel qui concerne la capacité de route à supporter les charges des roues des véhicules ; il s'agit ici de la chaussée : structure destinée à supporter les charges des véhicules en circulation.
+1.1- Les aspects géométriques de la route
+Sur le plan géométrique, on distingue sur une route les éléments suivants, figures :
+- La chaussée : surface aménagée de la route sur laquelle circulent normalement les véhicules ;
+- Les accotements : zones latérales de la plate-forme qui bordent extérieurement la chaussée ;
+- La plate-forme : surface de terrain qui comprend la ou les chaussées, les accotements et éventuellement les terre-pleins ;
+- L'assiette : surface de terrain réellement occupée par la route et toutes les dépendances indispensables à sa tenue, donc comprenant la plate-forme, les fossés et les talus ;
+
+[p. 7]
+- Terre-plein : bande de terrain séparant la chaussée en deux couloirs à sens unique chacun, dans le cas d'une route à deux chaussées distinctes ;
+- L'emprise : surface du terrain affectée à la route et à ses dépendances indispensables et appartenant à la collectivité. La route est aménagée dans l'emprise ;
+- La bande dérasée (ou B.A.U. Bande d'Arrêt d'Urgence) : zone dégagée de tout obstacle qui se raccorde à la chaussée sans dénivellation. Elle comprend la surlargeur de chaussée de même structure que la chaussée et qui supporte le marquage de rive.
+Figure 1: Les parties d'une route à 2 chaussées 1.2- Constitution structurelle d'une chaussée Les structures de chaussée sont constituées de plusieurs couches comme l'indique la Figure 2. Sur le plan structurel, la chaussée est une superposition de couches de matériaux différents dont l'ensemble est appelé superstructure et reposant sur une infrastructure. L'infrastructure est constituée de sol de plate-forme et une couche de forme en cas de remblai, alors que la superstructure est constituée de couche de fondation, d'une couche de base et de couche de surface ou le revêtement.
+
+[p. 8]
+Figure 2 : Constitution d'une structure de chaussée 1.2.1- L'infrastructure L'infrastructure d'une chaussée peut être définie comme le terrassement nécessaire à la constitution de l'assise de la superstructure. Elle est composée d'une plate-forme et d'une couche de forme.
+- Le sol de plate-forme
+La plate-forme correspond au terrain occupant les parties supérieures des terrassements (30 à 100 cm). Elle doit être suffisamment rigide pour permettre le passage des engins de terrassement, insensible à l'eau et aux intempéries. Sa portance influence sur l'épaisseur des couches de chaussée qui reposent sur elle. Une bonne portance permet d'éviter les déformations sous chargement ou répété entrainant une dégradation prématurée de la chaussée.
+Selon les terrains en place, on peut avoir recours à :
+- la pose d'une couche de forme ;
+- des purges puis des remblais ;
+- une substitution de matériaux ;
+- un traitement du sol en place par la chaux ou le ciment ;
+- la pose d'un matériau anti-contaminant de type géotextile.
+
+[p. 9]
+- La couche de forme
+La couche de forme est une couche de transition entre le sol-support et le corps de chaussée. Elle a une double fonction :
+- pendant la phase des travaux, elle protège le sol-support et établit une qualité de nivellement qui permet la circulation des engins, tant pour l'approvisionnement des matériaux que pour la construction des couches de chaussée.
+- vis-à-vis du fonctionnement mécanique de la chaussée, elle permet de rendre plus homogène et éventuellement d'améliorer les caractéristiques dispersées des matériaux de remblai ou du terrain en place.
+1.2.2- La superstructure
+La superstructure est constituée par l'ensemble des couches de matériaux mis en œuvre au-dessus de l'infrastructure. Elle est une succession de couches essentiellement constituée de bas en haut de la couche de fondation, la couche de base et la couche de surface. L'ensemble de ces trois (03) couches se reposent sur un ensemble appelé plate-forme de la chaussée.
+- La couche de fondation
+La couche de fondation permet d'assurer une répartition homogène des contraintes sur la couche de forme ou sur la plate-forme supérieure des terrassements. Pour cela, elle doit présenter une certaine résistance mécanique. Les matériaux qui la compose doivent avoir un CBR à 30% selon le trafic et ne doivent pas être friables. La couche de fondation doit assurer aussi bien un bon drainage et avoir une compacité minimale de 90% de l'OPM.
+- La couche de base
+Elle constitue avec la couche de fondation, l'assise de la chaussée. Elle est soumise à des contraintes verticales, effet de poinçonnement dû à la pression des pneumatiques et des contraintes de cisaillement à la base dans le cas des matériaux traités aux liants blancs d'autant plus important que la couche de surface est mince. Elle doit être constituée de matériaux suffisamment durs pour résister à l'attrition et avoir un grand indice portant ou stabilité. La couche de base joue les rôles suivants :
+- supporter les charges de trafic transmises par le revêtement ;
+- constituer la couche rigide pour le compactage de la couche de roulement ;
+
+[p. 10]
+- neutraliser les effets négatifs des agents atmosphériques.
+- La couche de surface
+La couche de roulement joue un rôle capital. C'est la couche vue et jugée par les usagers, auxquels elle doit offrir une surface sécuritaire et confortable. Un bon revêtement doit pouvoir jouer les rôles suivants :
+- résister sans déformation ni usure trop rapide, aux sollicitations et efforts tangentiels exercés par les charges roulantes ;
+- présenter un uni de surface durable, de façon à assurer durant toute la durée de vie un confort de roulement aux véhicules à vitesse élevée ;
+- assurer une évacuation rapide des eaux de ruissellement et garantir une adhérence élevée ;
+- être suffisamment imperméable pour empêcher les infiltrations des eaux superficielles.
+La couche de roulement peut être accompagnée d'une couche de liaison qui permet, dans certains cas, d'éloigner le sommet de la couche de base de la surface de la chaussée lorsqu'elle est mince ou encore dans le cas de forts trafics.
+2-
+LES
+DIFFERENTS
+TYPES
+DE
+STRUCTURES
+DE
+CHAUSSEE
+ET
+LEUR
+FONCTIONNEMENT
+La nature des différentes couches, associées au mode de fonctionnement des chaussées permet de distinguer six (06) grandes familles de chaussées.
+- Les chaussées souples
+Les chaussées souples comportent une couverture bitumineuse mince (épaisseur < 15 cm), parfois réduite à un simple enduit superficiel (figure 3), reposant sur une ou plusieurs couches de matériaux granulaires. L'épaisseur globale de la chaussée est comprise entre 30 et 60 cm.
+Les matériaux granulaires constituant l'assise de la chaussée ont un module de rigidité relativement faible. Comme la couverture bitumineuse est mince, les efforts verticaux dus au trafic sont transmis au support sans grande diffusion. Les pressions élevées transmises au sol entrainent leur plastification et le développement de déformations verticales permanentes.
+
+[p. 11]
+Fig ure 3 : Structure d'une chaussée souple
+Les matériaux granulaires constituant l'assise de la chaussée ont un module de rigidité relativement faible.
+- Les chaussées bitumineuses épaisses
+Les chaussées bitumineuses épaisses (figure 4) comportent une couche de roulement bitumineuse qui repose sur un corps de chaussée en matériaux bitumineux en une, deux, voire trois couches dont l'épaisseur totale est comprise entre 15 et 40 cm. Le fonctionnement des chaussées épaisses est d'autant plus différent que celui des chaussées souples que l'assise est épaisse.
+La rigidité et la résistance en traction des couches de matériaux bitumineux permettent de diffuser les contraints verticales transmises au sol en les atténuant fortement.
+Figu re 4 :
+Stru cture d'une chaussée bitumineuse épaisse
+Chaussée bitumineuse épaisse :
+
+[p. 12]
+- Les chaussées à assise traitées aux liants hydrauliques
+Ces structures comportent une couverture bitumineuse mince (moins de 15cm), parfois réduite à un simple enduit superficiel, reposant sur une ou plusieurs couches de matériaux granulaires non traités (figure 5). L'épaisseur globale de la chaussée est comprise entre 30 et 60 cm. Le fonctionnement de ces structures peut être schématisé comme suit :
+Figure 5 : Structure d'une chaussée à assise traitée aux liants hydrauliques Compte tenu de la très grande rigidité des matériaux traités aux liants hydrauliques, les contraintes verticales transmises au sol support sont très faibles. En revanche l'assise traitée subit des contraintes de traction-flexion qui s'avèrent déterminantes pour son dimensionnement.
+- Les chaussées à structure mixte
+Les chaussées à structure mixte comportent une couche de surface et une couche de base (10 à 20 cm) en matériaux bitumineux sur une couche de matériaux traités aux liants hydrauliques (20 à 40 cm). Les matériaux bitumineux représentent environ la moitié de l'épaisseur totale de la chaussée. Ces types de chaussées sont illustrés par la figure 6.
+
+[p. 13]
+Fig ure 6 : Structure d'une chaussée à structure mixte
+Chaque couche assure une fonction bien déterminée. La couche de fondation diffuse et atténue les efforts transmis au sol support, les couches bitumineuses ralentissent la montée des fissures transversales de la couche sous-jacente et réduisent les contraintes de flexion à la base de la structure tout en assurant les qualités d'uni et de continuité.
+- Les chaussées à structure inverse
+Comparativement aux structures mixtes, les structures inverses comportent une couche supplémentaire de matériaux granulaires entre la couche de fondation traitée aux liants hydrauliques et couches supérieures bitumineuses (figure 7).
+Cette couche de matériaux granulaires a pour rôle d'éviter la remontée des fissures de la fondation.
+Fi gure 7 : Structure d'une chaussée à structure inverse
+- Les chaussées en béton de ciment
+Ces structures sont presqu'inexistantes dans les pays sous-développés. Cette chaussée est constituée par une couche de fondation en grave ciment d'environ 20 cm surmontée
+
+[p. 14]
+0par une dalle de béton de 20 cm, (figure 8). Des joints transversaux sont effectués tous les 4 à 5 m pour éviter une fissuration anarchique du béton, ainsi que des joints longitudinaux.
+Fi gure 8 : Structure d'une chaussée en béton
+
+[p. 15]
+Chapitre 2
+PRINCIPAUX FACTEURS DE
+RUPTURE DES CHAUSSEES ET LES
+TYPE D'ENTRETIEN
+
+[p. 16]
+CHAPITRE 2
+PRINCIPAUX FACTEURS DE RUPTURE DES CHAUSSEES ET
+LES TYPE D'ENTRETIEN
+1- LES PRINCIPALES CAUSES DE DESORDRES
+Les désordres que l'on observe sur les chaussées peuvent provenir de causes multiples qu'il convient de bien identifier afin de déterminer les travaux d'entretien ou de renforcement à réaliser. Parmi les dégradations couramment observées, on peut distinguer les dégradations normales, qui apparaissent progressivement et qui s'aggravent lors du vieillissement de la chaussée, de celles qui proviennent d'un mauvais choix de matériaux, de malfaçon ou de facteurs extérieurs.
+1-1le vieillissement normal de la chaussée 1-1-1- La couche de roulement La résistance mécanique des matériaux de la chaussée diminue inéluctablement avec le temps sous l'effet du trafic routier et des conditions climatiques. Ce vieillissement affecte en premier lieu la couche de roulement qui est la plus exposée aux actions du trafic et du climat. Par exemple, on parle d'usure de la couche de roulement lorsque celle-ci a perdu ses caractéristiques d'adhérence, notamment en raison du polissage des gravillons sous l'effet du trafic. Il est communément admis que la durée de vie moyenne d'une couche de roulement parfaitement adaptée au trafic et mise en œuvre sur une chaussée ne présentant pas de problème structurel se situe entre 7 et 15 ans. Par conséquent, les dégradations qui pourront être observées au terme de la durée de vie de la couche de roulement seront qualifiées de « normales » et il conviendra de prévoir simplement le renouvellement de la couche de roulement ou bien des travaux d'attente si l'on souhaite différer son renouvellement.
+
+[p. 17]
+Figure 82. RN 7-Toulon-sur-Allier
+- Les conditions climatiques
+La couche de roulement subit de nombreuses sollicitations. En effet, l'eau fragilise les liaisons granulats-bitume, la lumière (rayonnement ultraviolet) favorise l'oxydation du bitume, les changements de température influent sur les propriétés mécaniques hydrocarbonés, les agents chimiques (sel de déverglaçage) accroissent les risques de fissuration dus aux chocs thermiques.
+La couche du roulement nécessite une surveillance régulière. L'application des premières fissures doit alerter rapidement le gestionnaire de voirie afin qu'il puisse y apporter une réponse simple et adaptée (pontage de fissure par exemple). A défaut, les dégradations s'étendront rapidement et cela conduira inévitablement à programmer des travaux lourds et coûteux de réhabilitation. La mise en œuvre d'une politique d'entretien préventif est donc préférable pour préserver et prolonger la chaussée.
+A noter que les dégradations de surfaces constituent un indicateur précoce de l'évolution des caractéristiques structurelle des chaussées.
+Le drainage doit être assuré avec une attention particulière afin de collecter et d'évacuer les eaux situées à l'intérieur et à l'extérieur de la chaussée (pas d'eau stagnante en bord de chaussée, curage efficace des fossés…). En effet, la présence d'eau dans les chaussées est source de nombreux désordres.
+A titre d'exemple, la circulation d'eau à l'intérieur du corps de chaussée provoque :
+- le désenrobage des matériaux bitumineux ;
+
+[p. 18]
+- un transport de matériaux, notamment des particules fines, ce qui est de nature à déstructurer progressivement les couches de matériaux non liées.
+Les phénomènes hivernaux (gel-dégel) : si le gel pénètre le corps d'une chaussée faiblement dimensionnée sur un sol support gélif :
+- conséquences du gel : gonflement de la chaussée ;
+- conséquences du dégel : augmentation de la déformabilité du sol par retour des lentilles de glace à l'état liquide. Pendant la période nécessaire à l'évacuation du surplus d'eau, il peut être nécessaire de limiter la circulation des véhicules lourds (pose de barrières de dégel) jusqu'à ce que la chaussée présente à nouveau une portance suffisante.
+1-1-2- Les couches d'assise
+Une chaussée neuve est dimensionnée avec un risque de calcul. Par conséquent, il existe une probabilité pour que les couches d'assise présentent des dégradations au cours de leur durée de dimensionnement nécessitant des travaux de renforcement assimilables à une reconstruction de la chaussée, en l'absence de toute intervention d'entretien structurel.
+1-1-3- Le type de matériau de chaussée
+Certaines dégradations apparaissent normalement au cours de la durée de dimensionnement de la chaussée et proviennent simplement du choix des matériaux d'assise. Par exemple, la présence de fissures transversales qui s'étendent sur toute la largeur de la chaussée, et espacées d'un pas régulier, est une pathologie liée au retrait des matériaux traités aux liants hydrauliques. Ainsi, il conviendra de prendre en compte ce phénomène lors des travaux de réalisation de la chaussée en adaptant les méthodes constructives afin d'anticiper et de contrôler l'apparition des fissures (pré-fissuration). A noter que les travaux d'entretien nécessiteront des techniques adaptées (technique antiremontées de fissures).
+
+[p. 19]
+1-2-
+Le vieillissement anormal de la chaussée : choix des matériaux et conditions de fabrication et de mise en œuvre 1-2-1- Le choix des matériaux Un mauvais choix de matériaux de chaussée, inadapté au trafic, aux conditions météorologiques, au tracé de la voie ou encore au sol support, peut être à l'origine de l'apparition prématurée de dégradations. Par exemple, on peut citer une erreur dans le choix du grade du bitume entrant dans la composition d'un BBSG qui est trop mou et qui peut donc conduire à l'apparition prématurée d'un orniérage dans les bandes de roulement, ou le cas de la mise en œuvre d'un ECF sur un support trop déformé, avec le risque à terme de conduire à l'apparition de zones de ressuage.
+1-2-2- Les malfaçons
+Lorsque le choix des matériaux n'est pas en cause, des malfaçons liées à la fabrication ou à la mise en œuvre peuvent également être à l'origine de l'apparition prématurée de dégradations. Par exemple, on peut citer :
+- le non-respect de la composition de l'enrobé telle qu'elle a été définie par l'épreuve de formulation,
+- le défaut d'homogénéité du produit,
+- le non-respect des températures de fabrication et de mise en œuvre,
+- le non-respect du pourcentage de vide obtenu sur le chantier,
+- le non-respect des épaisseurs,
+- le défaut de collage des couches d'enrobé,
+- les malfaçons lors de la mise en œuvre parmi lesquelles on peut citer : les arrêts prolongés de finisseur, le déversement d'enrobés à l'avant du finisseur, la mauvaise et le défaut de compactage des joints longitudinaux, les arrachements de surface provoqués par les pneus trop froids du compacteur à pneus, la poursuite du compactage au-delà de la température limite de fin de compactage, etc.
+Les malfaçons ou les non-conformités susceptibles de provoquer l'apparition prématurée de dégradations sont nombreuses, depuis la fabrication jusqu'à la mise en œuvre. Afin de s'en prémunir, le maitre d'ouvrage devra exiger, dans le cadre du marché, le respect de plans de contrôles adaptés à la nature et à l'importance des travaux. A titre d'exemple, un défaut de collage de la couche de roulement en enrobé bitumineux entraînera dans des délais très courts l'apparition de fissures de fatigue à la surface de l'enrobé. Le bon
+
+[p. 20]
+fonctionnement mécanique des chaussées bitumineuses implique que toutes les couches d'enrobés soient parfaitement collées entre elles afin que les efforts dus aux charges roulantes se produisent à la base de la couche bitumineuse la plus profonde.
+1-2-2-1-
+Le compactage
+Le compactage permet d'augmenter la densité sèche d'un sol en « serrant » les unes contre les autres les particules solides et liquides qu'il contient (expérience du château de sable avec un sable humide, nettement plus solide que le même élaboré avec du sable sec). Il limite ainsi les tassements ultérieurs en réduisant le pourcentage de vides grâce à la compression des grains, permettant ainsi un accroissement de la capacité portante du sol.
+Le compactage anticipe le passage des charges à venir. Il limite des déformations ultérieures de la chaussée, particulièrement l'orniérage au niveau de passage des roues.
+La bonne réussite de cette étape est donc primordiale pour assurer la pérennité de la structure de chaussée. Le choix du matériel, le calcul du nombre de passes et les épaisseurs de mise en œuvre sont autant de points de contrôles que devra opérer le maître d'œuvre.
+1-3-
+Les autres facteurs du vieillissement anormal de la chaussée Lorsque le choix des matériaux et les conditions de fabrication et de mise en œuvre ne sont pas en cause, des facteurs extérieurs indépendants de la chaussée peuvent être à l'origine des dégradations observées.
+1-3-1- Les terrassements
+La qualité des travaux de terrassement a une incidence directe sur le comportement de la chaussée. A travers notamment les objectifs de portance à long terme sur l'arase terrassement, dont l'évaluation est basée sur le niveau de portance obtenu à court terme (mesuré au moment des travaux). Les chutes de portance sont généralement dues aux modifications de l'état hydrique du sol support, surtout si celui-ci est sensible à l'eau.
+C'est pourquoi, afin de maintenir les caractéristiques de portance dans le temps, les travaux de terrassement peuvent s'accompagner d'une substitution de matériaux, d'un traitement et d'un drainage.
+
+[p. 21]
+1-3-2- Le trafic poids lourd
+Une modification importance du trafic poids lourds, pour lequel la structure de chaussée mais aussi son profil en travers n'étaient pas prévus à l'origine, peut provoquer l'apparition de dégradations (accélération du phénomène de fatigue de la chaussée).
+C'est le cas notamment lors de la mise en place d'une déviation ou lors de travaux occasionnant une circulation de chantier importante (augmentation de trafic limitée dans le temps), ou lors de l'implantation d'activités nouvelles (zones d'activités, base logistiques…) qui génèrent un trafic poids lourd supplémentaire (augmentation de trafic sur le terme). Dans le premier cas, seuls des travaux de réparation pourront être envisagés, après le retour au niveau de trafic initial, alors que dans le second cas, il conviendra de prévoir des travaux de renforcement de la structure de chaussée et d'élargissement du profil en travers (épaulement de chaussée).
+1-3-3- Les arbres d'alignement
+Les arbres d'alignement contribuent à l'apparition de dégradations liées au soulèvement de la chaussée par les racines. Un bourrelet se forme, au droit de l'arbre, en rive de chaussée conduisant à la fissuration progressive du revêtement et, à terme, au départ des matériaux. Les travaux de réparation associent généralement des techniques qui permettent de contenir les racines (traitements anti-racinaires).
+Figure 85 présences de racine de plante : réapparition des dégradations après une réparation ponctuelle 1-3-4- Les remblais En ce qui concerne les chaussées réalisées en remblai, les dégradations observées à la surface de la chaussée peuvent être causées par l'instabilité des talus. Dans ce cas, on constate généralement une fissure d'ouverture assez large formant un demi-cercle qui s'étend du bord de chaussée vers son axe, s'accompagnant d'une dénivellation (marche).
+Figure 86. Fissure en « arc de cercle » caractéristique d'un tassement de remblai La présence dans le corps de remblai de matériaux de mauvaise qualité du fait de leur sensibilité à l'eau (tels que les argiles responsables du phénomène de retrait-gonflement)
+est également à l'origine de dégradations observées sur la chaussée.
+Si les dégradations sont ponctuelles et peu étendues, des travaux de purges permettront de
+
+[p. 22]
+substitues les matériaux incriminés par des matériaux sains et insensibles à l'eau tels que des graves non traitées provenant de carrières.
+Il convient également de signaler le cas particulier des remblais contigus aux ouvrages d'art, aux murs de soutènement et aux ouvrages hydrauliques. Appelé aussi remblai technique, le remblai contigu est spécifique à la construction des ouvrages. Un défaut de réalisation de ce remblai peut entraîner l'affaissement de la chaussée à proximité de l'ouvrage.
+1-3-5- Les ouvrages hydrauliques
+Les affaissements de chaussées peuvent également être liés à la présence d'ouvrages hydrauliques. Les défauts d'étanchéité des buses (buses disjointes, fissurées) entrainent des venues liquide dans le corps de remblai et dans le cas extrêmes provoquent un sous-cavage pouvant conduire à l'effondrement de la chaussée. A noter que les affaissements peuvent aussi provenir d'un défaut de couverture sur l'ouvrage hydraulique qui génère un écrasement de buses, ou de déformations dues à Da buses métalliques.
+1-3-6- Les aléas naturels
+Les chaussées peuvent être soumises à des aléas naturels tels que les mouvements de terrain comme les glissements, les effondrements ou fontis liés à la présence de cavités naturelles (karst) ou de cavités artificielles (anciennes carrières souterraines). Des études géotechniques et de mécanique des sols, qui exigent souvent des délais importants, devront être menées avant d'envisager une réfection de chaussée définitive et pérenne. Dans ce cas, la réalisation de travaux provisoires permettant de rétablir les conditions normales de circulation n'est pas toujours possible.
+Figure 87. Chaussée soumise à un glissement de terrain 1-3-7- Les réseaux La présence de réseaux en tranchées est également source de désordres. Ils affectent plus particulièrement les chaussées urbaines, mais peuvent également concerner les chaussées situées en rase campagne. Les désordres qui apparaissent en surface sont
+
+[p. 23]
+généralement la conséquence du tassement des tranchées par suite de l'utilisation de matériaux de remblaiement de mauvaise qualité (sensible à l'eau) ou à un défaut de compactage.
+Dans ce cas, on observe généralement une déformation comparable à de l'orniérage qui s'étend en suivant l'axe et la largeur de la tranchée sous-jacent et qui, à terme, s'accompagne de faïençage.
+De manière générale, les ouvertures de tranchées contribuent à rompre la continuité et l'homogénéité de la structure de chaussée (effet de bord, joints), elles peuvent diminuer les caractéristiques mécaniques de la chaussée et par voie de conséquence réduire significativement sa durée de vie théorique1.
+Figure 88. Exemple d'une tranche particulièrement mal refermée
+2- LES TYPES D'ENTRETIEN ROUTIER
+Une route est une infrastructure de transport dont la durée est liée non seulement à l'agression du trafic qu'elle subit mais aux efforts d'entretien.
+2-1- Entretien courant « Activité qui doit être réalisée au moins une fois par an sur chaque section de route. Elle se compose d'interventions simples et de faible ampleur, mais souvent très dispersées.
+Dans une certaine mesure, les besoins peuvent être estimées et programmés ; les travaux peuvent être souvent exécutés sur une base routinière ; elles sont quasiment identiques d'une année sur l'autre. » L'entretien courant comprend deux groupes de tâches bien distinctes :
+- Le cantonnage
+Le cantonnage est exécuté manuellement selon la méthode HIMO. Il concerne « les dépendances » de la route : les accotements, les systèmes de drainage, les talus, la signalisation verticale,…. Accessoirement quelques interventions sur la chaussée peuvent être considérées comme du cantonnage dans la mesure où elles sont exécutées manuellement (bouchage de nids de poules sur routes non revêtues). Les opérations de cantonnage ne requièrent en général que du petit matériel (pelles, pioches, brouettes etc.)
+- L'entretien mécanisé des chaussées
+
+[p. 24]
+L'entretien courant des chaussées non revêtues est effectué avec des moyens mécaniques (reprofilage rapide sans apport de matériaux de chaussée, reprofilage avec apport de matériaux) effectué annuellement (une ou plusieurs fois en fonction de l'intensité du trafic et des dégradations dues au climat en particulier). Par analogie l'entretien des chaussées revêtues est considéré comme un entretien mécanisé même si le bouchage de nids de poule est souvent effectué manuellement. Cet entretien courant mécanisé des chaussées ne doit pas être confondu avec l'entretien périodique, qui est en général effectué avec des moyens mécaniques importants.
+2-2- Entretien périodique « Activités qui doivent être réalisées ponctuellement à l'issue d'une période d'un certain nombre d'années. Il s'agit de travaux de plus grande ampleur exigeant un équipement spécialisé et du personnel qualifié. Les interventions sont coûteuses et doivent être soigneusement identifiées et programmées. Certains travaux d'entretien périodique comprennent également certains travaux d'amélioration, tels que la mise en place de couches de roulement minces en enrobés à chaud. Pour ce qui concerne les chaussées il y a tout intérêt avant que les dégradations aient atteint une trop grande ampleur de réaliser une auscultation régulière, qui permet de mettre en place une politique d'entretien préventif. » Les tâches de l'entretien périodique sont définies et planifiées dans chaque stratégie d'entretien 2-3- Réhabilitation La réhabilitation résulte de situations dans lesquelles l'entretien périodique ne peut plus maintenir la circulation dans des conditions normales d'exploitation du réseau. La réhabilitation s'apparente à des travaux neufs quant aux quantités mises en œuvre et aux coûts des travaux. La limite entre entretien périodique et réhabilitation résulte d'une simulation économique entre les deux solutions. La réhabilitation ne peut pas être considérée comme une tâche d'entretien.
+2-4- Entretien d'urgence « Il s'agit d'interventions résultant de situations imprévues, nécessitant des actions de réparation à effectuer aussitôt que possible (dégradations dues à des inondations, à des glissements de terrain ….) » après l'évènement générateur du dommage, voire pendant l'évènement.
+2-5- Entretien améliorant
+
+[p. 25]
+L'entretien améliorant regroupe toutes les tâches qui augmentent la valeur de l'investissement routier, et par conséquent le niveau de service de la route. Elles demandent un investissement important l'année de leur exécution, entraînent souvent des coûts d'entretien plus important, mais peuvent s'avérer rentables à plus ou moins long terme.
+- exécution de couches de roulement
+- mise hors d'eau de la ligne rouge
+- construction d'ouvrages définitifs
+- construction de nouveaux ouvrages
+- réalisation de fossés maçonnés
+- rectification de virages et ouvrages de sécurité divers
+- construction de protections diverse 2-6- Entretien préventif L'entretien préventif est fait avant que les désordres n'apparaissent dans l'objectif qu'ils ne puissent se produire ou au pire qu'ils soient minimisés. L'entretien courant et l'entretien périodique doivent être pensés dans un but préventif qui devrait restreindre les conséquences de tous les facteurs de dégradation des chaussées et des ouvrages.
+2-7- Entretien curatif
+L'entretien curatif est fait une fois le dommage constaté. Les dégradations ne devraient se produire que dans les cas d'imprévisibilité totale. Il en est d'ailleurs de même pour l'entretien d'urgence. A noter qu'en Haïti, les cyclones sont prévisibles, leurs effets le sont rarement.
+Dans tous les cas l'objectif de l'entretien routier est de rechercher la plus grande homogénéité possible sur les tronçons de route prédéfinis et le meilleur uni pendant le temps le plus long et au moindre coût.
+
+[p. 26]
+Chapitre 3 1-
+DEGRADATION ET ENTRETIEN
+DES CHAUSSES REVETUES EN
+BETON HYDROCARBONNES
+
+[p. 27]
+CHAPITRE 3
+DEGRADATION ET ENTRETIEN DES CHAUSSES REVETUES
+EN BETON HYDROCARBONNES
+1- LES PRINCIPAUX DESORDRES
+Les chaussées se dégradent essentiellement sous l'effet du trafic lourd et des conditions climatiques. La rapidité de ces désordres qui apparaissent sont également liés à la nature et à l'épaisseur des matériaux utilisés et à leurs conditions de fabrication et de mise en œuvre. Certains désordres consécutifs à l'instabilité du support de la chaussée (remblais ou terrain naturel) peuvent apparaitre indépendamment du trafic et du climat.
+Les dégradations les plus couramment rencontrées se classent en deux grandes familles ; les dégradations structurelles et les dégradations superficielles. Les premières apparaissent au sein de la structure de chaussée ou de son support et remettent en cause le patrimoine. Les secondes prennent naissance dans la couche de surface de la chaussée et affectent d'abord ses qualités superficielles.
+On différencie les dégradations sur les routes revêtues à travers cinq grands groupes comme le montre le tableau 3.1.
+
+[p. 28]
+Tableau 3.1 : Les différents groupes de désordres sur les routes revêtues Groupes de désordre Différents pathologies 1- Déformation Affaissement Flache Bourrelet Ornière Tôle ondulée 2- Fissuration Fissures Faïençage Epaufrement 3- Arrachement Décollement Désenrobage Plumage Pelade Nids de poule 4- Mouvement de matériaux Remontée d'eau Ressuage Boursouflure 5- Usure de la surface du revêtement Glaçage Tète de chat
+
+[p. 29]
+1-1
+LES DEFORMATION
+1-1-1 Affaissements
+L'affaissement est une déformation ponctuelle par tassement du sol support qui se localise soit en rive de chaussée, soit sur la largeur de la demi-chaussée.
+L'affaissement de rive s'observe le plus souvent sur les chaussées souples traditionnelles. Comme pour le phénomène d'orniérage, la chute de portance est liée à la variation de la teneur en eau du sol support.
+Figure 94. Affaissement de rive en intérieur de virage d'une chaussée souple Figure 95. Fissure large liée au phénomène de retrait-gonflement d'argiles Cette pathologie affecte d'autant plus les chaussées anciennes que celle-ci ont souvent été élargies sans précaution en gagnant sur les rives lors des entretiens successifs.
+Dans ce cas, l'affaissement est aussi lié au sous-dimensionnement de la structure en rive de chaussée. Il s'accompagne souvent de la formation d'un bourrelet longitudinal en bord de rive de chaussée.
+
+[p. 30]
+Les affaissements peuvent s'étendre au-delà de la rive de chaussée et l'axe de la chaussée. C'est le cas notamment lorsque des poches de matériaux très sensibles à l'eau, tels que les argiles présentes dans le support de chaussée, entraînent un affaissement lié au phénomène de retrait-gonflement. Dans ce cas, l'affaissement s'accompagne généralement d'une fissure de forme demi-ovale joignant les rives et ayant pour sommet l'axe de la chaussée ou de la demi-chaussée.
+Dans le cas des chaussées en remblai, l'affaissement peut avoir des causes plus profondes, comme le glissement du talus de remblai. Dans ce cas, l'affaissement de rive s'accompagne souvent d'une fissure de largeur assez importante, de l'ordre du centimètre, et d'une dénivellation (marche).
+L'affaissement évolue ensuite vers un faïençage important de la couche de roulement puis, à terme, vers des départs de matériaux.
+1-1-2 Flache
+La flache est une déformation très ponctuelle de forme arrondie qui se produit sur les chaussées souples (assise en matériaux non traités du type GNT) ou sur les chaussées à couches d'assise traitées aux liants hydrauliques. Elle provient en générale d'un quelconque insuffisance, en un point du corps de chaussée ou de son support, d'un mauvais drainage ou d'un tassement du matériau ayant servi à reboucher un nid de poule.
+
+[p. 31]
+Figure 96. Affaissement lié au tassement d'un remblai et qui s'accompagne d'une fissure et d'une dénivellation Ensuite, sous l'action conjuguée de l'eau et du trafic, la partie supérieure de la couche de base se désagrège (diminution de la cohésion), la qualité de l'interface entre la couche de roulement et la couche de base se dégrade. Il se forme alors une flache qui s'accompagne le plus souvent d'un faïençage, de remontées de fines et pouvant évoluer très rapidement vers le départ des matériaux (nid-de-poule). Dans le cas particulier de chaussée ayant fait l'objet d'un retraitement en place aux liants hydrauliques, ce type de dégradation peut être lié à des hétérogénéités de dosage en liant ou aux caractéristiques des sols traités. Ainsi, afin d'éviter ces désordres qui peuvent apparaître très rapidement après la mise en œuvre (dès les premières pluies), il est conseillé de réaliser un enduit superficiel d'usure qui assure la double fonction de cure et d'imperméabilisation suive de la mise en œuvre d'une couche de roulement suffisamment épaisse en enrobé.
+1-1-3 Bourrelets
+Les bourrelets sont des déplacements horizontaux du revêtement de la chaussée, créant un renflement allongé dans la direction du trafic. Ils sont généralement accompagnés d'ornières. Habituellement de part et d'autre des traces des roues et dans les zones de décélération brutale
+
+[p. 32]
+1-1-4 Orniérage
+Les ornières sont des déformations permanentes longues localisés aux endroits de passage des roues des véhicules suite à une forte influence du trafic, tant par son intensité que par ses caractéristiques (vitesse de circulation et charge). Elles proviennent en générale d'un défaut de résistance d'une couche inférieure de la chaussée.
+
+[p. 33]
+On différencie l'orniérage à grand rayon (largeur supérieure à 0,80 m) de l'orniérage à petit rayon. L'orniérage à petit rayon à une déformation qui se limite en général à la couche supérieure de la chaussée, c'est-à-dire la couche de roulement.
+Cet orniérage, qui se produit dans les bandes de roulement sous l'effet de la circulation, peut avoir différentes causes non dépourvue de liens entre elles :
+- La classe de résistance à l'orniérage spécifiée pour les travaux n'est pas adaptée au trafic et aux conditions climatiques. Pour éviter ce problème, les maitres d'ouvres ont tendance à prescrire systématiquement dans leur marché des bétons bitumineux de classe 3, même lorsque cela ne s'avère pas nécessaire (sur spécification).
+- Le non-respect des caractéristiques de mise en œuvre et notamment des spécifications relatives aux pourcentages de vides (compacité)
+peuvent également conduire à l'orniérage. Lorsque la capacité obtenus à la mise en œuvre est trop faible (ou pourcentage de vides trop élevé) du fait d'un défaut de compactage (atelier de compactage non adapté, températures d'enrobé ou températures ambiantes trop basses…), un orniérage peut apparaître dans les bande de roulements. Celui-ci correspond à l'augmentation de la compacité de l'enrobé qui achève sa mise en place sous l'effet conjugué du trafic et des conditions météorologiques, et plus particulièrement des températures élevées.
+On parle dans ce cas d'orniérage par post-compactage.
+A l'inverse, lorsque la capacité obtenue à la mise en œuvre est trop élevé (ou pourcentage de vides trop faible), il peut apparaître un orniérage par fluage de l'enrobé sous l'effet conjugué du trafic et des conditions météorologique.
+
+[p. 34]
+- Les caractéristiques géométriques de la voie interviennent dans le phénomène d'orniérage comme facteur aggravant. Sont concernées les zones de fortes sollicitations, telles que les courbes, les rampes très prononcées, mais également les zones freinage aux bords des carrefours et notamment des carrefours giratoire et des barrières de péages d'autoroutes. On peut citer par exemple le cas des voies à trafic lourds, lents et canalisé tel que les voies bus ou les voies d'autoroutes réservés aux véhicules lents (en raison de rampes importantes).
+Le phénomène d'orniérage se produit en période estivale, lorsque les températures dans les couches supérieures de la chaussée sont élevées. Il peut s'accompagner de la formation de bourrelets sur les bords de l'ornière, surtout dans le cas d'un orniérage par fluage, et de ressuage affectant la surface du revêtement au fond de l'ornière.
+A noter que les chaussées en béton de ciment restent stables aux températures élevées et ne sont pas sensible à ce problème d'orniérage. C'est d'ailleurs pour cette raison que les zones fortement sollicitées, soumises à des efforts de poinçonnement telles que les plates-formes aéroportuaires (aires de stationnement des avions) sont souvent réalisées en béton du ciment.
+L'orniérage à grand rayon concerne quant à lui l'ensemble du corps de chaussée, c'està-dire les couches de structure de la chaussée (fondation et base), mais aussi les couches plus profondes telles que la couche de forme ou la partie supérieure de terrassements (PST).
+Dans ce cas, les causes sont plus structurelles que pour l'orniérage à petit rayon. Il peut s'agir de :
+- la fatigue de la chaussée :
+
+[p. 35]
+Les chaussées neuves sont dimensionnées pour résister à un niveau de trafic poids lourds cumulé avec une probabilité d'endommagement de la structure. On parle de phénomène de fatigue lorsque la chaussée n'est plus apte à supporter les sollicitations répétées et que de déformations irréversibles (plastiques) apparaissent au sein de la structure. Dans ce cas, l'orniérage peut s'accompagner d'autres dégradations liées à la structure (fissuration, faïençage).
+- la variation de la portance du sol support :
+Ce phénomène affect principalement les chaussées à structure souples constituées de matériaux non traités de type GNT. La plus ou moins grande sensibilité à l'eau des sols supports provoque une chute de portance lors de variations plus ou moins importantes de l'état hydrique. Dans le cas d'un sol très sensible à l'eau tel que certaines argiles, une faible augmentation de leur teneur en eau suffit pour provoquer une diminution importante de la portance. Cette chute de portance, qui peut être localisée, provoque sous l'effet d'un trafic même modeste un tassement des sols dont l'effet se répercute à la surface sous la forme d'orniérage à grand rayon. Ces dégradations étant liées à l'état hydrique des sols supports, elles se produisent essentiellement lors des saisons où les pluies sont abondantes.
+1-1-5 Tôle ondulée
+Les tôles ondulées sont des suites d'ondulation de longueur d'ondulation souvent faible et perpendiculaires à l'axe de la route. Ce désordre est exceptionnel sur les routes revêtues mais s'observe parfois.
+Ces désordres sont dus à une déformation de la couche de base par défaut de profilage avant la pose du revêtement. On peut ajouter également les actions mécaniques intenses dues à la circulation et à une stabilité inadéquate de l'enrobé bitumineux.
+Les tôles ondulées évolution vers les bourrelets accompagné souvent de ressuage et d'autres dégradations comme les fissures, les ruptures du revêtement et apparition d'arrachement.
+1-2 LES FISSURATIONS
+1-2-1 Fissures 1-2-1-1
+Fissures longitudinales
+
+[p. 36]
+Les fissures longitudinales (principalement parallèle à l'axe de la chaussée) qui apparaissent dans les bandes de roulement sont essentiellement dues à la fatigue de la structure de la chaussée. Dans le cas des chaussées souples, la fissuration observée en surface est le plus souvent liée au défaut de portance du sol support et s'accompagne par conséquent d'une formation ou d'un affaissement comme évoqué précédemment.
+Dans le cas des chaussées constituées d'une structure en matériaux traités, comme les chaussées bitumineuses, les fissures proviennent essentiellement d'un défaut de la structure (rupture par fatigue) qui n'est plus adaptée au trafic. Dans ce cas, les fissures sont généralement profondes et, au-delà des couches de surface (roulement et liaison), elles affectent également les couches d'assise.
+Dans le cas particulier d'un défaut de collage de la couche de roulement sur la couche d'enrobé sous-jacente, des fissures longitudinales affectant uniquement la couche de
+
+[p. 37]
+roulement pourront apparaître prématurément dans les bandes de roulement en raison des efforts de traction induits à la base de la couche de roulement.
+Dès l'apparition des premières fissures longitudinales, le processus de dégradation de la chaussée peut s'accélérer et s'aggraver du fait de la pénétration de l'eau dans le corps de chaussée. Dans les chaussées souples, en agissant sur la portance des sols support, dans les chaussées à assise traitées, en agissant sur la cohésion des matériaux (Désenrobage, perte de cohésion). Les fissures se ramifient et se rejoignent progressivement pour former un réseau de fissure appelé faïençage dont le maillage est de plus en plus fin. Le faïençage conduit à terme à des départs de matériaux (arrachements) et à la formation de nids-de-poule.
+Il est intéressent de noter ici que les dégradations que l'on peut observer sur les chaussées sont liées entre elle et ont un effet les unes en vers les autres. Ainsi, la fissuration pourra entraînes des déformations et réciproquement.
+Les autres fissures longitudinales, qui ne sont pas localisées spécifiquement dans les bandes de roulement, peuvent correspondre à des fissures dites d'adaptation. Elles ne sont pas directement liées à la structure de la chaussée mais proviennent de mouvement de sols plus profonds tels que nous les avons décrits précédemment (mouvement de terrain, instabilité de talus de remblai, défaut de remblai technique d'ouvrage d'art, retrait-gonflement dû à la présence d'argiles). Son également classées dans cette catégorie les fissures longitudinales qui peuvent réapparaître à la surface de la couche de roulement après la réalisation des travaux d'épaulement permettant d'élargir la chaussée. La fissure qui apparaît en surface correspond généralement au joint entre la structure de l'ancienne chaussée et celle réalisée en épaulement. Afin de réduire le risque d'apparition de cette dégradation, les dispositions techniques suivantes doivent adoptées :
+- La structure réalisée en épaulement doit être de même type que celle de la chaussée existante. Si la chaussée existante est une ancienne chaussée à structure souple, la structure réalisée pour l'épaulement sera basée sur des matériaux non traités de type GNT.
+- On évitera une découpe verticale uniforme sur l'épaisseur de l'ancienne chaussée à épauler pour privilégier la réalisation de redans (découpe en escalier) afin de permettre la mise en œuvre de chaque couche de chaussée avec des joints décalés (non superposition des joints).
+
+[p. 38]
+- La largeur d'épaulement devra être suffisante pour permettre la mise en œuvre et le compactage des matériaux par les moyens mécaniques classiques et adaptés.
+- Les travaux devront intégrer la réalisation d'un revêtement général couvrant l'ancienne chaussée et la chaussée en épaulement.
+Parmi les autres fissures, on peut citer celles qui proviennent de fissures ou de joints qui existaient sur la couche sous-jacente et qui après mise en œuvre d'un revêtement remontent à la surface, ou celle qui proviennent de malfaçons liées à la mise en œuvre, comme la mauvaise exécution de joints de raccordement entre deux bandes d'enrobés.
+On peut également noter le cas de fissures longitudinales qui réapparaissent à la surface d'un revêtement et qui sont liées à la présence d'une tranchée sous-jacente.
+1-2-1-2
+Fissures transversales
+Les fissures transversales sont des fissures perpendiculaires à l'axe de la chaussée.
+Leur présence à la surface des chaussées avec un espacement régulier (généralement entre 5 et 20 mètres) est caractéristique des assises traitées aux liants hydrauliques.
+Ces fissures se créent dans la chaussée dès la fin de la mise en œuvre des matériaux traités lorsque s'opère le retrait lié à la prise hydraulique, mais elles peuvent également se produire au cours du temps sous l'effet de la dilatation et du retrait liés aux variation de température. Les fissures remontent plus ou moins rapidement à la surface, à travers la couche de roulement en enrobé, selon différents processus qui sont fonction de l'interface entre les deux couches (interface collée ou décollée). Une interface collée favorise une remontée rapide de la fissure à la surface, mais celle-ci restera fini et stable, alors qu'une interface décollée conduira à une remontée plus lente de la fissure à la surface, parfois en se dédoublant, mais celle-ci pourra évoluer et se dégrader plus rapidement avec l'apparition d'épaufrures sur les arrêtes des fissures, (éclats ou effritements), de ramifications et, à terme, de faïençage puis d'arrachement. On observe souvent la présence d'éléments fins (remontées de fines) dans les interstices des fissures et du faïençage, qui témoignent de la détérioration de la partie supérieure des matériaux traités. Ces remontées de fines sont notamment dues aux effets de la circulation par temps de pluie, par entraînement des éléments fins par l'eau sous l'effet d'aspiration ou de pompage.
+
+[p. 39]
+A noter qu'en raison du retrait thermique les fissures est plus larges en hiver, ce qui favorise les pénétrations de l'eau dans la chaussée et accélère la dégradation de l'assise de chaussée.
+Les fissures transversales peuvent aussi avoir pour origine un joint de reprise (joint transversal réalisé à la fin de la journée de mise en œuvre et à partir du quel reprendra la mise en œuvre de la journée suivant) ou un joint transversal de raccordement à un ouvrage existant, ou encore un joint correspondant à une tranchée transversale. Dans ce cas, ces fissures s'expliquent par des malfaçons lors de la réalisation des joints : défaut de recouvrement de l'enrobé froid par l'enrobé chaud, températures d'enrobés trop basses, défaut de compactage joint, absence d'émulsion d'accrochage sur les bords.
+1-2-2 Faïençage
+Le faïençage se définit comme un ensemble de fissures formant un maillage plus ou moins serré. Le faïençage représente généralement un état ultime lié à l'évolution de la fissuration depuis l'apparition des premières fissures, leur ramifications, leurs entrecroisements, formation d'un réseau de fissures d'abord à maillages larges puis à mailles de plus en plus finies.
+
+[p. 40]
+0Ainsi, comme pour les fissures, le faïençage peut affecter toutes les parties de la chaussée. Il peut être ponctuel et peu étendu (faïençage circulaire) ou généralement et très étendu (faïençage dans les bandes de roulement). Le faïençage constitue généralement la dernière étape de la dégradation de la chaussée qui précède le départ de matériaux.
+1-2-3 Epaufrement
+Encore appelées épaufrures, ce sont des cassures des bords de la chaussée causant ainsi une nette réduction de la largeur de chaussée jusqu'à sa disparition même.
+C'est un phénomène fréquemment rencontré nos routes et est causé par :
+- érosion de la couche de roulement à partir des bords de la chaussée;
+- mauvais drainage des eaux: l'effet de bord entraine une perte de portance aux abords de l'accotement;
+
+[p. 41]
+- absence de butée latérale;
+- compactage insuffisant des rives ;
+- chaussée trop étroite: les véhicules circulent sur les accotements;
+- arrêts fréquents de véhicules sur les accotements;
+- mauvaise courbure des virages
+:
+les virages trop serrés obligent les conducteurs à emprunter les accotements entrainant une usure transversale;
+- vieillissement accentué du revêtement ;
+Des solutions préventives visant à retarder le phénomène doivent être prises durant la mise en œuvre. Il s'agit de veiller au bon compactage des couches mais surtout du sol support notamment dans les accotements. Aussi, une attention particulière doit être accordée à la protection des accotements contre les effets de l'eau particulièrement l'érosion et du trafic. Dans les solutions curatives, on retiendra la réfection localisée du corps de chaussée et la reprise des conditions de drainage (mise en place de butées).
+1-3 LES ARRACHEMENTS
+1-3-1 Plumage (Peignage)
+Le plumage est un arrachement des gravillons à la partie supérieure d'une couche de roulement. Elle porte le nom de peignage lorsque ce phénomène se produit suivant des lignes parallèles à l'axe de la route.
+
+[p. 42]
+²
+Le peignage est une forme particulière de plumage, qui est la conséquence d'une mauvaise mise en œuvre d'un enduit superficiel et plus particulièrement d'une mauvaise répartition transversale du liant lors de son épandage : alternance sur la largeur de zones correctement dosées en liant et de zones insuffisamment dosées en liant. Cette malfaçon conduira très rapidement au départ des gravillons suivant des sillons parallèles à l'axe de la chaussée.
+Le plumage résulte du départ des gravillons à la surface des chaussées. Cette dégradation touche essentiellement les enduits superficiels et peut provenir d'un sousdosage en liant, de l'utilisation de gravillons de propreté insuffisante (teneur en fines non conforme), d'une mauvaise affinité liant-granulat (propriétés d'adhésivité)
+ou de mauvaises conditions à la mise en œuvre (réalisation en arrière-saison, compactage
+
+[p. 43]
+insuffisant). Du fait de l'arrachement des gravillons à la surface du revêtement, le plumage contribue à dégrader sa texture et, par voie de conséquence, les propriétés d'adhérence.
+A noter qu'on peut également observer une forme de peignage, qualifié de rainurage.
+Celui-ci est souvent une conséquence de la ségrégation qui peut se produit pour les mélanges à forte granulométrie (supérieure à 60 mm) ou d'un mauvais nettoyage de la bavette qui permet le lissage de l'enrobé.
+1-3-2 Pelade
+On qualifie de pelade un arrachement de la couche de roulement par plaque (liant et granulat).
+Dans le cas d'un enduit superficiel, la pelade est généralement la conséquence d'un mauvais accrochage du liant sur le support. La pelade peut également s'observer sur une couche de roulement en enrobés très minces. Dans ce cas, il s'agit souvent d'un défaut de collage au support (absence ou sous-dosage de la couche d'accrochage).
+Figure 100. Plumage généralisé d'un enduit superficiel à base de gravillons basalte (gris), laissant apparaître la couche sous-jacente à base de gravillons silico-calcaires (blancs)
+Figure 101. Effets du peignage à long terme : départ des gravillons en formant des sillons à la surface du revêtement en enduit superficiel 1-3-3 Désenrobage
+
+[p. 44]
+Le désenrobage affecte les couches de roulement en enrobé à chaud comme à froid.
+Cette dégradation se caractérise par le départ des gravillons lié à un défaut d'enrobage par le mastic bitumineux constitué par le mélange du bitume et des fines.
+Diverses causes peuvent être à l'origine de cette dégradation, comme des défauts de fabrication (non-conformité de la teneur en liant, non-conformité des granulats concernant plus particulièrement la propreté, surchauffe de l'enrobé ayant provoqué le durcissement du bitume), une mauvaise adhésivité liant-granulat, de mauvaises conditions de mise en œuvre et notamment celles pouvant conduire à de la ségrégation lors d'une mise en œuvre manuelle ou une mise en œuvre par de températures trop basses ayant conduit à un compactage insuffisant.
+1-3-4 Nid-de -poule
+Le nid-de-poule est un trou de forme arrondie qui se forme avec le départ des matériaux à la surface de la chaussée. L'apparition du nid-de-poule correspond généralement à l'ultime étape de l'évolution du faïençage et du désenrobage. Dans ce cas, le nid-depoule est à l'aboutissement d'un processus lent de dégradation de la chaussée. La formation est d'abord localisée, puis, en l'absence de traitement de l'origine du problème par une technique d'entretien adaptée, la formation s'accélère et se généralise ; comme dans le cas notamment de la dégradation liée au défaut d'interface des structures traités aux liants hydrauliques évoqué précédemment.
+
+[p. 45]
+Mais il arrive parfois que des nids-de-poule apparaissent très rapidement et de manière généralisée, le plus souvent de la bande de roulement, alors qu'il n'y a pas de signes avancoureurs, c'est-à-dire de dégradation à la surface laissant présage la formation de nid-de-poule. Cette apparition des nids-de-poule dans un délai très court peut s'expliquer par des défauts qui affectent non pas les couches d'assises de chaussée mais plutôt les couches de surface (roulement, liaison)
+et par des conditions météorologiques particulières (pluviométrie importante, alternance de périodes de gel et de dégel), qui ont contribué à accélérer le processus de dégradation.
+Outre les défauts cités couramment qui peuvent contribuer à la formation de nid-de poule (défaut de fabrication, de mise en œuvre, de collage des interfaces), d'autres défaut sont imputable aux techniques successives qui ont été mises en œuvre sur la chaussée. En effet, la technique d'entretien la plus répandue pour les routes en rase compagne consiste simplement à recharges la chaussée avec un enrobé plus ou moins épais, le BBM en 4 cm d'épaisseur étant le plus prisé. Or, cette technique de rechargement, qui peut paraître au premier abord bénéfique pour la durée de vie de la chaussée, peut à terme se révéler néfaste. En effet, les couches supérieurs de la chaussée seront constituées d'une mille-feuille de couches d'enrobé peu épaisses, d'âge différents et aux caractéristiques mécanique hétérogènes avec une multiplication des interfaces. Autant de points faible qui, par la désagrégation d'une des couches d'enrobé sous-jacente ou le décollement d'une des interfaces, pourront conduire à une formation rapide de nid-de-poule sous l'effet de conditions météorologiques particulièrement défavorable, telles que des épisodes de pluies importants ou des périodes de gel-dégel sévères.
+
+[p. 46]
+1-4 LES MOUVEMENTS DE MATERIAUX
+1-4-1 Remonte d'eau et de boue
+Il s'agit de l'éjection de matériaux (eau, boue)
+provenant du corps de chaussée et remontant à travers les points faibles de la couche de roulement (fissures, enrobé poreux).
+Les principales causes être la pénétration et cheminement de l'eau entre les couches de chaussée, le mauvais drainage du corps de chaussée, le manque de cohésion et sensibilité à l'eau du support, et défaut d'interface propice à la circulation de l'eau Les remontées peuvent induire un manque d'adhérence au niveau de l'interface chaussée-pneumatiques par la présence de zones humides à la surface. Elles évoluent vers une destruction progressive de la chaussée sous l'action de l'eau, à une désagrégation des matériaux du corps de chaussée par suite de sa désorganisation et à un désenrobage des granulats. A long terme, des nids de poule peuvent apparaitre à la surface de la chaussée à cause de la baisse de portance de l'assise.
+1-4-2 Ressuage
+Le ressuage est défini comme une remontée de liant à la surface de l'indentation comme un renforcement des granulats par rapport à la surface. Les deux dégradations de distinguent plus précisément selon le type de couche de roulement. Le ressuage s'observe principalement sur les enduits superficiels d'usure.
+
+[p. 47]
+Le ressuage peut être causé par une mauvaise formulation (surdosage). L'utilisation d'un liant de grade trop mou ou la mise en œuvre sur un support inadapté (support présentant déjà du ressuage ou travaux de préparation ayant à des surdosages tels que les travaux d'emplois partiels au point-à-temps) peuvent aussi en être la cause. Le ressuage peut également provenir de travaux réalisés à la mauvaise saison. Par exemple, dans le cas des enduits utilisant des liants anhydres, les conditions météorologiques lors d'une mise en œuvre trop tardive à l'automne ne permettent pas l'évacuation des huiles de fluxage.
+Aux premières chaleurs, il se produira alors un phénomène de réactivation du liant susceptible de provoquer le ressuage.
+1-4-3 Boursouflure
+La boursouflure se définis comme la surhausse du revêtement formant une aspérité sur la surface de roulement avec souvent des fissures et décollement de la couche de surface.
+Ce type de désordre n'a pas de zone de localisation particulière, mais souvent dans les zones où des fissures, des déformations et un décollement de la couche de surface se sont produits.
+La boursouflure peut être causée par un défaut localisé de la couche de fondation ou de base, une fondation argileuse et par fois la présence de matériaux gonflants (nappe de sols salin) lorsque la teneur en eau augmente.
+1-5 LES USURE DE LA SURFACE DE ROULEMENT
+1-5-1 Glaçage
+Le glaçage se défini comme un arasement progressif des gravillons sans arrachement.
+Ce type de désordre n'a pas de zone de localisation particulière.
+
+[p. 48]
+Le glaçage peut être causé par la nature de granulats trop polissable, l'usure très avancée du revêtement. Ce type de pathologie peut évoluer en donnant les tète de chat, l'imperméabilisation du corps de chaussée 1-5-2 Tète de chat La tête de chat est l'apparition de point durs (pierre, cailloux) en relief à la surface de la chaussée. Ce type de désordre n'a pas de zone de localisation particulière, mais souvent dans les zones où le corps de chaussée est constitué de tout venant à granulométrie discontinue et granulométrie élevée. Les causes de ce type de désordre peuvent être la mauvaise granulométrie ou l'hétérogénéité des matériaux de la couche de roulement, l'usure du revêtement causée par le trafic et l'affleurement rocheux.
+
+[p. 49]
+2- LES OPERATIONS D'ENTRETIEN
+Les entretiens des routes revêtues de béton hydrocarboné les plus courants sont :
+- Les réparations localisées, qui sont groupées sous l'appellation '' Point à temps''
+- Les réparations généralisées sur des portions de tronçons, qui sont groupées sous l'appellation ''Grosse réparation''
+- Et les revêtements généraux exécutés périodiquement.
+2-1 Les points à temps
+On distingue par cette technique la réparation à l'aide des matériaux de granulométrie continue des nids de pouls de chaussées.
+Le terme s'applique actuellement à l'ensemble des procédés de réparations des dégradations localisées de tout nature lorsqu'elles sont trop importantes pour être toléré jusqu'à la prochaine campagne de revêtement généraux.
+L'opération de point à temps ne consiste pas à un simple bouchage de nid de poule lorsqu'ils deviennent trop gênants. Il faut plutôt d'abord diagnostiquer la cause réelle des désordres, et de s'efforcer d'y apporter le remède approprié.
+Elle consiste à :
+- délimiter les portions à réparer ;
+- apprécier la gravité de la dégradation ;
+- identifier les causes ;
+- procéder aux réparations qui peuvent être superficielle ou profonde.
+La figure 3-1 donne les différentes étapes de cette opération.
+
+[p. 50]
+Figure 3-1 : Exemple de réparation profonde d'un nid de poule
+
+[p. 51]
+Exemple2-2 : Réparation superficielle d'un nid de poule
+- Examen de l'aspect de la dégradation
+Schéma
+- Délimitation de la surface à réfectionne
+Schéma
+- Balayage et application du liant d'accrochage
+Schéma
+- Epandage et compactage de l'enrobé
+Schéma
+- Aspect final de la réfection 2-2 Grosses réparations
+Ce sont des réparations généralisées qui s'effectuent sur une portion de route. Elle consiste à :
+- délimiter les portions à reprendre
+- apprécier la gravité de la dégradation
+- identifier les causes
+- procéder aux réparations qui peuvent être :
+- des travaux de revêtement généraux
+- des travaux de reprise complète de la chaussée (décapage des couches et reconstitution)
+2-3 Revêtements généraux
+Ce sont des opérations de rechargement en revêtement de toute la chaussée
+3- RECAPITILATIF
+DES
+DEGRADATIONS,
+LEURS
+CAUSES,
+EVOLUTION
+ET
+REMEDES
+
+[p. 52]
+ffggghjhh
+N°
+Types
+Définitions et descriptions
+Causes probables
+Evolution et dégradations associées
+Remèdes applicables 1-
+DEFORMATIONS
+1-1
+AFFAISSEMENT
+Dépression très prononcée et souvent assez étendue.
+Sous dimensionnement de la chaussée (couche inférieures),
+- Tassement de l'assise ou des couches inférieures,
+- construction localement défectueuses,
+- Pollution du corps de chaussée,
+- Drainage insuffisant ou mauvais,
+- pénétration d'eau dans la structure ou fondation de la chaussée ayant entrainé une perte de portance ;
+- chaussée non butée ou calée sur les rives.
+Désintégration des abords de la chaussée ;
+L'accentuation en profondeur de ces affaissements s'accompagne de bourrelets, de fissures et de faïençage.
+Déflachage et réfection des accotements pour les affaissements de faibles ampleurs (moins de 5 cm) ;
+- Drainage soigné,
+- sous couche anti contaminant,
+- renforcement de la chaussée,
+-Réfection localisée et du corps de chaussée et des accotements,
+- approfondissement des fossés latéraux pour abaisser le niveau de la nappe phréatique.
+
+[p. 53]
+FLACHE
+Dépression localisée de forme arrondie.
+Résistance ou compacité insuffisante de l'assise ou de la chaussée pour l'intensité du trafic ;
+- Trou dans la couche de base rigidifiée,
+- Pollution du corps de chaussée,
+- Désagrégation en point de la couche de base rigidifiée,
+- Stabilité inadéquate de l'enrobé bitumineux
+;
+- Perte de cohésions localisées de la couche de base, pollution du corps de chaussée ;
+- Drainage insuffisant ou tassement différentiel du matériau ayant servi à reboucher un nid-depoule.
+L'aggravation entraine la formation de fissures, de faïençage suivi d'arrachements ou de la rupture de la chaussée.
+Déflachage (redressement)
+pour les flaches de faibles ampleurs (moins de 5 cm) ;
+- Refaire un tapis de couverture
+;
+- Réfection localisée du corps de la chaussée pour les flaches profondes.
+
+[p. 60]
+Chapitre 4 1-
+DEGRADATION ET ENTRETIEN
+DES CHAUSSES NON REVETUES :
+ROUTE EN TERRE
+
+[p. 61]
+CHAPITRE 4
+DEGRADATION ET ENTRETIEN DES CHAUSSES NON
+REVETUES : LES ROUTE EN TERRE
+1- LES PRINCIPAUX DESORDRES
+Tout comme les dégradations des chaussées à revêtement bitumineux regroupées en quatre familles, on différencie les dégradations sur les routes non revêtues à travers trois (3) grands groupes ou familles.
+On différencie les dégradations sur les routes non revêtues à travers le tableau 4-1.
+Tableau 4-1 : Les différents groupes de désordres sur les routes revêtues Groupes de désordre Différents pathologies 1- Déformation Ornière Tôle ondulée Déformation dans les virages 2- Arrachement Arrachement avec frayement « W »
+Ravinement
+Nids de poule 3- Usure de la surface du revêtement
+Les usures de la couche de roulement graveleux
+Usure des accotements
+
+[p. 62]
+1-1 LES DEFORMATIONS
+1-1-1 Ornière
+Les ornières sont des affaissements localisés apparaissant sous le passage des véhicules, accompagnés ou non de bourrelets et pouvant affecter entièrement la couche de roulement sur d'assez grandes longueurs.
+L'orniérage est causé par un défaut de portance de la chaussée, d'un tassement localisé sous le passage des roues de la chaussée et ou de son support ; d'un taux humidité importante dans les couches inférieures de la chaussée et d'une pente transversale trop forte canalisant les véhicules dans une même bande de roulement au voisinage de l'axe de la chaussée.
+1-1-2 Tôles ondulées
+C'est la formation d'ondulations régulières plus ou moins serrées et profondes, perpendiculaires à l'axe de la couche de roulement.
+C'est l'une des pathologies les plus fréquentes sur les routes en terre surtout quand celles-ci sont en latérites. Elle consiste en une organisation des matériaux libres de la chaussée en bandes perpendiculaires à l'axe de la route, qui affecte toute la largeur de la plateforme et même ses parties les moins circulées. La surface de la route prend un aspect ondulé, et les ondes sont très régulières tant en
+
+[p. 63]
+espacement qu'en amplitude qui dépendent d'ailleurs du matériau de surface et de l'intensité de circulation.
+Les tôles ondulées sont causées par un manque de stabilité de la couche de roulement:
+en saison sèche, les éléments fins partent en poussière et laisse la place à un squelette manquant de cohésion. En saison des pluies les éléments fins développent une plasticité excessive nuisible à la viabilité de la chaussée, le non-respect de la charge maximale à l'essieu (variant entre 9 et 13 tonnes): il entrainera une augmentation de la pression des pneus induisant une surexploitation de la couche de roulement au-delà des conditions limites de son dimensionnement et entrainera par conséquent l'apparition de certaines dégradations en l'occurrence la formation de tôle ondulée. Le trafic: le niveau du trafic et la vitesse de circulation des véhicules influent sur la rapidité de formation et l'amplitude de la tôle ondulée.
+1-1-3 Déformation dans les virages
+Les virages à court rayon constituent des zones soumises à des efforts tangentiels particulièrement importantes. Il arrive très souvent que les matériaux chassés vers l'extérieur y constituent un bourrelet qui vient s'installer sur la sur largeur.
+
+[p. 64]
+Ce pathologie peut évoluer vers une augmentation de la pente du devers et une accélération du phénomène d'érosion. L'ampleur en largeur et en hauteur, du bourrelet de matériaux sans cohésion peut entrainer une concentration de la circulation ver le centre de la route avec augmentation des risques d'accidents.
+1-2 LES ARRACHEMENTS
+1-2-1 Arrachement avec frayement « W »
+Ce sont des frayées longitudinales en forme de W se formant sous l'effet du trafic. On les trouve dans les zones ayant une couche de roulement constituée de matériau de cohésion faible (les couches de roulement à prédominance sableuse en saison sèche).
+Les frayées W sont causées par l'effet du trafic des routes à faible cohésion.
+1-2-2 Ravinement
+C'est l'érosion longitudinale (ravine longitudinale)
+ou transversale (ravine transversale) de la chaussée causée par un écoulement qui se fait sur cette dernière à défaut de se faire dans le réseau d'assainissement. L'intensité de l'érosion est fonction des quantités d'eau mises enjeu et de la vitesse d'écoulement de l'eau.
+
+[p. 65]
+Ravinement longitudinal
+Ce sont des rigoles creusées par les eaux ruisselant à la surface de la route et grossièrement parallèles à l'axe du tracé.
+Le ravinement longitudinal se manifeste dans les rampes dont la pente et la longueur permettent à l'eau de dépasser la vitesse critique d'érosion du sol constituant la couche de roulement, dans certains sables argileux très fins. Ces ravines évoluent très rapidement dès qu'elles apparaissent et d'autant plus vite que leur profondeur dépasse l'épaisseur de la couche de surface la plus résistante à l'érosion.
+Ravinement transversal 1-2-3 Arrachement avec frayement « W »
+
+[p. 67]
+Figure 13 : Dégradations courants des chaussées
+
+[p. 68]
+4- LES PRINCIPAUX MODES DE RUPTURE DES CHAUSSEES
+On reconnait généralement deux principaux modes de ruptures structurelles des chaussées qui affectent la structure en profondeur :
+- la fissuration ; et
+- l'orniérage ou l'excès d'ornière.
+La fissuration de fatigue
+La fissuration de fatigue est considérée comme un des plus grands modes de dégradation de chaussées. En effet, elle reflète un état de faiblesse de de chaussée qui perd sa résistance ou sa capacité à amortir ou distribuer les charges des véhicules en circulation. Les fissures ont principalement a deux grandes causes :
+- fatigue du revêtement sollicité en traction à sa base par suite de flexions alternées dues au passage des véhicules ;
+- rupture momentanée causée par des efforts excessifs de tension dans le revêtement sous effets de variations de température.
+Les fissures de fatigue sont une direction longitudinale, c'est-à-dire qu'elles sont parallèles à l'axe de la chaussée. Mais il existe d'autres types de fissures : la fissure transversale ; la fissure oblique ; la fissure de joint de construction.
+L'orniérage
+C'est le développement de déformations permanentes excessives dans les traces des roues des véhicules ; elles sont causées, soit par le tassement du sol, soit par le déplacement latéral des mélanges bitumineux constituant la couche de roulement.
+Ce mode de rupture structurelle ne concerne que les chaussées à revêtement bitumineux.
+
+[p. 69]
+Figure 14 : Processus conduisant à fissuration de la chaussée et à l'orniérage Figure 15 : Mécanisme typique de fissuration de la chaussée Figure 16 : Profil transversal d'une voie de circulation ornièrée
+
+[p. 70]
+Figure 17: Mesure de la profondeur d'ornière
+
+[p. 71]
+5- PARAMETRES ENTRANT DANS LE DIMENSIONNEMENT D'UNE CHAUSSEE
+Quelle que soit la méthode utilisée pour le dimensionnement d'une chaussée, un certain nombre de paramètres doivent être pris en compte. Le diagramme de la figure qui suit montre bien les divers paramètres intervenant dans le dimensionnement d'une chaussée en général et les interrelations entre eux. Il s'agit notamment de :
+- le sol-support (capacité portante) ;
+- les matériaux disponibles (la nature et la qualité) ;
+- le trafic (intensité et nombre d'applications de charges) ;
+- le climat (le régime de température, l'hydrologie).
+Figure 18 : Organigramme général de dimensionnement d'une chaussée
+
+[p. 72]
+Ces différents paramètres nécessaires au dimensionnement des chaussées seront présentés dans les chapitres 3 à 7.

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { RAG_DOWN_MESSAGE } from './ragClient.js';
+import { RAG_DOWN_MESSAGE, RAG_TUNNEL_CLOSED_MESSAGE } from './ragClient.js';
 import {
   recommendationForRetained,
   retainedObservationFrom,
@@ -153,7 +153,8 @@ describe('recommendation for a retained observation', () => {
     expect(result.live).toBe(false);
     expect(result.recorded).toBe(false);
     expect(result.answer).toBeUndefined();
-    expect(result.error.message).toBe(RAG_DOWN_MESSAGE);
+    expect(result.error.message).toBe(RAG_TUNNEL_CLOSED_MESSAGE);
+    expect(result.error.message).not.toMatch(/réparation|extrait|D40/);
     expect(result.question).toContain('code RDD2022 D40');
     expect(result.question).not.toContain('Sfax');
   });

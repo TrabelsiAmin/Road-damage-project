@@ -2,9 +2,11 @@ import React, { useEffect, useRef, useState } from 'react';
 import { BookOpen } from 'lucide-react';
 import { DAMAGE_CLASSES, STATUS_LABELS } from '../constants';
 import {
+  LOCAL_EXTRACT_BASE,
   RAG_K_DEFAULT,
   askRag,
-  checkRagHealth,
+  buildTechnicalQuestion,
+  chooseAssistantBase,
   normalizeRagBase,
   readStoredRagBase,
   sourceFileName,
@@ -21,6 +23,10 @@ const COPY = {
     saveUrl: 'Enregistrer',
     badUrl: 'Cette adresse n\'est pas une URL http(s).',
     apiDown: 'l\'API ne répond pas',
+    tunnelDown: 'La session Colab est arrêtée : le tunnel est fermé.',
+    localNote: 'La session Colab est arrêtée : le tunnel est fermé. Les questions partent vers les extraits des manuels sur cette machine, sans le modèle Qwen.',
+    localOnly: 'Aucune adresse Colab n\'est enregistrée. Les questions partent vers les extraits des manuels sur cette machine, sans le modèle Qwen.',
+    emptyLocal: 'Le fil est vide. L\'adresse Colab ne répond pas : la question part vers les extraits locaux des manuels.',
     httpError: 'Erreur HTTP',
     selected: 'Observation retenue',
     none: 'Choisissez une observation dans la file prioritaire ou dans l\'infobulle d\'un agrégat sur la carte.',
@@ -50,6 +56,10 @@ const COPY = {
     saveUrl: 'Save',
     badUrl: 'This is not an http(s) URL.',
     apiDown: 'The API is not responding',
+    tunnelDown: 'The Colab session is stopped: the tunnel is closed.',
+    localNote: 'The Colab session is stopped: the tunnel is closed. Questions go to the manual excerpts on this machine, without the Qwen model.',
+    localOnly: 'No Colab address is saved. Questions go to the manual excerpts on this machine, without the Qwen model.',
+    emptyLocal: 'The thread is empty. The Colab address is not responding: the question goes to the local manual excerpts.',
     httpError: 'HTTP error',
     selected: 'Selected observation',
     none: 'Choose an observation in the priority list or in a map cluster popup.',
@@ -87,6 +97,7 @@ function selectionLine(selection, lang, copy) {
 
 function failureText(error, copy) {
   if (error?.status) return `${copy.httpError} ${error.status}`;
+  if (error?.message) return error.message;
   return copy.apiDown;
 }
 
@@ -98,7 +109,8 @@ export function TechnicalRecommendation({ lang = 'fr', selection = null, request
   const [phase, setPhase] = useState('idle');
   const [messages, setMessages] = useState([]);
   const [urlError, setUrlError] = useState('');
-  const [backend, setBackend] = useState(() => (readStoredRagBase() ? 'checking' : 'idle'));
+  const [route, setRoute] = useState('checking');
+  const [routeNote, setRouteNote] = useState('');
   const runId = useRef(0);
   const abortRef = useRef(null);
   const cardRun = useRef(0);
@@ -108,21 +120,32 @@ export function TechnicalRecommendation({ lang = 'fr', selection = null, request
   const [cardNote, setCardNote] = useState('');
   baseRef.current = base;
 
-  useEffect(() => {
-    if (!base) {
-      setBackend('idle');
-      return undefined;
+  const applyChoice = (choice, saved) => {
+    if (choice.ok && choice.via === 'saved') {
+      setRoute('saved');
+      setRouteNote('');
+      return;
     }
+    if (choice.ok && choice.via === 'local') {
+      setRoute('local');
+      setRouteNote(saved ? copy.localNote : copy.localOnly);
+      return;
+    }
+    setRoute(saved ? 'down' : 'idle');
+    setRouteNote(saved ? (choice.error?.message || copy.tunnelDown) : '');
+  };
+
+  useEffect(() => {
     let cancelled = false;
-    setBackend('checking');
-    checkRagHealth({ base }).then((status) => {
+    setRoute('checking');
+    chooseAssistantBase({ base, localBase: LOCAL_EXTRACT_BASE }).then((choice) => {
       if (cancelled) return;
-      setBackend(status.ok ? 'up' : 'down');
+      applyChoice(choice, base);
     });
     return () => {
       cancelled = true;
     };
-  }, [base]);
+  }, [base, copy.localNote, copy.localOnly, copy.tunnelDown]);
 
   function saveUrl(event) {
     event?.preventDefault();
@@ -151,9 +174,18 @@ export function TechnicalRecommendation({ lang = 'fr', selection = null, request
     ]);
   }
 
+  async function resolveTarget() {
+    const saved = baseRef.current;
+    const choice = await chooseAssistantBase({
+      base: saved,
+      localBase: LOCAL_EXTRACT_BASE,
+    });
+    applyChoice(choice, saved);
+    return choice;
+  }
+
   async function run(question) {
     const trimmed = String(question || '').trim();
-    const root = baseRef.current;
     if (!trimmed) return null;
     abortRef.current?.abort();
     const controller = new AbortController();
@@ -161,15 +193,18 @@ export function TechnicalRecommendation({ lang = 'fr', selection = null, request
     const id = ++runId.current;
     setPhase('loading');
     setDraft('');
-    if (!root) {
-      appendExchange(id, trimmed, { error: copy.apiDown });
+    const choice = await resolveTarget();
+    if (id !== runId.current) return null;
+    if (!choice.ok) {
+      const message = choice.error?.message || copy.apiDown;
+      appendExchange(id, trimmed, { error: message });
       setPhase('error');
-      return { ok: false, error: { code: 'not_configured', message: copy.apiDown } };
+      return { ok: false, error: choice.error || { code: 'unavailable', message } };
     }
     const response = await askRag({
       question: trimmed,
       k: RAG_K_DEFAULT,
-      base: root,
+      base: choice.base,
       signal: controller.signal,
       checkHealth: false,
     });
@@ -182,12 +217,13 @@ export function TechnicalRecommendation({ lang = 'fr', selection = null, request
         score: top?.score,
       });
       setPhase('ready');
-      setBackend('up');
+      applyChoice(choice, baseRef.current);
       return response;
     }
     appendExchange(id, trimmed, { error: failureText(response.error, copy) });
     if (response.error?.code === 'network' || response.error?.code === 'timeout' || response.error?.code === 'unavailable') {
-      setBackend('down');
+      setRoute('down');
+      setRouteNote(failureText(response.error, copy));
     }
     setPhase('error');
     return response;
@@ -211,10 +247,24 @@ export function TechnicalRecommendation({ lang = 'fr', selection = null, request
     setCardResult(null);
     setCardNote('');
     setPhase('loading');
+    const saved = baseRef.current || readStoredRagBase();
+    const choice = await chooseAssistantBase({
+      base: saved,
+      localBase: LOCAL_EXTRACT_BASE,
+    });
+    applyChoice(choice, saved);
+    if (!choice.ok) {
+      const sentence = choice.error?.message || copy.apiDown;
+      appendExchange(exchangeId, buildTechnicalQuestion(selection, lang), { error: sentence });
+      setCardNote(sentence);
+      setCardPhase('error');
+      setPhase('error');
+      return;
+    }
     const outcome = await recommendationForRetained({
       observation: selection,
       lang,
-      storedBase: baseRef.current || readStoredRagBase(),
+      storedBase: choice.base,
       k: RAG_K_DEFAULT,
       signal: controller.signal,
     });
@@ -230,7 +280,7 @@ export function TechnicalRecommendation({ lang = 'fr', selection = null, request
       setCardNote('');
       setCardPhase('ready');
       setPhase('ready');
-      setBackend('up');
+      applyChoice(choice, saved);
       return;
     }
     const sentence = failureText(outcome.error, copy);
@@ -239,7 +289,8 @@ export function TechnicalRecommendation({ lang = 'fr', selection = null, request
     setCardNote(sentence);
     setCardPhase('error');
     setPhase('error');
-    setBackend('down');
+    setRoute('down');
+    setRouteNote(sentence);
   }
 
   useEffect(() => {
@@ -290,19 +341,22 @@ export function TechnicalRecommendation({ lang = 'fr', selection = null, request
       </form>
       {urlError && <p className="rag-error" role="alert">{urlError}</p>}
 
-      {backend === 'checking' && (
+      {route === 'checking' && (
         <p className="rag-loading" role="status">{copy.checking}</p>
       )}
-      {backend === 'up' && (
+      {route === 'saved' && (
         <p className="rag-loading" role="status">{copy.ready}</p>
       )}
-      {backend === 'down' && base && (
-        <p className="rag-error" role="status">{copy.apiDown}</p>
+      {route === 'local' && routeNote && (
+        <p className="rag-loading" role="status" data-assistant-route="local">{routeNote}</p>
+      )}
+      {route === 'down' && routeNote && (
+        <p className="rag-error" role="status" data-assistant-error="true">{routeNote}</p>
       )}
 
       <div className="rag-transcript" data-assistant-transcript="live" aria-live="polite">
         {messages.length === 0 && phase !== 'loading' && (
-          <p className="rag-empty">{copy.empty}</p>
+          <p className="rag-empty">{route === 'local' ? copy.emptyLocal : copy.empty}</p>
         )}
         {messages.map((message) => (
           <article

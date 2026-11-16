@@ -1,10 +1,15 @@
 import fs from 'fs';
 import { describe, it, expect } from 'vitest';
 import {
+  LOCAL_EXTRACT_BASE,
   RAG_DOWN_MESSAGE,
+  RAG_TUNNEL_CLOSED_MESSAGE,
   RAG_URL_STORAGE_KEY,
   askRag,
   checkRagHealth,
+  chooseAssistantBase,
+  explainRagFailure,
+  isPublicTunnel,
   buildMapRagPopupHtml,
   buildTechnicalQuestion,
   clampK,
@@ -321,7 +326,7 @@ describe('RAG response parsing and errors', () => {
       })),
     });
     expect(timeout.error.code).toBe('timeout');
-    expect(timeout.error.message).toBe(RAG_DOWN_MESSAGE);
+    expect(timeout.error.message).toBe(RAG_TUNNEL_CLOSED_MESSAGE);
 
     const network = await askRag({
       question: 'Quelles sont les causes usuelles d\'une fissure ?',
@@ -331,7 +336,7 @@ describe('RAG response parsing and errors', () => {
       }),
     });
     expect(network.error.code).toBe('network');
-    expect(network.error.message).toBe(RAG_DOWN_MESSAGE);
+    expect(network.error.message).toBe(RAG_TUNNEL_CLOSED_MESSAGE);
 
     const down = await askRag({
       question: 'Quelles sont les causes usuelles d\'une fissure ?',
@@ -419,6 +424,62 @@ describe('RAG health', () => {
     expect(down.error.message).toBe('Erreur HTTP 503');
     expect(down.error.message).not.toMatch(/127\.0\.0\.1|démonstration|Colab/);
     expect(down.answer).toBeUndefined();
+  });
+});
+
+describe('closed Colab tunnel', () => {
+  it('names the stopped session and does not invent an answer', () => {
+    expect(isPublicTunnel('https://appraisal-handle-example.ngrok-free.dev')).toBe(true);
+    expect(isPublicTunnel('https://session.trycloudflare.com')).toBe(true);
+    expect(isPublicTunnel(LOCAL_EXTRACT_BASE)).toBe(false);
+    expect(explainRagFailure(BASE, 'network')).toBe(RAG_TUNNEL_CLOSED_MESSAGE);
+    expect(explainRagFailure(LOCAL_EXTRACT_BASE, 'network')).toBe(RAG_DOWN_MESSAGE);
+    expect(RAG_TUNNEL_CLOSED_MESSAGE).not.toMatch(/dinars|nid-de-poule|fissure longitudinale/i);
+  });
+
+  it('keeps a live saved URL and uses local excerpts only after that URL fails', async () => {
+    const savedCalls = [];
+    const saved = await chooseAssistantBase({
+      base: BASE,
+      localBase: LOCAL_EXTRACT_BASE,
+      fetchImpl: async (url) => {
+        savedCalls.push(String(url));
+        return { ok: true, status: 200, json: async () => ({ status: 'ok' }) };
+      },
+    });
+    expect(saved).toEqual({ ok: true, base: BASE, via: 'saved' });
+    expect(savedCalls).toEqual([`${BASE}/health`]);
+    expect(savedCalls.some((url) => url.includes('127.0.0.1'))).toBe(false);
+
+    const calls = [];
+    const local = await chooseAssistantBase({
+      base: 'https://session.ngrok-free.dev',
+      localBase: LOCAL_EXTRACT_BASE,
+      fetchImpl: async (url) => {
+        calls.push(String(url));
+        if (String(url).startsWith(LOCAL_EXTRACT_BASE)) {
+          return { ok: true, status: 200, json: async () => ({ status: 'ok', mode: 'extract' }) };
+        }
+        throw new TypeError('Failed to fetch');
+      },
+    });
+    expect(local.ok).toBe(true);
+    expect(local.via).toBe('local');
+    expect(local.base).toBe(LOCAL_EXTRACT_BASE);
+    expect(local.savedDown).toBe(true);
+    expect(calls[0]).toBe('https://session.ngrok-free.dev/health');
+
+    const down = await chooseAssistantBase({
+      base: 'https://session.ngrok-free.dev',
+      localBase: LOCAL_EXTRACT_BASE,
+      fetchImpl: async () => {
+        throw new TypeError('Failed to fetch');
+      },
+    });
+    expect(down.ok).toBe(false);
+    expect(down.via).toBe('down');
+    expect(down.error.message).toBe(RAG_TUNNEL_CLOSED_MESSAGE);
+    expect(down.error.message).not.toMatch(/extrait|Longitudinal|D00/);
   });
 });
 

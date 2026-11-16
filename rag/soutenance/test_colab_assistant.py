@@ -126,6 +126,14 @@ class AssistantPreparationTest(unittest.TestCase):
         self.assertLess(prepare_body.index("finish_public_session()"), prepare_body.index("start_api(app)"))
         self.assertLess(prepare_body.index("start_api(app)"), prepare_body.rindex("finish_public_session()"))
         self.assertLess(prepare_body.index("Qwen n'est pas rechargé"), prepare_body.index("load_llm("))
+        self.assertNotIn("re.compile", script)
+        self.assertIn("TRYCLOUDFLARE_PATTERN", script)
+        tail = [line.strip() for line in script.strip().splitlines() if line.strip()][-4:]
+        self.assertEqual(tail[-1], "print(DASHBOARD_LINE, flush=True)")
+        main_body = script.split("def main", 1)[1].split("\nif __name__", 1)[0]
+        self.assertIn("return None", main_body)
+        self.assertNotIn("return code", main_body)
+        self.assertNotIn("return app", main_body)
 
     def test_ask_accepts_question_body_and_keeps_document_only_answers(self):
         seen = {}

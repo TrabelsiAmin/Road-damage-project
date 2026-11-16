@@ -27,8 +27,8 @@ export const RAG_TUNNEL_CLOSED_MESSAGE =
 export const LOCAL_EXTRACT_BASE = 'http://127.0.0.1:4721';
 
 /**
- * Small Qwen Instruct on this CPU. Used only when the saved Colab address
- * does not answer /health. A live Colab URL still wins.
+ * Small Qwen Instruct on this CPU. Used only when neither the saved address
+ * nor the configured Colab address answers /health. A live Colab URL still wins.
  */
 export const LOCAL_QWEN_BASE = 'http://127.0.0.1:4733';
 
@@ -148,6 +148,11 @@ const FORBIDDEN_QUESTION = [
 export function isRagConfigured(env = import.meta.env) {
   const value = String(env?.VITE_RAG_API_URL ?? '').trim();
   return /^https?:\/\//i.test(value);
+}
+
+/** Colab address from the dashboard env. Empty when none is configured. */
+export function configuredRagBase(env = import.meta.env) {
+  return normalizeRagBase(env?.VITE_RAG_API_URL ?? '');
 }
 
 export function clampK(value) {
@@ -448,12 +453,14 @@ export async function askRag({
 }
 
 /**
- * Saved Colab address when it answers. localBase is used only when that
- * address does not answer /health. A live Colab URL still wins. The chat
- * does not pass the excerpt server, and never a recorded paragraph.
+ * A saved address that answers /health wins, including one pasted later.
+ * If it is missing or does not answer, the configured Colab address is
+ * tried. localBase is used only after both of those fail. Storage is not
+ * changed here, so a dead saved URL stays stored but does not block.
  */
 export async function chooseAssistantBase({
   base = '',
+  configuredBase = '',
   localBase = '',
   fetchImpl = globalThis.fetch,
   timeoutMs = RAG_HEALTH_TIMEOUT_MS,
@@ -463,26 +470,40 @@ export async function chooseAssistantBase({
     const health = await checkRagHealth({ base: root, fetchImpl, timeoutMs });
     if (health.ok) return { ok: true, base: root, via: 'saved', payload: health.payload };
   }
+  const configured = normalizeRagBase(configuredBase);
+  if (configured && configured !== root) {
+    const configuredHealth = await checkRagHealth({ base: configured, fetchImpl, timeoutMs });
+    if (configuredHealth.ok) {
+      return {
+        ok: true,
+        base: configured,
+        via: 'configured',
+        savedDown: Boolean(root),
+        payload: configuredHealth.payload,
+      };
+    }
+  }
   const local = normalizeRagBase(localBase);
-  if (local && local !== root) {
+  if (local && local !== root && local !== configured) {
     const localHealth = await checkRagHealth({ base: local, fetchImpl, timeoutMs });
     if (localHealth.ok) {
       return {
         ok: true,
         base: local,
         via: 'local',
-        savedDown: Boolean(root),
+        savedDown: Boolean(root || configured),
         payload: localHealth.payload,
       };
     }
   }
+  const failed = root || configured;
   return {
     ok: false,
-    base: root,
+    base: failed,
     via: 'down',
     error: {
-      code: root ? 'unavailable' : 'not_configured',
-      message: root ? explainRagFailure(root, 'unavailable') : RAG_DOWN_MESSAGE,
+      code: failed ? 'unavailable' : 'not_configured',
+      message: failed ? explainRagFailure(failed, 'unavailable') : RAG_DOWN_MESSAGE,
     },
   };
 }

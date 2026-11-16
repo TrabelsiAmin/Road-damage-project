@@ -34,7 +34,10 @@ CHUNK_OVERLAP = 100
 DIMENSION = 1024
 API_HOST = "127.0.0.1"
 API_PORT = 8000
-TRYCLOUDFLARE_RE = re.compile(r"https://[A-Za-z0-9-]+\.trycloudflare\.com")
+# Chaîne, pas un motif compilé : IPython 3.13 plante en affichant un re.Pattern
+# (module 're' has no attribute 'TEMPLATE').
+TRYCLOUDFLARE_PATTERN = r"https://[A-Za-z0-9-]+\.trycloudflare\.com"
+DASHBOARD_LINE = ""
 CLOUDFLARED_RELEASE = "https://github.com/cloudflare/cloudflared/releases/latest/download"
 
 # Noms réels du corpus, présents sur origin/feature/road-damage-rag.
@@ -698,7 +701,7 @@ def ensure_cloudflared():
 
 
 def parse_trycloudflare_url(text):
-    match = TRYCLOUDFLARE_RE.search(text or "")
+    match = re.search(TRYCLOUDFLARE_PATTERN, text or "")
     return match.group(0) if match else None
 
 
@@ -786,15 +789,18 @@ def open_public_tunnel():
 
 
 def finish_public_session():
+    global DASHBOARD_LINE
     public_url = open_public_tunnel()
     try:
         run_demo()
     finally:
         print("API locale :", f"http://{API_HOST}:{API_PORT}", flush=True)
         if public_url:
+            DASHBOARD_LINE = format_dashboard_url(public_url)
             print("Copiez cette ligne dans le tableau de bord, champ « Adresse de l'API Colab ».", flush=True)
-            print(format_dashboard_url(public_url), flush=True)
+            print(DASHBOARD_LINE, flush=True)
         else:
+            DASHBOARD_LINE = ""
             print("Pas de ligne URL_DASHBOARD : le tunnel public n'a pas démarré.", flush=True)
     return 0
 
@@ -898,8 +904,14 @@ def main(argv=None):
     code = prepare(root, check_only=args.check)
     if code and not running_in_notebook():
         raise SystemExit(code)
-    return code
+    # None : IPython n'affiche pas le résultat. Renvoyer l'application
+    # FastAPI pretty-print un objet qui contient une regex compilée
+    # (CORS) et lève AttributeError sur Python 3.13.
+    return None
 
 
 if __name__ == "__main__":
     main()
+    # Dernière instruction de la cellule : un print, pas une valeur affichée.
+    if DASHBOARD_LINE:
+        print(DASHBOARD_LINE, flush=True)

@@ -7,6 +7,7 @@ import {
   askRag,
   buildTechnicalQuestion,
   chooseAssistantBase,
+  configuredRagBase,
   normalizeRagBase,
   readStoredRagBase,
   sourceFileName,
@@ -134,7 +135,11 @@ function statusText(copy, { route, modelName, savedDown }) {
 }
 
 function probeAssistant(base) {
-  return chooseAssistantBase({ base, localBase: LOCAL_QWEN_BASE });
+  return chooseAssistantBase({
+    base,
+    configuredBase: configuredRagBase(),
+    localBase: LOCAL_QWEN_BASE,
+  });
 }
 
 export function TechnicalRecommendation({ lang = 'fr', selection = null, request = null }) {

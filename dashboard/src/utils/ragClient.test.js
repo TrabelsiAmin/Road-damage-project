@@ -9,6 +9,7 @@ import {
   askRag,
   checkRagHealth,
   chooseAssistantBase,
+  configuredRagBase,
   explainRagFailure,
   isPublicTunnel,
   buildMapRagPopupHtml,
@@ -484,6 +485,75 @@ describe('closed Colab tunnel', () => {
     expect(down.via).toBe('down');
     expect(down.error.message).toBe(RAG_TUNNEL_CLOSED_MESSAGE);
     expect(down.error.message).not.toMatch(/extrait|Longitudinal|D00/);
+  });
+
+  it('uses a working saved URL before the configured Colab URL and the local model', async () => {
+    const savedUrl = 'https://user-pasted.ngrok-free.dev';
+    const configured = 'https://selections-sizes-thunder-bones.trycloudflare.com';
+    const calls = [];
+    const choice = await chooseAssistantBase({
+      base: savedUrl,
+      configuredBase: `${configured}/health`,
+      localBase: LOCAL_QWEN_BASE,
+      fetchImpl: async (url) => {
+        calls.push(String(url));
+        return { ok: true, status: 200, json: async () => ({ status: 'ok', llm: 'pasted' }) };
+      },
+    });
+    expect(choice).toEqual({
+      ok: true,
+      base: savedUrl,
+      via: 'saved',
+      payload: { status: 'ok', llm: 'pasted' },
+    });
+    expect(calls).toEqual([`${savedUrl}/health`]);
+    expect(configuredRagBase({ VITE_RAG_API_URL: `${configured}/ask` })).toBe(configured);
+  });
+
+  it('falls through a dead saved URL to the configured Colab URL, then to local Qwen', async () => {
+    const dead = 'https://scoff-recycler-overfill.ngrok-free.dev';
+    const configured = 'https://selections-sizes-thunder-bones.trycloudflare.com';
+    const calls = [];
+    const colab = await chooseAssistantBase({
+      base: dead,
+      configuredBase: configured,
+      localBase: LOCAL_QWEN_BASE,
+      fetchImpl: async (url) => {
+        calls.push(String(url));
+        if (String(url).startsWith(configured)) {
+          return {
+            ok: true,
+            status: 200,
+            json: async () => ({ status: 'ok', llm: 'Qwen/Qwen2.5-7B-Instruct' }),
+          };
+        }
+        throw new TypeError('Failed to fetch');
+      },
+    });
+    expect(colab.ok).toBe(true);
+    expect(colab.via).toBe('configured');
+    expect(colab.base).toBe(configured);
+    expect(colab.savedDown).toBe(true);
+    expect(colab.payload.llm).toBe('Qwen/Qwen2.5-7B-Instruct');
+    expect(calls).toEqual([`${dead}/health`, `${configured}/health`]);
+
+    const localCalls = [];
+    const local = await chooseAssistantBase({
+      base: dead,
+      configuredBase: configured,
+      localBase: LOCAL_QWEN_BASE,
+      fetchImpl: async (url) => {
+        localCalls.push(String(url));
+        if (String(url).startsWith(LOCAL_QWEN_BASE)) {
+          return { ok: true, status: 200, json: async () => ({ status: 'ok', llm: 'Qwen/Qwen2.5-1.5B-Instruct' }) };
+        }
+        throw new TypeError('Failed to fetch');
+      },
+    });
+    expect(local.via).toBe('local');
+    expect(local.base).toBe(LOCAL_QWEN_BASE);
+    expect(local.savedDown).toBe(true);
+    expect(localCalls).toEqual([`${dead}/health`, `${configured}/health`, `${LOCAL_QWEN_BASE}/health`]);
   });
 });
 

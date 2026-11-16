@@ -51,6 +51,7 @@ describe('assistant chat panel', () => {
   it('uses the local Qwen when Colab is down and tells how to start the notebook', () => {
     const source = fs.readFileSync(new URL('./TechnicalRecommendation.jsx', import.meta.url), 'utf8');
     expect(source).toContain('LOCAL_QWEN_BASE');
+    expect(source).toContain('configuredRagBase');
     expect(source).toContain('assistant_colab.ipynb');
     expect(source).toContain('URL_DASHBOARD=https://');
     expect(source).toContain('GPU T4');
